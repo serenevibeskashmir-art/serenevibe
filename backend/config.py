@@ -8,7 +8,16 @@ import os
 class Config:
     # Neon (and some platforms) give 'postgres://' — SQLAlchemy needs 'postgresql://'
     _db_url = os.getenv("DATABASE_URL", "sqlite:///travel.db")
-    SQLALCHEMY_DATABASE_URI = _db_url.replace("postgres://", "postgresql://", 1)
+    _db_url = _db_url.replace("postgres://", "postgresql://", 1)
+    # Some providers hand out connection strings pinned to the psycopg v3 driver
+    # ('postgresql+psycopg://'), but only psycopg2-binary is installed (see
+    # requirements.txt). Force the driver we actually have so this never breaks
+    # depending on which format the DB provider's dashboard gives you.
+    if _db_url.startswith("postgresql+psycopg://"):
+        _db_url = _db_url.replace("postgresql+psycopg://", "postgresql+psycopg2://", 1)
+    elif _db_url.startswith("postgresql://"):
+        _db_url = _db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    SQLALCHEMY_DATABASE_URI = _db_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     # Neon serverless: recycle connections to avoid 'SSL connection closed' errors
     SQLALCHEMY_ENGINE_OPTIONS = {
