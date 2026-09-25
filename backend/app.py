@@ -39,7 +39,10 @@ def create_app():
     app.register_blueprint(assistant_bp, url_prefix="/api")
 
     with app.app_context():
-        db.create_all()
+        try:
+            db.create_all()
+        except Exception as exc:  # never let a DB hiccup crash the whole app on cold start
+            print(f"db.create_all() skipped/failed at startup: {exc}")
 
     @app.get("/")
     def serve_public_home():
