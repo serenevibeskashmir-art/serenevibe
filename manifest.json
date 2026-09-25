@@ -1,0 +1,41 @@
+{
+  "name": "Serene Vibes Kashmir — A Poem In Motion",
+  "short_name": "Serene Vibes",
+  "description": "Licensed Kashmir tour operator offering curated itineraries to Pahalgam, Gulmarg, Srinagar, Sonamarg, and Doodhpathri.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f3f6f6",
+  "theme_color": "#0a2733",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["travel", "tourism"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

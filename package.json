@@ -1,0 +1,17 @@
+{
+  "name": "travel-dashboard-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vite": "^5.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react":"^4.3.1"
+  }
+}

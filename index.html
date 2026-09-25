@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Serene Vibes Kashmir — A Poem In Motion. Licensed Kashmir tour operator offering curated itineraries to Pahalgam, Gulmarg, Srinagar, Sonamarg, and Doodhpathri.">
+  <title>Serene Vibes Kashmir | A Poem In Motion</title>
+  <script>document.documentElement.classList.add('js');</script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/css/assistant.css">
+
+  <!-- Photos uploaded in the admin panel (/admin/photos) are injected here by the server -->
+  <!--SITE_PHOTOS-->
+  <!--SITE_PACKAGES-->
+
+  <!-- PWA: manifest + theme color -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0a2733">
+
+  <!-- PWA: iOS support (Apple doesn't read manifest.json for these) -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Serene Vibes">
+
+  <!-- PWA: icons -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TravelAgency",
+    "name": "Serene Vibes Kashmir",
+    "slogan": "A Poem In Motion",
+    "foundingDate": "2009",
+    "telephone": "+919419766510",
+    "email": "serenevibeskashmir@gmail.com",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "NH-44, Lethpora Awantipora",
+      "addressRegion": "Jammu & Kashmir",
+      "postalCode": "192122",
+      "addressCountry": "IN"
+    }
+  }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <div class="site-head" id="header">
+    <div class="top-bar">
+      <div class="container top-bar-inner">
+        <div class="top-bar-contact">
+          <a href="tel:+919419766510" class="top-bar-link">+919419766510</a>
+          <a href="mailto:serenevibeskashmir@gmail.com" class="top-bar-link top-bar-email">serenevibeskashmir@gmail.com</a>
+        </div>
+        <span class="top-bar-badge">Registered J&amp;K Tour Operator</span>
+        <a href="/admin" class="top-bar-link top-bar-admin">Admin Login</a>
+      </div>
+    </div>
+
+    <nav class="nav container" aria-label="Main">
+      <a href="#top" class="logo">
+        <img class="logo-mark" src="/icons/icon-192.png" width="34" height="34" alt="" aria-hidden="true">
+        <span class="logo-text">
+          <span class="logo-name">Serene Vibes Kashmir</span>
+          <span class="logo-tagline">A Poem In Motion</span>
+        </span>
+      </a>
+      <button class="nav-toggle" id="navToggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="navLinks">
+        <span></span><span></span><span></span>
+      </button>
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#destinations">Destinations</a></li>
+        <li><a href="#packages">Packages</a></li>
+        <li><a href="#about">About</a></li>
+        <li><a href="#testimonials">Reviews</a></li>
+        <li><a href="#contact" class="nav-cta">Enquire Now</a></li>
+      </ul>
+    </nav>
+  </div>
+
+  <main id="main">
+    <!-- ============ HERO ============ -->
+    <section class="hero" id="top">
+      <div class="hero-media ph ph--hero" data-photo="hero">
+        <img alt="Kashmir valley landscape" fetchpriority="high" decoding="async">
+      </div>
+      <div class="hero-shade" aria-hidden="true"></div>
+
+      <div class="container hero-inner">
+        <p class="hero-tag">A Poem In Motion</p>
+        <h1>Serene Vibes Kashmir</h1>
+        <p class="hero-sub">Licensed Kashmir tour operator delivering thoughtfully planned itineraries across the valley — Srinagar's Mughal gardens, Gulmarg's alpine meadows, Pahalgam's pine forests, and beyond — with local guides, verified stays, and transparent pricing.</p>
+        <div class="hero-actions">
+          <a href="#packages" class="btn btn-primary">View packages</a>
+          <a href="tel:+919419766510" class="btn btn-ghost">Call +919419766510</a>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ============ QUICK QUOTE TRIGGER ============ -->
+    <section class="quote-strip" aria-label="Get a quote">
+      <div class="container quote-trigger-wrap">
+        <button type="button" class="btn btn-primary quote-open-btn" id="quoteOpenBtn" aria-haspopup="dialog">
+          Get a Quote
+        </button>
+      </div>
+    </section>
+
+    <!-- ============ QUICK QUOTE MODAL ============ -->
+    <div class="quote-modal-overlay" id="quoteModalOverlay" role="dialog" aria-modal="true" aria-labelledby="quoteModalTitle" hidden>
+      <div class="quote-modal">
+        <div class="quote-modal-header">
+          <div>
+            <h2 id="quoteModalTitle">Get a same-day quote</h2>
+            <p>Pick a destination or tell us your dates — our team replies within 24 hours.</p>
+          </div>
+          <button type="button" class="quote-modal-close" id="quoteModalClose" aria-label="Close quote form">&#10005;</button>
+        </div>
+
+        <form class="quote-card" id="searchForm" novalidate>
+          <div class="quote-picks" role="group" aria-label="Quick destination picks">
+            <button type="button" class="quote-pick active" data-dest="">Any destination</button>
+            <button type="button" class="quote-pick" data-dest="pahalgam">Pahalgam</button>
+            <button type="button" class="quote-pick" data-dest="gulmarg">Gulmarg</button>
+            <button type="button" class="quote-pick" data-dest="srinagar">Srinagar</button>
+          </div>
+
+          <div class="quote-fields">
+            <div class="search-field">
+              <label for="destination">Destination</label>
+              <select id="destination" name="destination">
+                <option value="">Select destination</option>
+                <option value="pahalgam">Pahalgam</option>
+                <option value="gulmarg">Gulmarg</option>
+                <option value="srinagar">Srinagar</option>
+                <option value="sonamarg">Sonamarg</option>
+                <option value="doodhpathri">Doodhpathri</option>
+              </select>
+            </div>
+            <div class="search-field">
+              <label for="dates">Travel date</label>
+              <input type="date" id="dates" name="dates">
+            </div>
+            <div class="search-field">
+              <label for="travelers">Guests</label>
+              <select id="travelers" name="travelers">
+                <option value="1">1 Guest</option>
+                <option value="2" selected>2 Guests</option>
+                <option value="3">3 Guests</option>
+                <option value="4">4 Guests</option>
+                <option value="5+">5+ Guests</option>
+              </select>
+            </div>
+            <button type="submit" class="btn btn-wa search-btn"><svg class="wa-icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>Check on WhatsApp</button>
+          </div>
+          <p class="form-note" id="searchNote" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </div>
+
+    <!-- ============ TRUST BAND ============ -->
+    <section class="trust-band" id="why-us" aria-label="Why travellers trust us">
+
+      <!-- Stat pills -->
+      <div class="trust-pills-wrap">
+        <div class="container">
+          <div class="trust-pills">
+            <div class="trust-pill">
+              <span class="trust-pill-num">15+</span>
+              <span class="trust-pill-label">Years Experience</span>
+              <span class="trust-pill-sub">Established 2009</span>
+            </div>
+            <div class="trust-pill">
+              <span class="trust-pill-num">5,000+</span>
+              <span class="trust-pill-label">Guests Served</span>
+              <span class="trust-pill-sub">Across India &amp; abroad</span>
+            </div>
+            <div class="trust-pill">
+              <span class="trust-pill-num">J&amp;K</span>
+              <span class="trust-pill-label">Registered Operator</span>
+              <span class="trust-pill-sub">Govt. licensed &amp; verified</span>
+            </div>
+            <div class="trust-pill">
+              <span class="trust-pill-num">24/7</span>
+              <span class="trust-pill-label">Support</span>
+              <span class="trust-pill-sub">On-trip assistance</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Proof grid -->
+      <div class="proof-section">
+        <div class="container">
+          <h2 class="proof-heading">Why travellers trust us</h2>
+          <p class="proof-subheading">Every claim below is backed by real documentation, real people, and real guests.</p>
+
+          <div class="proof-grid">
+
+            <!-- 1. Registration Certificate — tall card -->
+            <div class="proof-card proof-card--tall">
+              <div class="proof-body proof-body--top">
+                <span class="proof-cat">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 3l7 3v5c0 4.4-2.9 8.3-7 10-4.1-1.7-7-5.6-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
+                  Official Registration
+                </span>
+                <h3 class="proof-title">J&amp;K Tourism Registration Certificate</h3>
+                <p class="proof-desc">We are a government-registered tourism operator under J&amp;K Tourism — not an aggregator or middleman. You book directly with a licensed operator.</p>
+              </div>
+              <div class="cert-doc ph" data-photo="proof-certificate">
+                <img alt="J&amp;K Tourism Registration Certificate">
+                <div class="cert-doc-corner"></div>
+                <div class="cert-seal">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 3l7 3v5c0 4.4-2.9 8.3-7 10-4.1-1.7-7-5.6-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
+                </div>
+                <div class="cert-lines">
+                  <div class="cert-line"></div>
+                  <div class="cert-line"></div>
+                  <div class="cert-line"></div>
+                </div>
+                <div class="cert-stamp">
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+                  Govt. Verified
+                </div>
+              </div>
+              <div class="est-ribbon">
+                <div class="est-ribbon-line"></div>
+                <span class="est-ribbon-text">Registered since 2009</span>
+                <div class="est-ribbon-line"></div>
+              </div>
+            </div>
+
+            <!-- 2. Office Photo -->
+            <div class="proof-card">
+              <div class="proof-tag">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                Office
+              </div>
+              <div class="proof-media proof-media--reg cat-office ph" data-photo="proof-office">
+                <img alt="Serene Vibes Kashmir office, Srinagar">
+                <div class="proof-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="3" y="7" width="18" height="14" rx="1.5"/><path d="M7 7V5a2 2 0 012-2h6a2 2 0 012 2v2"/><path d="M8 12h8m-8 4h5"/></svg>
+                  <span class="proof-icon-label">Office Photo</span>
+                </div>
+              </div>
+              <div class="proof-body">
+                <span class="proof-cat">Physical Office</span>
+                <h3 class="proof-title">Our Srinagar Office</h3>
+                <p class="proof-desc">We have a real, walk-in office in Srinagar — not just a phone number. Visit us before or during your trip.</p>
+                <a href="#contact" class="proof-link">
+                  Get directions
+                  <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 6h8M6.5 2.5L10 6l-3.5 3.5"/></svg>
+                </a>
+              </div>
+            </div>
+
+            <!-- 3. Google Reviews -->
+            <div class="proof-card">
+              <div class="proof-body proof-body--reviews">
+                <span class="proof-cat">Verified Reviews</span>
+                <div class="review-score">4.9</div>
+                <div class="review-stars" role="img" aria-label="4.9 out of 5 stars">
+                  <span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star">★</span>
+                </div>
+                <p class="review-count">Based on 200+ Google reviews</p>
+                <div class="google-logo" aria-label="Google">
+                  <span class="g-dot" style="background:#4285f4"></span>
+                  <span class="g-dot" style="background:#ea4335"></span>
+                  <span class="g-dot" style="background:#fbbc04"></span>
+                  <span class="g-dot" style="background:#34a853"></span>
+                  <span class="google-logo-text">Google Reviews</span>
+                </div>
+                <div class="review-quotes">
+                  <div class="rq">
+                    <p class="rq-text">"Transfers were punctual, hotels were exactly as described, and our guide in Gulmarg was exceptional."</p>
+                    <p class="rq-author">— Arjun K. · Grand Kashmir Circuit · ★★★★★</p>
+                  </div>
+                  <div class="rq">
+                    <p class="rq-text">"Houseboat package for our anniversary — thoughtfully planned and completely stress-free."</p>
+                    <p class="rq-author">— Priya S. · Heritage &amp; Houseboat · ★★★★★</p>
+                  </div>
+                </div>
+                <a href="https://g.page/r/serenevibeskashmir" target="_blank" rel="noopener" class="proof-link proof-link--mt">
+                  Read all reviews on Google
+                  <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 6h8M6.5 2.5L10 6l-3.5 3.5"/></svg>
+                </a>
+              </div>
+            </div>
+
+            <!-- 4. Team Photographs -->
+            <div class="proof-card">
+              <div class="proof-tag">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                
+              </div>
+              <div class="proof-body proof-body--top">
+                <span class="proof-cat">Local Guides &amp; Team</span>
+                <h3 class="proof-title">Meet the team behind your trip</h3>
+              </div>
+              <div class="team-strip">
+                <!-- Replace these placeholders with real team photos uploaded via the admin panel -->
+                <div class="team-photo ph" data-photo="proof-team-1">
+                  <img alt="Serene Vibes Kashmir guide">
+                  <div class="team-photo-inner" aria-hidden="true">
+                    <div class="team-avatar">MR</div>
+                    <span class="team-avatar-name">Mushtaq<br>Lead Guide</span>
+                  </div>
+                </div>
+                <div class="team-photo ph" data-photo="proof-team-2">
+                  <img alt="Serene Vibes Kashmir team member">
+                  <div class="team-photo-inner" aria-hidden="true">
+                    <div class="team-avatar">AR</div>
+                    <span class="team-avatar-name">Aisha<br>Coordinator</span>
+                  </div>
+                </div>
+                <div class="team-photo ph" data-photo="proof-team-3">
+                  <img alt="Serene Vibes Kashmir driver">
+                  <div class="team-photo-inner" aria-hidden="true">
+                    <div class="team-avatar">FA</div>
+                    <span class="team-avatar-name">Farooq<br>Driver</span>
+                  </div>
+                </div>
+              </div>
+              <div class="proof-body proof-body--bottom">
+                <p class="proof-desc">All our guides are certified, locally born, and have led hundreds of trips across the valley.</p>
+              </div>
+            </div>
+
+            <!-- 5. Customer Photos — wide -->
+            <div class="proof-card proof-card--wide">
+              <div class="proof-tag">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                Guest Photos
+              </div>
+              <div class="proof-media proof-media--wide cat-guest">
+                <!-- Three-slot mosaic: replace these with real guest photos from the admin panel -->
+                <div class="guest-mosaic">
+                  <div class="guest-mosaic-slot ph" data-photo="proof-guest-1"><img alt="Guest photo from Kashmir trip"></div>
+                  <div class="guest-mosaic-slot ph" data-photo="proof-guest-2"><img alt="Guest photo from Kashmir trip"></div>
+                  <div class="guest-mosaic-slot ph" data-photo="proof-guest-3"><img alt="Guest photo from Kashmir trip"></div>
+                </div>
+              </div>
+              <div class="proof-body">
+                <span class="proof-cat">Real Customer Photographs</span>
+                <h3 class="proof-title">Photos from 5,000+ travellers</h3>
+                <p class="proof-desc">Unfiltered moments shared by our guests — Dal Lake at dawn, Gulmarg's slopes, houseboat evenings. Every photo tells a real story.</p>
+                <a href="#gallery" class="proof-link">
+                  Browse the gallery
+                  <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 6h8M6.5 2.5L10 6l-3.5 3.5"/></svg>
+                </a>
+              </div>
+            </div>
+
+            <!-- 6. Hotel Partnerships -->
+            <div class="proof-card">
+              <div class="proof-tag">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M3 18V7"/><path d="M3 14h18v4"/><path d="M21 14v-2a3 3 0 00-3-3h-7v5"/><circle cx="7" cy="11" r="1.6"/></svg>
+                Verified Stays
+              </div>
+              <div class="proof-media proof-media--reg cat-hotel ph" data-photo="proof-hotel">
+                <img alt="Partner hotel in Kashmir">
+                <div class="proof-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M3 18V7"/><path d="M3 14h18v4"/><path d="M21 14v-2a3 3 0 00-3-3h-7v5"/><circle cx="7" cy="11" r="1.6"/></svg>
+                  <span class="proof-icon-label">Hotel Partnership</span>
+                </div>
+              </div>
+              <div class="proof-body">
+                <span class="proof-cat">Hotel Partnerships</span>
+                <h3 class="proof-title">Handpicked, direct partnerships</h3>
+                <p class="proof-desc">We have direct agreements with our partner hotels — not OTA bookings. That is how we guarantee room quality and priority service for every guest.</p>
+                <div class="partner-logos">
+                  <span class="partner-badge">Lalit Grand Palace</span>
+                  <span class="partner-badge">Houseboat Royale</span>
+                  <span class="partner-badge">Hotel Broadway</span>
+                  <span class="partner-badge">+ more partners</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 7. Trip Video -->
+            <div class="proof-card">
+              <div class="proof-tag">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Highlights
+              </div>
+              <button type="button" class="proof-media proof-media--reg cat-video ph" data-photo="proof-video-thumb" data-video-trigger aria-label="Play trip video">
+                <img alt="Kashmir trip video thumbnail">
+                <div class="proof-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="2" y="7" width="15" height="10" rx="1.5"/><path d="M17 9l5-3v12l-5-3"/></svg>
+                  <span class="proof-icon-label">Trip Video</span>
+                </div>
+                <div class="play-btn" aria-hidden="true">
+                  <div class="play-circle">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  </div>
+                </div>
+              </button>
+              <div class="proof-body">
+                <span class="proof-cat">Real Trip Videos</span>
+                <h3 class="proof-title">See a Kashmir trip, start to finish</h3>
+                <p class="proof-desc">Watch actual trip footage — the transfers, the stays, the moments. No stock footage, shot by our guides and guests on real journeys.</p>
+                <a href="https://www.instagram.com/reel/DZNS5iTSrGv/" target="_blank" rel="noopener" class="proof-link" data-video-link>
+                  <span data-video-link-label>Watch on Instagram</span>
+                  <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 6h8M6.5 2.5L10 6l-3.5 3.5"/></svg>
+                </a>
+              </div>
+            </div>
+
+
+          </div><!-- /proof-grid -->
+        </div>
+      </div><!-- /proof-section -->
+
+    </section><!-- /trust-band -->
+
+    <!-- ============ DESTINATIONS ============ -->
+    <section class="section destinations" id="destinations">
+      <div class="container">
+        <div class="section-header">
+          <h2>Kashmir Valley Highlights</h2>
+          <p>Five signature destinations, each selected for natural beauty, cultural significance, and reliable access throughout the season.</p>
+        </div>
+
+        <figure class="reach" id="reach">
+          <!-- Photo background (from the admin panel). Two layers so photos cross-fade. -->
+          <div class="reach-bg" aria-hidden="true">
+            <div class="reach-bg-layer ph ph--hero"><img alt=""></div>
+            <div class="reach-bg-layer ph ph--hero"><img alt=""></div>
+            <div class="reach-scrim"></div>
+          </div>
+          <figcaption>
+            <h3>Every destination is within 90&nbsp;km of Srinagar</h3>
+            <p>Distance from Srinagar, and height above sea level. <span class="reach-hint">Select a destination to explore. Select it again to close.</span></p>
+          </figcaption>
+
+          <div class="reach-plot">
+            <div class="reach-grid" aria-hidden="true">
+              <span style="--e:3000">3,000 m</span>
+              <span style="--e:2000">2,000 m</span>
+              <span style="--e:1000">1,000 m</span>
+            </div>
+            <ol class="reach-field">
+              <li class="reach-stop" style="--km:0;--elev:1585"
+                  data-name="Srinagar" data-elev="1,585 m" data-km="0 km"
+                  data-desc="The summer capital of Kashmir — famous for Dal Lake, ornate houseboats, Mughal gardens, and the old city's bustling markets."
+                  data-slot="reach-srinagar" data-fallback="dest-srinagar">
+                <span class="reach-elev">1,585 m</span>
+                <button type="button" class="reach-name" aria-pressed="false" aria-controls="reachDetail">Srinagar<small>Base &amp; airport hub</small></button>
+              </li>
+              <li class="reach-stop" style="--km:42;--elev:2610"
+                  data-name="Doodhpathri" data-elev="2,610 m" data-km="42 km"
+                  data-desc="The 'Valley of Milk' — a pristine alpine meadow carpeted with wildflowers, crystal-clear streams, and snow-dusted peaks."
+                  data-slot="reach-doodhpathri" data-fallback="dest-doodhpathri">
+                <span class="reach-elev">2,610 m</span>
+                <button type="button" class="reach-name" aria-pressed="false" aria-controls="reachDetail">Doodhpathri<small>42 km from Srinagar</small></button>
+              </li>
+              <li class="reach-stop" style="--km:52;--elev:2690"
+                  data-name="Gulmarg" data-elev="2,690 m" data-km="52 km"
+                  data-desc="Asia's highest gondola, world-class ski slopes in winter, and sweeping meadows of wildflowers in summer — Gulmarg does it all."
+                  data-slot="reach-gulmarg" data-fallback="dest-gulmarg">
+                <span class="reach-elev">2,690 m</span>
+                <button type="button" class="reach-name" aria-pressed="false" aria-controls="reachDetail">Gulmarg<small>52 km from Srinagar</small></button>
+              </li>
+              <li class="reach-stop" style="--km:80;--elev:2800"
+                  data-name="Sonamarg" data-elev="2,800 m" data-km="80 km"
+                  data-desc="The 'Meadow of Gold' — gateway to the Himalayan glaciers, offering breathtaking views of Thajiwas Glacier and the Sindh River valley."
+                  data-slot="reach-sonamarg" data-fallback="dest-sonamarg">
+                <span class="reach-elev">2,800 m</span>
+                <button type="button" class="reach-name" aria-pressed="false" aria-controls="reachDetail">Sonamarg<small>80 km from Srinagar</small></button>
+              </li>
+              <li class="reach-stop" style="--km:90;--elev:2130"
+                  data-name="Pahalgam" data-elev="2,130 m" data-km="90 km"
+                  data-desc="The 'Valley of Shepherds' — pine forests, the Lidder River, and the starting point of the annual Amarnath Yatra pilgrimage."
+                  data-slot="reach-pahalgam" data-fallback="dest-pahalgam">
+                <span class="reach-elev">2,130 m</span>
+                <button type="button" class="reach-name" aria-pressed="false" aria-controls="reachDetail">Pahalgam<small>90 km from Srinagar</small></button>
+              </li>
+            </ol>
+          </div>
+
+          <!-- Selected destination details: reserved band INSIDE the card, so text never lands on the chart -->
+          <div class="reach-info" id="reachDetail" aria-live="polite">
+            <div class="reach-info-inner">
+              <div class="reach-info-text">
+                <p class="reach-detail-meta" id="reachDetailMeta"></p>
+                <h4 id="reachDetailName"></h4>
+                <p class="reach-detail-desc" id="reachDetailDesc"></p>
+              </div>
+              <a href="#contact" class="btn btn-primary reach-detail-cta" id="reachDetailCta">Enquire</a>
+            </div>
+          </div>
+        </figure>
+
+        <div class="destinations-grid">
+          <a href="#contact" class="destination-card destination-card--large" data-destination="Srinagar">
+            <div class="ph ph--lake" data-photo="dest-srinagar"><img alt="Dal Lake, Srinagar"></div>
+            <div class="destination-info">
+              <span class="destination-elev">1,585 m · Summer Capital</span>
+              <h3>Srinagar</h3>
+              <p>Drift by shikara across Dal Lake at sunset, wander the Mughal-era terraces of Nishat and Shalimar Bagh, and watch the valley unfold from Shankaracharya hill.</p>
+              <ul class="destination-spots">
+                <li>Shalimar Bagh</li>
+                <li>Nishat Bagh</li>
+                <li>Shankaracharya Temple</li>
+                <li>Dal Lake &amp; Houseboats</li>
+              </ul>
+            </div>
+          </a>
+          <a href="#contact" class="destination-card" data-destination="Pahalgam">
+            <div class="ph ph--pine" data-photo="dest-pahalgam"><img alt="Pahalgam valley"></div>
+            <div class="destination-info">
+              <span class="destination-elev">2,130 m</span>
+              <span class="destination-region">Valley of Shepherds</span>
+              <h3>Pahalgam</h3>
+              <p>Lidder Valley · Betaab Valley · Aru</p>
+            </div>
+          </a>
+          <a href="#contact" class="destination-card" data-destination="Gulmarg">
+            <div class="ph ph--slate" data-photo="dest-gulmarg"><img alt="Gulmarg meadows"></div>
+            <div class="destination-info">
+              <span class="destination-elev">2,690 m</span>
+              <span class="destination-region">Meadow of Flowers</span>
+              <h3>Gulmarg</h3>
+              <p>Gondola Cable Car · Khilanmarg · Apharwat Peak</p>
+            </div>
+          </a>
+          <a href="#contact" class="destination-card" data-destination="Sonamarg">
+            <div class="ph ph--slate" data-photo="dest-sonamarg"><img alt="Sonamarg mountains"></div>
+            <div class="destination-info">
+              <span class="destination-elev">2,800 m</span>
+              <span class="destination-region">Meadow of Gold</span>
+              <h3>Sonamarg</h3>
+              <p>Thajiwas Glacier · Sindh River</p>
+            </div>
+          </a>
+          <a href="#contact" class="destination-card" data-destination="Doodhpathri">
+            <div class="ph ph--pine" data-photo="dest-doodhpathri"><img alt="Doodhpathri meadows"></div>
+            <div class="destination-info">
+              <span class="destination-elev">2,610 m</span>
+              <span class="destination-region">Valley of Milk</span>
+              <h3>Doodhpathri</h3>
+              <p>Shaliganga River · Pine Forests</p>
+            </div>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PACKAGES ============ -->
+    <section class="section packages" id="packages">
+      <div class="container">
+        <div class="section-header">
+          <h2>Structured Itineraries</h2>
+          <p>Fixed-departure and custom packages including accommodation, transfers, permits, and guided sightseeing — with no hidden charges.</p>
+        </div>
+        <div class="packages-grid" data-packages-grid></div>
+        <template id="packageCardTemplate">
+          <article class="package-card">
+            <div class="package-photo ph" data-package-photo><img alt=""></div>
+            <div class="package-body">
+              <div class="package-meta"><span class="package-duration"></span><span class="package-badge"></span></div>
+              <h3></h3>
+              <p class="package-desc"></p>
+              <ul class="package-features"></ul>
+              <div class="package-footer">
+                <span class="package-price">From <strong></strong> <span class="package-per"></span></span>
+                <a href="#contact" class="btn" data-package>Enquire</a>
+              </div>
+            </div>
+          </article>
+        </template>
+      </div>
+    </section>
+
+    <!-- ============ ABOUT ============ -->
+    <section class="section about" id="about">
+      <div class="container about-grid">
+        <div class="about-images">
+          <div class="about-img-main ph ph--lake" data-photo="about-main"><img alt="Dal Lake, Srinagar"></div>
+          <div class="about-img-accent ph ph--pine" data-photo="about-accent"><img alt="Kashmir valley landscape"></div>
+        </div>
+        <div class="about-content">
+          <h2>Kashmir Specialists Since 2009</h2>
+          <p>Serene Vibes Kashmir is a Srinagar-based tour operator focused exclusively on the valley. We combine local knowledge with professional trip management to deliver reliable, well-organized travel experiences.</p>
+          <ul class="about-list">
+            <li><strong>Local Operations Team</strong><p>Ground staff and guides based in Srinagar, available throughout your journey.</p></li>
+            <li><strong>Transparent Pricing</strong><p>Detailed quotations with inclusions, exclusions, and taxes clearly listed upfront.</p></li>
+            <li><strong>Responsible Tourism</strong><p>Partnerships with local communities and environmentally conscious accommodation providers.</p></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SEASONS ============ -->
+    <section class="section season-strip">
+      <div class="container">
+        <div class="section-header">
+          <h2>Kashmir Through the Seasons</h2>
+          <p>Each season changes what the valley has to offer — select one to see what to plan around.</p>
+        </div>
+        <div class="season-grid" id="seasonGrid">
+
+          <div class="season-item">
+            <button type="button" class="season-card" data-start="3" data-end="5" aria-expanded="false" aria-controls="season-detail-spring">
+              <div class="season-photo ph ph--pine" data-photo="season-spring"><img alt="Spring in Kashmir"></div>
+              <span class="season-icon-ring">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 21v-8"/>
+                  <path d="M12 13c-2.3 0-3.8-1.8-3.8-4.2 0-1.7.9-3.2 1.9-4.4A6.3 6.3 0 0112 2.5a6.3 6.3 0 011.9 1.9c1 1.2 1.9 2.7 1.9 4.4 0 2.4-1.5 4.2-3.8 4.2z"/>
+                  <path d="M8.4 17.5c-1.6.3-3 1.5-3.6 3"/>
+                  <path d="M15.6 15.5c1.6.3 3 1.5 3.6 3"/>
+                </svg>
+              </span>
+              <span class="season-badge" hidden>Happening now</span>
+              <div class="season-card-body">
+              <p class="season-months">Mar – May</p>
+              <h3>Spring Bloom</h3>
+              <p class="season-teaser">Tulip gardens open in Srinagar, orchards blossom across the valley, and Doodhpathri's meadows turn green.</p>
+              <span class="season-toggle-hint">Season highlights <svg class="chevron" width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              </div>
+            </button>
+            <div class="season-detail" id="season-detail-spring">
+              <div class="season-detail-inner">
+                <ul>
+                  <li>Indira Gandhi Tulip Garden is in full bloom from late March through mid-April — Asia's largest tulip garden.</li>
+                  <li>Orchard blossoms spread across the valley through April; ideal light for photography.</li>
+                  <li>Mild days, cool evenings — pack layers rather than heavy winter wear.</li>
+                </ul>
+                <a href="#contact" class="btn btn-outline-dark season-detail-cta" data-season="Spring Bloom (Mar–May)">Plan a Mar–May trip</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="season-item">
+            <button type="button" class="season-card" data-start="6" data-end="8" aria-expanded="false" aria-controls="season-detail-summer">
+              <div class="season-photo ph ph--slate" data-photo="season-summer"><img alt="Summer in Kashmir"></div>
+              <span class="season-icon-ring">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="8.2" r="2.6"/>
+                  <path d="M12 3v1.3M12 12v1.3M7 8.2h1.3M16.7 8.2H18M8.4 4.6l.9.9M15.6 4.6l-.9.9M8.4 11.8l.9-.9M15.6 11.8l-.9-.9"/>
+                  <path d="M3 19l4.2-6.4 2.8 3 3-4.4 3 4 3.5-3.1L21 19z"/>
+                </svg>
+              </span>
+              <span class="season-badge" hidden>Happening now</span>
+              <div class="season-card-body">
+              <p class="season-months">Jun – Aug</p>
+              <h3>Summer Greens</h3>
+              <p class="season-teaser">Peak season for Gulmarg's meadows, Pahalgam's riverside walks, and family sightseeing across all five stops.</p>
+              <span class="season-toggle-hint">Season highlights <svg class="chevron" width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              </div>
+            </button>
+            <div class="season-detail" id="season-detail-summer">
+              <div class="season-detail-inner">
+                <ul>
+                  <li>Gulmarg's gondola runs to Apharwat Peak in clear alpine weather — the meadows are at their greenest.</li>
+                  <li>Pahalgam's Lidder riverside walks and Betaab Valley are most accessible this season.</li>
+                  <li>This is peak season — hotels and gondola slots fill up, so book 4–6 weeks ahead.</li>
+                </ul>
+                <a href="#contact" class="btn btn-outline-dark season-detail-cta" data-season="Summer Greens (Jun–Aug)">Plan a Jun–Aug trip</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="season-item">
+            <button type="button" class="season-card" data-start="9" data-end="11" aria-expanded="false" aria-controls="season-detail-autumn">
+              <div class="season-photo ph ph--pine" data-photo="season-autumn"><img alt="Autumn in Kashmir"></div>
+              <span class="season-icon-ring">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 3.2l1.5 3 3.3-1-1 3.3 3.1 1.5-2.8 2 1.5 3.3-3.3-1-1 3.3-1.3-2.8-1.3 2.8-1-3.3-3.3 1 1.5-3.3-2.8-2 3.1-1.5-1-3.3 3.3 1z"/>
+                  <path d="M12 12.5V20"/>
+                </svg>
+              </span>
+              <span class="season-badge" hidden>Happening now</span>
+              <div class="season-card-body">
+              <p class="season-months">Sep – Nov</p>
+              <h3>Autumn Gold</h3>
+              <p class="season-teaser">Chinar trees turn amber across Srinagar's gardens — fewer crowds, crisp air, dramatic valley light.</p>
+              <span class="season-toggle-hint">Season highlights <svg class="chevron" width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              </div>
+            </button>
+            <div class="season-detail" id="season-detail-autumn">
+              <div class="season-detail-inner">
+                <ul>
+                  <li>Chinar trees at Nishat Bagh and Shalimar Bagh turn deep amber through late September and October.</li>
+                  <li>Noticeably fewer crowds than summer, with lower hotel rates across all five destinations.</li>
+                  <li>Crisp, clear air gives the sharpest mountain views of the year — a favourite for photographers.</li>
+                </ul>
+                <a href="#contact" class="btn btn-outline-dark season-detail-cta" data-season="Autumn Gold (Sep–Nov)">Plan a Sep–Nov trip</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="season-item">
+            <button type="button" class="season-card" data-start="12" data-end="2" aria-expanded="false" aria-controls="season-detail-winter">
+              <div class="season-photo ph ph--slate" data-photo="season-winter"><img alt="Winter in Kashmir"></div>
+              <span class="season-icon-ring">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M2.5 18.5l4.8-8.2 2.7 3.3 2.5-4.4 2.4 3 3.6-3.8 3 10.1z"/>
+                  <path d="M7.3 10.3l-1.1 2h2.3z"/>
+                  <path d="M18.5 4.2v3.6M16.9 5.1l3.2 1.8M20.1 5.1l-3.2 1.8"/>
+                </svg>
+              </span>
+              <span class="season-badge" hidden>Happening now</span>
+              <div class="season-card-body">
+              <p class="season-months">Dec – Feb</p>
+              <h3>Winter Snow</h3>
+              <p class="season-teaser">Gulmarg becomes a skiing destination with snow-laden slopes; Srinagar's lakes take on a quieter, frozen calm.</p>
+              <span class="season-toggle-hint">Season highlights <svg class="chevron" width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+              </div>
+            </button>
+            <div class="season-detail" id="season-detail-winter">
+              <div class="season-detail-inner">
+                <ul>
+                  <li>Gulmarg's slopes and gondola open for skiing and snowboarding through the coldest months.</li>
+                  <li>Dal Lake's shallows can freeze in the coldest stretches of January — a rare sight for most visitors.</li>
+                  <li>Srinagar hotel rates are at their lowest, with houseboats offering heated stays on the lake.</li>
+                </ul>
+                <a href="#contact" class="btn btn-outline-dark season-detail-cta" data-season="Winter Snow (Dec–Feb)">Plan a Dec–Feb trip</a>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TESTIMONIALS ============ -->
+    <section class="section testimonials" id="testimonials">
+      <div class="container">
+        <div class="section-header section-header--center">
+          <h2>What Our Travelers Say</h2>
+        </div>
+        <div class="testimonials-slider" role="region" aria-roledescription="carousel" aria-label="Guest reviews">
+          <div class="testimonials-track" id="testimonialsTrack">
+            <blockquote class="testimonial">
+              <div class="testimonial-stars" role="img" aria-label="5 out of 5 stars">★★★★★</div>
+              <p>"The Grand Kashmir Circuit was impeccably organized. Transfers were punctual, hotels were as described, and our guide in Gulmarg was exceptional."</p>
+              <footer><div class="testimonial-avatar" aria-hidden="true">AK</div><div><cite>Arjun Kapoor</cite><span>Grand Kashmir Circuit · March 2026</span></div></footer>
+            </blockquote>
+            <blockquote class="testimonial">
+              <div class="testimonial-stars" role="img" aria-label="5 out of 5 stars">★★★★★</div>
+              <p>"We booked the houseboat package for our anniversary. The Srinagar itinerary covering Shalimar, Nishat, and Dal Lake was thoughtfully planned and stress-free."</p>
+              <footer><div class="testimonial-avatar" aria-hidden="true">PS</div><div><cite>Priya Sharma</cite><span>Heritage &amp; Houseboat · February 2026</span></div></footer>
+            </blockquote>
+            <blockquote class="testimonial">
+              <div class="testimonial-stars" role="img" aria-label="5 out of 5 stars">★★★★★</div>
+              <p>"Traveled with elderly parents to Pahalgam and Sonamarg. The team adjusted pacing and vehicle arrangements without us having to ask. Highly professional service."</p>
+              <footer><div class="testimonial-avatar" aria-hidden="true">RM</div><div><cite>Rahul Mehta</cite><span>Valley Discovery · January 2026</span></div></footer>
+            </blockquote>
+          </div>
+          <div class="testimonials-controls">
+            <button class="slider-btn" id="prevBtn" type="button" aria-label="Previous review"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <div class="slider-dots" id="sliderDots"></div>
+            <button class="slider-btn" id="nextBtn" type="button" aria-label="Next review"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3L11 8L6 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ GALLERY (hidden automatically until photos are uploaded) ============ -->
+    <section class="section gallery" id="gallery" data-gallery hidden>
+      <div class="container">
+        <div class="gallery-header">
+          <div class="section-header">
+            <h2>From the Valley</h2>
+            <p>Moments from the journeys we plan — tap any photo to view it full screen.</p>
+          </div>
+          <a href="https://instagram.com/serenevibeskashmir" target="_blank" rel="noopener" class="social-handle">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="0.8" fill="currentColor" stroke="none"/></svg>
+            @serenevibeskashmir
+          </a>
+        </div>
+        <div class="gallery-grid">
+          <button type="button" class="gallery-tile ph ph--lake" data-photo="gallery-1" aria-label="Open photo 1"><img alt="Kashmir travel photo"></button>
+          <button type="button" class="gallery-tile ph ph--pine" data-photo="gallery-2" aria-label="Open photo 2"><img alt="Kashmir travel photo"></button>
+          <button type="button" class="gallery-tile ph ph--slate" data-photo="gallery-3" aria-label="Open photo 3"><img alt="Kashmir travel photo"></button>
+          <button type="button" class="gallery-tile ph ph--pine" data-photo="gallery-4" aria-label="Open photo 4"><img alt="Kashmir travel photo"></button>
+          <button type="button" class="gallery-tile ph ph--lake" data-photo="gallery-5" aria-label="Open photo 5"><img alt="Kashmir travel photo"></button>
+          <button type="button" class="gallery-tile ph ph--slate" data-photo="gallery-6" aria-label="Open photo 6"><img alt="Kashmir travel photo"></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CONTACT ============ -->
+    <section class="section contact" id="contact">
+      <div class="container contact-grid">
+        <div class="contact-info">
+          <h2>Request a Custom Itinerary</h2>
+          <p>Submit your enquiry and a travel consultant will contact you within one business day with package options and a detailed quotation.</p>
+          <div class="contact-details">
+            <div class="contact-item">
+              <span class="contact-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 10.833a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" stroke="currentColor" stroke-width="1.5"/><path d="M10 18.333s6.667-4.167 6.667-10A6.667 6.667 0 103.333 8.333c0 5.834 6.667 10 6.667 10z" stroke="currentColor" stroke-width="1.5"/></svg></span>
+              <div><strong>Office</strong><p>NH-44, Lethpora Awantipora<br>Jammu &amp; Kashmir 192122</p></div>
+            </div>
+            <div class="contact-item">
+              <span class="contact-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h3.5l1.7 4.3-2.2 1.4a11 11 0 005 5l1.4-2.2L19 14.2V18a2 2 0 01-2 2A14 14 0 013 6a2 2 0 012-2z"/></svg></span>
+              <div><strong>Phone</strong><p><a href="tel:+919419766510">+919419766510</a><br>Mon–Sat, 9:00 AM – 7:00 PM IST</p></div>
+            </div>
+            <div class="contact-item">
+              <span class="contact-icon contact-icon--wa" aria-hidden="true"><svg class="wa-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></span>
+              <div><strong>WhatsApp</strong><p><a href="https://wa.me/919419766510?text=Hello%20Serene%20Vibes%20Kashmir%21%20I%27d%20like%20to%20know%20more%20about%20your%20Kashmir%20tour%20packages." data-wa target="_blank" rel="noopener">Chat with our team</a><br>+919419766510</p></div>
+            </div>
+            <div class="contact-item">
+              <span class="contact-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3.333 5.833l6.667 5 6.667-5M3.333 15h13.334V5.833H3.333V15z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg></span>
+              <div><strong>Email</strong><p><a href="mailto:serenevibeskashmir@gmail.com">serenevibeskashmir@gmail.com</a></p></div>
+            </div>
+          </div>
+        </div>
+        <form class="contact-form" id="contactForm">
+          <h3 class="contact-form-title">Enquiry Form</h3>
+          <div class="form-row">
+            <div class="form-group"><label for="firstName">First name</label><input type="text" id="firstName" name="firstName" required autocomplete="given-name"></div>
+            <div class="form-group"><label for="lastName">Last name</label><input type="text" id="lastName" name="lastName" required autocomplete="family-name"></div>
+          </div>
+          <div class="form-group"><label for="email">Email address</label><input type="email" id="email" name="email" required autocomplete="email"></div>
+          <div class="form-group"><label for="phone">Phone number</label><input type="tel" id="phone" name="phone" placeholder="+91" autocomplete="tel"></div>
+          <div class="form-group">
+            <label for="tripInterest">Package interest</label>
+            <select id="tripInterest" name="tripInterest" required>
+              <option value="">Select a package</option>
+              <option value="valley">Valley Discovery</option>
+              <option value="circuit">Grand Kashmir Circuit</option>
+              <option value="heritage">Heritage &amp; Houseboat</option>
+              <option value="custom">Custom Itinerary</option>
+            </select>
+          </div>
+          <div class="form-group"><label for="message">Trip requirements</label><textarea id="message" name="message" rows="4" placeholder="Preferred dates, number of guests, destinations, and any special requirements"></textarea></div>
+          <button type="submit" class="btn btn-wa btn-full"><svg class="wa-icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>Send enquiry on WhatsApp</button>
+          <p class="form-hint">Opens WhatsApp with your details already filled in. Just tap Send.</p>
+          <p class="form-note" id="formNote" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
+
+    <!-- ============ POLICIES ============ -->
+    <section class="section policies-section" id="policies">
+      <div class="container">
+        <div class="section-header">
+          <h2>Booking, Payment &amp; Cancellation Terms</h2>
+          <p>The same terms issued with every client itinerary — laid out here for reference before you book.</p>
+        </div>
+
+        <div class="policy-list">
+          <details class="policy" id="booking-terms">
+            <summary>Booking Terms</summary>
+            <div class="policy-body">
+              <p>All bookings are processed after receiving the token amount. This amount is refundable in case Serene Vibes Kashmir is unable to confirm your booking on the requested date.</p>
+              <p>These itineraries give a general idea of our standard tour. Weather, road conditions, natural hazards, and the physical ability of participants may require changes before or during the trip. Serene Vibes Kashmir is not responsible for delays or expenses arising from natural calamities, flight cancellations, accidents, transport breakdowns, sickness, political closures, or other untoward incidents.</p>
+
+              <h4 class="policy-subtitle">Payment Schedule</h4>
+              <div class="policy-table-wrap">
+                <table class="policy-table">
+                  <thead>
+                    <tr><th>Instalment</th><th>Amount</th><th>Due Date</th><th>Mode</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>Token / Advance</td><td>30% of total cost</td><td>At time of booking</td><td>NEFT / UPI / Cheque</td></tr>
+                    <tr><td>Balance Payment</td><td>70% of total cost</td><td>7 days before departure</td><td>NEFT / UPI / Cheque</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="policy-note">Bank Transfer Details — Account Name: Serene Vibes Kashmir &nbsp;|&nbsp; Bank: J&amp;K Bank &nbsp;|&nbsp; UPI: serenevibeskashmir@upi. Full account number and IFSC are shared on your confirmed quotation.</p>
+
+              <h4 class="policy-subtitle">Child Policy</h4>
+              <p>Children up to age 5 are not charged. Children aged 6–10 are not charged for the package but meal charges apply. Children aged 11 and above are considered adults and charged accordingly.</p>
+
+              <h4 class="policy-subtitle">Documents Required</h4>
+              <p>A government-issued photo ID (Aadhaar / Passport / Voter ID) is mandatory for every guest at all checkpoints — copies are not accepted. Foreign nationals must carry a valid passport and Indian visa. Age proof is required for children aged 2–10 and infants under 2.</p>
+            </div>
+          </details>
+
+          <details class="policy" id="cancellation-policy">
+            <summary>Cancellation Policy</summary>
+            <div class="policy-body">
+              <div class="policy-table-wrap">
+                <table class="policy-table">
+                  <thead>
+                    <tr><th>Cancellation Timeline</th><th>Cancellation Charge</th><th>Refund %</th><th>Processing Time</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr><td>30 days or more before departure</td><td>Nil (token forfeited)</td><td>70%</td><td>7–10 working days</td></tr>
+                    <tr><td>15–29 days before departure</td><td>25% of total tour cost</td><td>45%</td><td>7–10 working days</td></tr>
+                    <tr><td>7–14 days before departure</td><td>50% of total tour cost</td><td>20%</td><td>10–14 working days</td></tr>
+                    <tr><td>Less than 7 days / No-show</td><td>100% of total tour cost</td><td>Nil</td><td>Not applicable</td></tr>
+                    <tr><td>Natural calamity / force majeure</td><td>Credit note for future travel</td><td>—</td><td>As per T&amp;C</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p>Any alteration or cancellation after the holiday has commenced may incur additional penalties, and refunds do not apply to unused services.</p>
+            </div>
+          </details>
+
+          <details class="policy" id="privacy-policy">
+            <summary>Privacy Policy</summary>
+            <div class="policy-body">
+              <p>Information you share with us — name, contact details, travel dates, and trip preferences — is used solely to prepare your itinerary, process your booking, and coordinate your stay with our hotel and transport partners. We do not sell or share your personal information with third parties beyond what is necessary to deliver your booked services.</p>
+              <p>Payment details are handled through your bank or UPI provider directly; Serene Vibes Kashmir does not store card or account credentials. For any privacy concerns, write to <a href="mailto:serenevibeskashmir@gmail.com">serenevibeskashmir@gmail.com</a>.</p>
+            </div>
+          </details>
+
+          <details class="policy" id="refund-guidelines">
+            <summary>Refund Guidelines</summary>
+            <div class="policy-body">
+              <p>All refund claims must be raised within 7 days of booking completion by emailing <a href="mailto:serenevibeskashmir@gmail.com">serenevibeskashmir@gmail.com</a>. Requests raised after the trip has commenced will not be entertained.</p>
+              <p>Amounts already paid to third-party hotels or airlines are refunded only after recovery from the respective vendor, and refund timelines follow the cancellation table above. If a tour cannot be undertaken due to a pandemic or similar disruption, we provide either a refund or a credit note for future travel, subject to third-party vendor conditions. In case of billing errors, the agency reserves the right to re-invoice; dishonoured cheques attract a penalty of INR 500 per instance.</p>
+            </div>
+          </details>
+        </div>
+
+        <p class="policy-footnote">These terms apply to all bookings made through Serene Vibes Kashmir and are reissued in full with every client itinerary. For the complete terms &amp; conditions covering hotel policy, check-in/out, telecom, and jurisdiction, contact our team directly.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-grid">
+      <div class="footer-brand">
+        <a href="#top" class="logo">
+          <img class="logo-mark" src="/icons/icon-192.png" width="30" height="30" alt="" aria-hidden="true">
+          <span class="logo-text"><span class="logo-name">Serene Vibes Kashmir</span><span class="logo-tagline">A Poem In Motion</span></span>
+        </a>
+        <p>Licensed Kashmir tour operator delivering professionally managed travel experiences across the valley.</p>
+      </div>
+      <div class="footer-links">
+        <h4>Navigation</h4>
+        <ul><li><a href="#destinations">Destinations</a></li><li><a href="#packages">Packages</a></li><li><a href="#about">About</a></li><li><a href="#contact">Contact</a></li></ul>
+      </div>
+      <div class="footer-links">
+        <h4>Policies</h4>
+        <ul><li><a href="#booking-terms">Booking Terms</a></li><li><a href="#cancellation-policy">Cancellation Policy</a></li><li><a href="#privacy-policy">Privacy Policy</a></li><li><a href="#refund-guidelines">Refund Guidelines</a></li></ul>
+      </div>
+      <div class="footer-contact">
+        <h4>Contact</h4>
+        <p>NH-44, Lethpora<br>J&amp;K 192122</p>
+        <p><a href="tel:+919419766510">+919419766510</a></p>
+        <p><a href="https://wa.me/919419766510?text=Hello%20Serene%20Vibes%20Kashmir%21%20I%27d%20like%20to%20know%20more%20about%20your%20Kashmir%20tour%20packages." data-wa target="_blank" rel="noopener">WhatsApp chat</a></p>
+        <p><a href="mailto:serenevibeskashmir@gmail.com">serenevibeskashmir@gmail.com</a></p>
+        <p><a href="https://instagram.com/serenevibeskashmir" target="_blank" rel="noopener">@serenevibeskashmir</a></p>
+      </div>
+    </div>
+    <div class="footer-bottom container"><p>&copy; 2026 Serene Vibes Kashmir. All rights reserved.</p></div>
+  </footer>
+
+  <!-- Mobile quick actions -->
+  <div class="mobile-cta" aria-label="Quick contact">
+    <a href="tel:+919419766510" class="btn btn-ghost-dark">Call us</a>
+    <a href="#contact" class="btn btn-primary">Enquire now</a>
+  </div>
+
+  <!-- WhatsApp chat button (number is set once, in js/main.js -> WHATSAPP_NUMBER) -->
+  <a href="https://wa.me/919419766510?text=Hello%20Serene%20Vibes%20Kashmir%21%20I%27d%20like%20to%20know%20more%20about%20your%20Kashmir%20tour%20packages." class="wa-float" data-wa target="_blank" rel="noopener" aria-label="Chat with us on WhatsApp">
+    <svg class="wa-icon" viewBox="0 0 24 24" width="28" height="28" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+    <span class="wa-float-label">Chat with us</span>
+  </a>
+
+  <!-- Trip video pop-up, opened from the "Real Trip Videos" card. The video link comes from the admin panel (Website Photos -> Highlight video). -->
+  <div class="video-modal-overlay" id="videoModalOverlay" role="dialog" aria-modal="true" aria-label="Trip video" hidden>
+    <button type="button" class="video-modal-close" id="videoModalClose" aria-label="Close video">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 4l12 12M16 4L4 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+    <div class="video-modal">
+      <div class="video-modal-body" id="videoModalBody">
+        <p class="video-loading">Loading video…</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Gallery lightbox -->
+  <dialog class="lightbox" id="lightbox" aria-label="Photo viewer">
+    <button type="button" class="lightbox-close" id="lbClose" aria-label="Close photo">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 4l12 12M16 4L4 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+    <button type="button" class="lightbox-nav lightbox-prev" id="lbPrev" aria-label="Previous photo"><svg width="20" height="20" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3L5 8L10 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <figure class="lightbox-figure"><img id="lbImg" alt=""><figcaption id="lbCap"></figcaption></figure>
+    <button type="button" class="lightbox-nav lightbox-next" id="lbNext" aria-label="Next photo"><svg width="20" height="20" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3L11 8L6 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </dialog>
+
+  <script src="/js/main.js"></script>
+  <script src="/js/assistant.js" defer></script>
+</body>
+</html>

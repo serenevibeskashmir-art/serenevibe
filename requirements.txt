@@ -1,0 +1,10 @@
+flask
+flask-cors
+flask-sqlalchemy
+python-dotenv
+fpdf2
+reportlab
+requests
+gunicorn
+psycopg2-binary
+SQLAlchemy>=2.0.33

@@ -1,0 +1,213 @@
+<!-- Service Worker Registration Script -->
+<!-- Add this to your index.html before closing </body> tag -->
+
+<script>
+  /**
+   * Service Worker Registration
+   * Registers the service worker for PWA functionality
+   */
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js')
+        .then((registration) => {
+          console.log('✅ Service Worker registered successfully:', registration);
+
+          // Check for updates every minute
+          setInterval(() => {
+            registration.update();
+          }, 60000);
+
+          // Listen for updates
+          registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing;
+            
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                // New service worker is ready, notify user
+                showUpdateNotification(registration);
+              }
+            });
+          });
+        })
+        .catch((error) => {
+          console.error('❌ Service Worker registration failed:', error);
+          // App still works, just without offline support
+        });
+    });
+
+    // Listen for messages from service worker
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      console.log('Message from Service Worker:', event.data);
+      
+      if (event.data && event.data.type === 'NOTIFICATION') {
+        // Handle notifications from service worker
+        console.log(event.data.message);
+      }
+    });
+
+    // Handle service worker updates
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      
+      // Reload page when new service worker takes control
+      console.log('New Service Worker activated, reloading page...');
+      window.location.reload();
+    });
+  } else {
+    console.warn('⚠️ Service Workers not supported in this browser');
+  }
+
+  /**
+   * Show update notification to user
+   * Lets user know when a new version is available
+   */
+  function showUpdateNotification(registration) {
+    // Create a toast/banner notification
+    const updateBanner = document.createElement('div');
+    updateBanner.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: #0a1f2b;
+      color: #f6f1e7;
+      padding: 16px 24px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      font-size: 14px;
+      z-index: 9999;
+      max-width: 300px;
+    `;
+
+    updateBanner.innerHTML = `
+      <div style="margin-bottom: 12px; font-weight: 500;">
+        ✨ New version available!
+      </div>
+      <div style="margin-bottom: 12px; font-size: 13px; opacity: 0.9;">
+        A new version of Serene Vibes is ready. Refresh to update.
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button id="update-btn" style="
+          background-color: #c98a4b;
+          color: #fff;
+          border: none;
+          padding: 6px 12px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 13px;
+          font-weight: 500;
+        ">Refresh</button>
+        <button id="dismiss-btn" style="
+          background-color: rgba(255,255,255,0.1);
+          color: #f6f1e7;
+          border: none;
+          padding: 6px 12px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 13px;
+        ">Dismiss</button>
+      </div>
+    `;
+
+    document.body.appendChild(updateBanner);
+
+    // Update button - Skip waiting and reload
+    document.getElementById('update-btn').addEventListener('click', () => {
+      const worker = registration.waiting;
+      if (worker) {
+        worker.postMessage({ type: 'SKIP_WAITING' });
+        updateBanner.remove();
+      }
+    });
+
+    // Dismiss button - Hide notification
+    document.getElementById('dismiss-btn').addEventListener('click', () => {
+      updateBanner.remove();
+    });
+
+    // Auto-remove after 10 seconds if not dismissed
+    setTimeout(() => {
+      if (updateBanner.parentNode) {
+        updateBanner.remove();
+      }
+    }, 10000);
+  }
+
+  /**
+   * Check if app is running in standalone mode
+   * (installed as PWA app, not in browser)
+   */
+  function isStandaloneMode() {
+    return window.matchMedia('(display-mode: standalone)').matches ||
+           window.navigator.standalone === true ||
+           document.referrer.includes('android-app://');
+  }
+
+  if (isStandaloneMode()) {
+    console.log('ℹ️ App is running in standalone mode (installed PWA)');
+    document.documentElement.classList.add('pwa-standalone');
+  }
+
+  /**
+   * Optional: Request notification permissions for push notifications
+   * Uncomment to enable push notifications
+   */
+  /*
+  function requestNotificationPermission() {
+    if ('Notification' in window && navigator.serviceWorker.controller) {
+      if (Notification.permission === 'granted') {
+        console.log('Notifications already enabled');
+      } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then((permission) => {
+          if (permission === 'granted') {
+            console.log('✅ Notifications enabled');
+            // Subscribe to push notifications
+            navigator.serviceWorker.ready.then((registration) => {
+              registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array('YOUR_PUBLIC_VAPID_KEY')
+              });
+            });
+          }
+        });
+      }
+    }
+  }
+
+  // Request permission when user interacts with page
+  document.addEventListener('click', () => {
+    requestNotificationPermission();
+  }, { once: true });
+  */
+
+  /**
+   * Debug: Log service worker status
+   */
+  function logServiceWorkerStatus() {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then(() => {
+        console.log('✅ Service Worker is ready and controlling the page');
+      });
+
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        console.log(`📊 Service Worker registrations: ${registrations.length}`);
+        registrations.forEach((registration) => {
+          console.log('  - Scope:', registration.scope);
+          console.log('  - Active:', registration.active ? '✅' : '❌');
+          console.log('  - Installing:', registration.installing ? '⏳' : '❌');
+          console.log('  - Waiting:', registration.waiting ? '⏳' : '❌');
+        });
+      });
+    }
+  }
+
+  // Log status on page load
+  window.addEventListener('load', logServiceWorkerStatus);
+
+  // Also expose via console command for debugging
+  window.logSWStatus = logServiceWorkerStatus;
+  console.log('💡 Tip: Run logSWStatus() in console to check Service Worker status');
+</script>

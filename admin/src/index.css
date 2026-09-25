@@ -1,0 +1,66 @@
+/* Global responsive fixes for the admin app */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  overflow-x: hidden;
+}
+
+/* ── Hotel Photo Manager grid ── */
+.hpm-grid {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 380px;
+}
+
+.hpm-sidebar {
+  border-right: 1px solid #e2e8f0;
+  overflow-y: auto;
+  max-height: 520px;
+}
+
+@media (max-width: 640px) {
+  .hpm-grid {
+    grid-template-columns: 1fr;
+  }
+  .hpm-sidebar {
+    border-right: none;
+    border-bottom: 1px solid #e2e8f0;
+    max-height: 200px;
+  }
+}
+
+/* ── Scrollable day tabs — hide scrollbar visually ── */
+::-webkit-scrollbar {
+  height: 4px;
+  width: 4px;
+}
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+/* ── Ensure all inputs/buttons have minimum 44px tap target ── */
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="date"],
+  input[type="url"],
+  input[type="password"],
+  select,
+  button {
+    min-height: 44px;
+  }
+  textarea {
+    min-height: 80px;
+  }
+}
+
+/* ── LeadForm responsive grid (injected via <style> in component) ── */
+
+/* ── QuotePreview footer scrollbar fix ── */
+.qp-wrap {
+  -webkit-overflow-scrolling: touch;
+}
