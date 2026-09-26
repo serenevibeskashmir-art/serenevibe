@@ -1331,19 +1331,43 @@ html { scrollbar-color: var(--pine-700) var(--glacier); }
    rather than a flat fill — a small but real "professionally framed" cue. */
 .package-photo { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16); }
 
-/* The bullet, now a caption sitting on the photo */
-.package-photo .package-features-slideshow {
+/* The bullet + price/CTA now live together as one caption block on the
+   photo — solid enough to read over any photo, with a filled gold check
+   badge instead of a thin outline icon so it pops at a glance. */
+.package-photo-overlay {
   position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
-  margin: 0; flex-grow: 0;
-  padding: 1.4rem .95rem .7rem;
-  background: linear-gradient(0deg, rgba(7, 28, 38, .92) 0%, rgba(7, 28, 38, .55) 60%, transparent 100%);
+  padding: .95rem .95rem .85rem;
+  background: linear-gradient(0deg, rgba(6, 20, 28, .97) 0%, rgba(6, 20, 28, .9) 62%, rgba(6, 20, 28, 0) 100%);
 }
-.package-photo .feature-slide-stack { min-height: 1.35rem; }
-.package-photo .feature-slide { color: #fff; font-size: .85rem; font-weight: 500; }
-.package-photo .feature-slide svg { color: var(--saffron-bright); }
-.package-photo .feature-dots { margin-top: .5rem; }
-.package-photo .feature-dot { background: rgba(255, 255, 255, .38); }
-.package-photo .feature-dot.is-active { background: var(--saffron-bright); }
+.package-photo-overlay .package-features-slideshow { position: static; margin: 0 0 .65rem; padding: 0; background: none; }
+.package-photo-overlay .feature-slide-stack { min-height: 1.6rem; }
+.package-photo-overlay .feature-slide {
+  align-items: center; gap: .55rem;
+  color: #fff; font-size: .92rem; font-weight: 600; letter-spacing: .005em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .55);
+}
+.package-photo-overlay .feature-slide svg {
+  flex-shrink: 0; width: 19px; height: 19px; padding: 4px; box-sizing: border-box;
+  color: var(--pine-950); background: var(--saffron-bright); border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .4);
+}
+.package-photo-overlay .feature-dots { margin-top: .55rem; }
+.package-photo-overlay .feature-dot { background: rgba(255, 255, 255, .45); }
+.package-photo-overlay .feature-dot.is-active { background: var(--saffron-bright); }
+
+.package-photo-overlay .package-footer {
+  padding-top: .7rem; margin-top: .55rem; border-top: 1px solid rgba(255, 255, 255, .22);
+}
+.package-photo-overlay .package-price { color: rgba(255, 255, 255, .82); }
+.package-photo-overlay .package-price strong {
+  color: #fff; background: none; -webkit-text-fill-color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, .45);
+}
+.package-photo-overlay .btn-outline-dark { color: #fff; border-color: rgba(255, 255, 255, .65); }
+.package-photo-overlay .btn-outline-dark:hover { background: #fff; color: var(--pine-900); }
+
+/* Body now only carries meta / title / description */
+.package-body { padding-top: 1.15rem; }
 
 @media (max-width: 480px) {
   .package-desc { -webkit-line-clamp: 3; }
