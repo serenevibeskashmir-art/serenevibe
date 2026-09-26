@@ -10,6 +10,7 @@ from backend.extensions import db
 from backend.routes.admin import admin_bp
 from backend.routes.assistant import assistant_bp
 from backend.routes.email import email_bp
+from backend.routes.hotels import hotels_bp
 from backend.routes.itinerary import itinerary_bp
 from backend.routes.leads import leads_bp
 from backend.routes.packages import packages_bp
@@ -35,6 +36,7 @@ def create_app():
     app.register_blueprint(itinerary_bp, url_prefix="/api/itinerary")
     app.register_blueprint(email_bp, url_prefix="/api/email")
     app.register_blueprint(site_photos_bp, url_prefix="/api")
+    app.register_blueprint(hotels_bp, url_prefix="/api")
     app.register_blueprint(site_packages_bp, url_prefix="/api")
     app.register_blueprint(assistant_bp, url_prefix="/api")
 
