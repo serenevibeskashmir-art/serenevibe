@@ -384,6 +384,9 @@ button.proof-media {
 }
 .proof-media--reg   { height: 220px; }
 .proof-media--wide  { height: 200px; }
+/* Guest photos are uploaded square (1:1), so the wide card needs real height
+   or the crop leaves nothing but a thin strip of the middle of the photo. */
+.proof-media--wide.cat-guest { height: 340px; }
 .cat-office { background: linear-gradient(145deg, #1c3d50 0%, #0d2433 100%); }
 .cat-hotel  { background: linear-gradient(145deg, #1a2e4d 0%, #0d1c33 100%); }
 .cat-guest  { background: linear-gradient(145deg, #3a2e14 0%, #22190a 100%); }
@@ -604,6 +607,9 @@ button.proof-media {
 }
 .site-slide.is-active { opacity: 1; pointer-events: auto; }
 .site-slide img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Guest photos are usually people standing/sitting with faces in the upper
+   half — bias the crop upward so heads don't get sliced off. */
+.cat-guest .site-slide img { object-position: center 22%; }
 .site-slideshow-dots {
   position: absolute; top: .8rem; right: .9rem; z-index: 2;
   display: flex; gap: .35rem; opacity: 0; transition: opacity var(--ease);
