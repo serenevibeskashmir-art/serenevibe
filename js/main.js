@@ -136,6 +136,7 @@ function applyPhotos(photos, links) {
 
   initGallery(photos);
   initSiteSlideshows(photos);
+  initGuestSlideshow(photos);
 }
 
 /* ------------------------------------------------------------------ */
@@ -186,6 +187,83 @@ function initSiteSlideshows(photos) {
     box.addEventListener('mouseenter', stop);
     box.addEventListener('mouseleave', start);
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* Guest Photos — shows 3 at a time, each a full uncropped 1:1 square. */
+/* Built directly from the site-photos data rather than the generic    */
+/* [data-photo] loop, since it needs to group slots 3-at-a-time and    */
+/* crossfade whole rows rather than one image filling the whole box.   */
+/* ------------------------------------------------------------------ */
+const GUEST_PHOTO_SLOTS = [
+  'proof-guest-1', 'proof-guest-2', 'proof-guest-3',
+  'proof-guest-4', 'proof-guest-5', 'proof-guest-6',
+];
+
+function initGuestSlideshow(photos) {
+  const box = document.querySelector('[data-guest-slideshow]');
+  const track = box && box.querySelector('[data-guest-track]');
+  const dotsBox = box && box.querySelector('[data-guest-dots]');
+  if (!box || !track) return;
+
+  const shown = GUEST_PHOTO_SLOTS
+    .map(slot => (photos[slot] ? { url: photos[slot].url, alt: photos[slot].alt || 'Guest photo from Kashmir trip' } : null))
+    .filter(Boolean);
+
+  track.innerHTML = '';
+  if (dotsBox) dotsBox.innerHTML = '';
+  box.classList.toggle('has-photos', shown.length > 0);
+  if (!shown.length) return;
+
+  const groups = [];
+  for (let i = 0; i < shown.length; i += 3) groups.push(shown.slice(i, i + 3));
+
+  groups.forEach((group, gi) => {
+    const groupEl = document.createElement('div');
+    groupEl.className = 'guest-group' + (gi === 0 ? ' is-active' : '');
+    group.forEach(photo => {
+      const cell = document.createElement('div');
+      cell.className = 'guest-square';
+      const img = document.createElement('img');
+      img.loading = gi === 0 ? 'eager' : 'lazy';
+      img.decoding = 'async';
+      img.src = photo.url;
+      img.alt = photo.alt;
+      cell.appendChild(img);
+      groupEl.appendChild(cell);
+    });
+    track.appendChild(groupEl);
+  });
+
+  const groupEls = [...track.querySelectorAll('.guest-group')];
+  let dotEls = [];
+  if (dotsBox && groupEls.length > 1) {
+    groupEls.forEach((_, i) => {
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.className = 'guest-dot' + (i === 0 ? ' is-active' : '');
+      dot.setAttribute('aria-label', `Show guest photos, set ${i + 1}`);
+      dot.addEventListener('click', () => goTo(i));
+      dotsBox.appendChild(dot);
+    });
+    dotEls = [...dotsBox.children];
+  }
+
+  let current = 0;
+  let timer = null;
+  function goTo(i) {
+    current = (i + groupEls.length) % groupEls.length;
+    groupEls.forEach((el, idx) => el.classList.toggle('is-active', idx === current));
+    dotEls.forEach((el, idx) => el.classList.toggle('is-active', idx === current));
+  }
+  function start() {
+    if (prefersReducedMotion || groupEls.length < 2 || timer) return;
+    timer = setInterval(() => goTo(current + 1), 5000);
+  }
+  function stop() { clearInterval(timer); timer = null; }
+  start();
+  box.addEventListener('mouseenter', stop);
+  box.addEventListener('mouseleave', start);
 }
 
 /* ------------------------------------------------------------------ */
