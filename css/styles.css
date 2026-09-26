@@ -384,9 +384,6 @@ button.proof-media {
 }
 .proof-media--reg   { height: 220px; }
 .proof-media--wide  { height: 200px; }
-/* Guest photos are uploaded square (1:1), so the wide card needs real height
-   or the crop leaves nothing but a thin strip of the middle of the photo. */
-.proof-media--wide.cat-guest { height: 340px; }
 .cat-office { background: linear-gradient(145deg, #1c3d50 0%, #0d2433 100%); }
 .cat-hotel  { background: linear-gradient(145deg, #1a2e4d 0%, #0d1c33 100%); }
 .cat-guest  { background: linear-gradient(145deg, #3a2e14 0%, #22190a 100%); }
@@ -607,9 +604,6 @@ button.proof-media {
 }
 .site-slide.is-active { opacity: 1; pointer-events: auto; }
 .site-slide img { width: 100%; height: 100%; object-fit: cover; display: block; }
-/* Guest photos are usually people standing/sitting with faces in the upper
-   half — bias the crop upward so heads don't get sliced off. */
-.cat-guest .site-slide img { object-position: center 22%; }
 .site-slideshow-dots {
   position: absolute; top: .8rem; right: .9rem; z-index: 2;
   display: flex; gap: .35rem; opacity: 0; transition: opacity var(--ease);
@@ -623,6 +617,43 @@ button.proof-media {
 }
 .site-dot.is-active { background: var(--saffron-bright); transform: scale(1.25); }
 .site-slideshow.has-photos .proof-icon { opacity: 0; }
+
+/* ============================================================
+   Guest photos — 3 across, each a full 1:1 square with NO crop
+   (object-fit: contain, so nothing about the guest's photo is cut
+   off). If more than 3 photos are uploaded, the whole row of 3
+   crossfades to the next 3 (up to 6 total, admin panel).
+   ============================================================ */
+.guest-slideshow { padding: .85rem; }
+/* This card needs to fit 3 full, uncropped squares in a row — let its
+   height follow the grid's natural (square-per-cell) height instead of
+   forcing the fixed --wide height, which would clip or force a crop. */
+.proof-media--wide.guest-slideshow { height: auto; }
+.guest-slideshow-track { position: relative; width: 100%; height: 100%; }
+.guest-group {
+  position: absolute; inset: 0;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: .7rem;
+  opacity: 0; transition: opacity 1.1s ease; pointer-events: none;
+}
+.guest-group.is-active { position: relative; opacity: 1; pointer-events: auto; }
+.guest-square {
+  position: relative; aspect-ratio: 1 / 1; border-radius: 6px; overflow: hidden;
+  background: rgba(255,255,255,.05);
+  display: flex; align-items: center; justify-content: center;
+}
+.guest-square img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.guest-dots {
+  position: absolute; top: .8rem; right: 1.1rem; z-index: 2;
+  display: flex; gap: .35rem; opacity: 0; transition: opacity var(--ease);
+}
+.guest-slideshow:hover .guest-dots,
+.guest-dots:has(.is-active) { opacity: 1; }
+.guest-dot {
+  width: 6px; height: 6px; border-radius: 50%; padding: 0; border: 0;
+  background: rgba(255,255,255,.35); cursor: pointer;
+  transition: background var(--ease), transform var(--ease);
+}
+.guest-dot.is-active { background: var(--saffron-bright); transform: scale(1.25); }
 
 .guest-mosaic {
   position: absolute; inset: 0;
