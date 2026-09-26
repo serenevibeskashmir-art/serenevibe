@@ -344,15 +344,11 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
                 Guest Photos
               </div>
-              <div class="proof-media proof-media--wide cat-guest site-slideshow" data-site-slideshow>
-                <!-- Slideshow: shows whichever guest photos are uploaded in the admin panel (1 to 6) -->
-                <div class="site-slide" data-photo="proof-guest-1"><img alt="Guest photo from Kashmir trip"></div>
-                <div class="site-slide" data-photo="proof-guest-2"><img alt="Guest photo from Kashmir trip"></div>
-                <div class="site-slide" data-photo="proof-guest-3"><img alt="Guest photo from Kashmir trip"></div>
-                <div class="site-slide" data-photo="proof-guest-4"><img alt="Guest photo from Kashmir trip"></div>
-                <div class="site-slide" data-photo="proof-guest-5"><img alt="Guest photo from Kashmir trip"></div>
-                <div class="site-slide" data-photo="proof-guest-6"><img alt="Guest photo from Kashmir trip"></div>
-                <div class="site-slideshow-dots" data-site-dots></div>
+              <div class="proof-media proof-media--wide cat-guest guest-slideshow" data-guest-slideshow>
+                <!-- Shows guest photos 3 at a time, each a full uncropped square. Rotates to
+                     the next 3 if more than 3 are uploaded (up to 6 total, admin panel). -->
+                <div class="guest-slideshow-track" data-guest-track></div>
+                <div class="guest-dots" data-guest-dots></div>
               </div>
               <div class="proof-body">
                 <span class="proof-cat">Real Customer Photographs</span>
