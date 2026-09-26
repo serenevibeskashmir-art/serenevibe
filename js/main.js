@@ -621,12 +621,7 @@ function renderPackages(packages) {
     node.querySelector('h3').textContent = pkg.name || '';
     node.querySelector('.package-desc').textContent = pkg.description || '';
 
-    const featuresList = node.querySelector('.package-features');
-    (pkg.features || []).forEach(feature => {
-      const li = document.createElement('li');
-      li.textContent = feature;
-      featuresList.appendChild(li);
-    });
+    initFeatureSlideshow(node.querySelector('[data-package-features]'), pkg.features || []);
 
     const priceStrong = node.querySelector('.package-price strong');
     priceStrong.textContent = pkg.price_label ? `₹${pkg.price_label}` : 'Enquire';
@@ -638,6 +633,67 @@ function renderPackages(packages) {
 
     grid.appendChild(node);
   });
+}
+
+/* Package "included" bullets, one at a time on a short auto-rotating loop
+   instead of a static list — pauses while the card is hovered. */
+const FEATURE_CHECK_SVG =
+  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
+
+function initFeatureSlideshow(box, features) {
+  if (!box || !features.length) return;
+
+  const stack = document.createElement('div');
+  stack.className = 'feature-slide-stack';
+  features.forEach((text, i) => {
+    const slide = document.createElement('div');
+    slide.className = 'feature-slide' + (i === 0 ? ' is-active' : '');
+    slide.innerHTML = FEATURE_CHECK_SVG + '<span></span>';
+    slide.querySelector('span').textContent = text;
+    stack.appendChild(slide);
+  });
+  box.appendChild(stack);
+
+  const slides = [...stack.querySelectorAll('.feature-slide')];
+  let dots = [];
+  if (slides.length > 1) {
+    const dotsBox = document.createElement('div');
+    dotsBox.className = 'feature-dots';
+    slides.forEach((_, i) => {
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.className = 'feature-dot' + (i === 0 ? ' is-active' : '');
+      dot.setAttribute('aria-label', 'Show feature ' + (i + 1));
+      dot.addEventListener('click', () => goTo(i));
+      dotsBox.appendChild(dot);
+    });
+    box.appendChild(dotsBox);
+    dots = [...dotsBox.querySelectorAll('.feature-dot')];
+  }
+
+  let current = 0;
+  let timer = null;
+
+  function goTo(index) {
+    current = (index + slides.length) % slides.length;
+    slides.forEach((el, i) => el.classList.toggle('is-active', i === current));
+    dots.forEach((el, i) => el.classList.toggle('is-active', i === current));
+  }
+  function start() {
+    if (prefersReducedMotion || slides.length < 2 || timer) return;
+    timer = setInterval(() => goTo(current + 1), 2800);
+  }
+  function stop() {
+    clearInterval(timer);
+    timer = null;
+  }
+
+  start();
+  const card = box.closest('.package-card');
+  if (card) {
+    card.addEventListener('mouseenter', stop);
+    card.addEventListener('mouseleave', start);
+  }
 }
 
 /* ------------------------------------------------------------------ */
