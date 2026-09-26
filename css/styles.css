@@ -1312,3 +1312,39 @@ html { scrollbar-color: var(--pine-700) var(--glacier); }
   transition: background var(--ease), width var(--ease);
 }
 .feature-dot.is-active { background: var(--saffron); width: 22px; }
+
+/* ============================================================
+   Package cards — compact layout, v2
+   The rotating "included" bullet now lives as a caption on the photo
+   itself (like the hotel slideshow), so the body only needs to carry
+   meta / title / description / price. Tighter paddings throughout.
+   ============================================================ */
+.package-body { padding: 1.25rem 1.45rem 1.4rem; }
+.package-meta { margin-bottom: .7rem; }
+.package-desc {
+  margin: .45rem 0 1rem; font-size: .93rem; line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.package-footer { padding-top: 1.05rem; margin-top: .3rem; }
+
+/* A quiet inset line frames every photo, so it reads as a placed picture
+   rather than a flat fill — a small but real "professionally framed" cue. */
+.package-photo { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16); }
+
+/* The bullet, now a caption sitting on the photo */
+.package-photo .package-features-slideshow {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  margin: 0; flex-grow: 0;
+  padding: 1.4rem .95rem .7rem;
+  background: linear-gradient(0deg, rgba(7, 28, 38, .92) 0%, rgba(7, 28, 38, .55) 60%, transparent 100%);
+}
+.package-photo .feature-slide-stack { min-height: 1.35rem; }
+.package-photo .feature-slide { color: #fff; font-size: .85rem; font-weight: 500; }
+.package-photo .feature-slide svg { color: var(--saffron-bright); }
+.package-photo .feature-dots { margin-top: .5rem; }
+.package-photo .feature-dot { background: rgba(255, 255, 255, .38); }
+.package-photo .feature-dot.is-active { background: var(--saffron-bright); }
+
+@media (max-width: 480px) {
+  .package-desc { -webkit-line-clamp: 3; }
+}
