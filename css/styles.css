@@ -1288,3 +1288,27 @@ html { scrollbar-color: var(--pine-700) var(--glacier); }
 }
 .hotel-dot.is-active { background: var(--saffron-bright); transform: scale(1.25); }
 .hotel-slideshow.has-photos .proof-icon { opacity: 0; }
+
+/* ============================================================
+   Package card "included" bullets — auto-rotating slideshow
+   Replaces the old static .package-features <ul>. Populated by
+   initFeatureSlideshow() in main.js from the same pkg.features data.
+   ============================================================ */
+.package-features-slideshow { margin-bottom: 1.6rem; flex-grow: 1; }
+.feature-slide-stack { position: relative; min-height: 3.2rem; }
+.feature-slide {
+  position: absolute; inset: 0;
+  display: flex; align-items: flex-start; gap: .55rem;
+  font-size: .92rem; line-height: 1.5; color: var(--ink);
+  opacity: 0; transform: translateY(4px); pointer-events: none;
+  transition: opacity .5s ease, transform .5s ease;
+}
+.feature-slide.is-active { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.feature-slide svg { flex-shrink: 0; margin-top: .15rem; color: var(--saffron-ink); }
+.feature-dots { display: flex; gap: .3rem; margin-top: .7rem; }
+.feature-dot {
+  width: 14px; height: 4px; border-radius: 2px; border: 0; padding: 0;
+  background: var(--line); cursor: pointer;
+  transition: background var(--ease), width var(--ease);
+}
+.feature-dot.is-active { background: var(--saffron); width: 22px; }
