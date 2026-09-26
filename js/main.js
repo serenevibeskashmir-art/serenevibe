@@ -135,6 +135,57 @@ function applyPhotos(photos, links) {
   });
 
   initGallery(photos);
+  initSiteSlideshows(photos);
+}
+
+/* ------------------------------------------------------------------ */
+/* Generic photo slideshows (Office photo, Guest Photos) — crossfades  */
+/* through whichever of a card's slots have a photo uploaded in the    */
+/* admin panel. Works with as few as one photo; falls back to the      */
+/* placeholder icon (if any) when none are uploaded yet.               */
+/* ------------------------------------------------------------------ */
+function initSiteSlideshows(photos) {
+  document.querySelectorAll('[data-site-slideshow]').forEach(box => {
+    const slides = [...box.querySelectorAll('.site-slide')];
+    const shown = slides.filter(s => Boolean(photos[s.dataset.photo]));
+    box.classList.toggle('has-photos', shown.length > 0);
+    if (!shown.length) return;
+
+    shown.forEach((s, i) => s.classList.toggle('is-active', i === 0));
+
+    const dotsBox = box.querySelector('[data-site-dots]');
+    let dotEls = [];
+    if (dotsBox) {
+      dotsBox.innerHTML = '';
+      if (shown.length > 1) {
+        shown.forEach((_, i) => {
+          const dot = document.createElement('button');
+          dot.type = 'button';
+          dot.className = 'site-dot' + (i === 0 ? ' is-active' : '');
+          dot.setAttribute('aria-label', `Show photo ${i + 1}`);
+          dot.addEventListener('click', () => goTo(i));
+          dotsBox.appendChild(dot);
+        });
+        dotEls = [...dotsBox.children];
+      }
+    }
+
+    let current = 0;
+    let timer = null;
+    function goTo(i) {
+      current = (i + shown.length) % shown.length;
+      shown.forEach((s, idx) => s.classList.toggle('is-active', idx === current));
+      dotEls.forEach((d, idx) => d.classList.toggle('is-active', idx === current));
+    }
+    function start() {
+      if (prefersReducedMotion || shown.length < 2 || timer) return;
+      timer = setInterval(() => goTo(current + 1), 4500);
+    }
+    function stop() { clearInterval(timer); timer = null; }
+    start();
+    box.addEventListener('mouseenter', stop);
+    box.addEventListener('mouseleave', start);
+  });
 }
 
 /* ------------------------------------------------------------------ */
