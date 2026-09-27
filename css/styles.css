@@ -155,11 +155,21 @@ h3 { font-size: 1.4rem; }
 .logo-name { font-family: var(--display); font-size: 1.25rem; font-weight: 500; letter-spacing: -.005em; }
 .logo-tagline { font-size: .72rem; font-weight: 500; letter-spacing: .06em; opacity: .75; }
 
-.nav-links { display: flex; align-items: center; gap: 2rem; }
+.nav-links { display: flex; align-items: center; gap: 1.25rem; }
+.nav-links a:not(.nav-cta) {
+  padding: .5rem 1rem; border-radius: var(--r-pill);
+  transition: color var(--ease), background-color var(--ease);
+}
 .nav-links a { font-size: .92rem; font-weight: 500; color: rgba(255, 255, 255, .92); transition: color var(--ease); }
 .nav-links a:hover { color: var(--saffron); }
 .site-head.scrolled .nav-links a { color: var(--ink); }
 .site-head.scrolled .nav-links a:hover { color: var(--saffron-ink); }
+/* Current section: filled pill, like a small selected "tab" rather than the
+   solid CTA button, so it reads as active state without competing with it. */
+.nav-links a.is-current { font-weight: 600; background: rgba(255, 255, 255, .16); color: #fff; }
+.nav-links a.is-current:hover { color: #fff; }
+.site-head.scrolled .nav-links a.is-current { background: rgba(217, 164, 65, .14); color: var(--saffron-ink); }
+.site-head.scrolled .nav-links a.is-current:hover { color: var(--saffron-ink); }
 .site-head .nav-links a.nav-cta {
   background: var(--saffron); color: var(--pine-950); padding: .6rem 1.2rem; border-radius: var(--r-pill); font-weight: 600;
 }
@@ -1046,7 +1056,19 @@ button.proof-media {
 .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1.3fr; gap: 2.5rem; padding-bottom: 3rem; }
 .footer-brand .logo { margin-bottom: 1rem; }
 .footer-brand p { font-size: .92rem; line-height: 1.7; max-width: 22rem; }
-.footer-links h4, .footer-contact h4 { font-family: var(--body); font-size: .95rem; font-weight: 700; letter-spacing: 0; color: #fff; margin-bottom: 1rem; }
+.footer-links summary, .footer-contact summary {
+  font-family: var(--body); font-size: .95rem; font-weight: 700; color: #fff;
+  cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between;
+  padding: .15rem 0 .9rem; margin-bottom: 0; -webkit-tap-highlight-color: transparent;
+}
+.footer-links summary::-webkit-details-marker { display: none; }
+.footer-links summary::after, .footer-contact summary::after {
+  content: ''; width: 8px; height: 8px; flex-shrink: 0; margin-left: .75rem;
+  border-right: 1.5px solid rgba(255, 255, 255, .55); border-bottom: 1.5px solid rgba(255, 255, 255, .55);
+  transform: rotate(45deg); transition: transform var(--ease);
+}
+.footer-links[open] summary::after, .footer-contact[open] summary::after { transform: rotate(-135deg); margin-top: .3rem; }
+.footer-links ul, .footer-contact > p { padding-top: .2rem; }
 .footer-links li { margin-bottom: .55rem; }
 .footer-links a, .footer-contact a { font-size: .92rem; transition: color var(--ease); }
 .footer-links a:hover, .footer-contact a:hover { color: var(--saffron); }
@@ -1109,6 +1131,9 @@ button.proof-media {
   }
   .nav-links.open { transform: none; visibility: visible; }
   .site-head.scrolled .nav-links a, .site-head .nav-links a { color: #fff; font-family: var(--display); font-size: 1.5rem; font-weight: 500; }
+  .nav-links a:not(.nav-cta) { padding: .3rem .9rem; }
+  .site-head.scrolled .nav-links a.is-current,
+  .site-head .nav-links a.is-current { background: rgba(255, 255, 255, .14); color: var(--saffron-bright); }
   .site-head .nav-links a.nav-cta { font-family: var(--body); font-size: 1rem; margin-top: .5rem; }
 
   .quote-open-btn { width: 100%; }
