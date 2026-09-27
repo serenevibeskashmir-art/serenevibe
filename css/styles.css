@@ -18,6 +18,8 @@
   --saffron:        #d9a441;   /* on dark surfaces, and as button fill */
   --saffron-bright: #e8b755;
   --saffron-ink:    #7d5208;   /* saffron for text on light surfaces */
+  --nav-current:      #2563eb;  /* selected nav item */
+  --nav-current-dark: #1d4ed8;
 
   /* Type */
   --display: 'Fraunces', Georgia, 'Times New Roman', serif;
@@ -164,16 +166,14 @@ h3 { font-size: 1.4rem; }
 .nav-links a:hover { color: var(--saffron); }
 .site-head.scrolled .nav-links a { color: var(--ink); }
 .site-head.scrolled .nav-links a:hover { color: var(--saffron-ink); }
-/* Current section: filled pill, like a small selected "tab" rather than the
-   solid CTA button, so it reads as active state without competing with it. */
-.nav-links a.is-current { font-weight: 600; background: rgba(255, 255, 255, .16); color: #fff; }
-.nav-links a.is-current:hover { color: #fff; }
-.site-head.scrolled .nav-links a.is-current { background: rgba(217, 164, 65, .14); color: var(--saffron-ink); }
-.site-head.scrolled .nav-links a.is-current:hover { color: var(--saffron-ink); }
-.site-head .nav-links a.nav-cta {
-  background: var(--saffron); color: var(--pine-950); padding: .6rem 1.2rem; border-radius: var(--r-pill); font-weight: 600;
+/* Current section: a solid blue pill, so the selected item is unmistakable
+   in either header state, and doesn't compete with the saffron CTA button. */
+.nav-links a.is-current, .site-head.scrolled .nav-links a.is-current {
+  background: var(--nav-current); color: #fff; font-weight: 600;
 }
-.site-head .nav-links a.nav-cta:hover { background: var(--saffron-bright); color: var(--pine-950); }
+.nav-links a.is-current:hover, .site-head.scrolled .nav-links a.is-current:hover {
+  background: var(--nav-current-dark); color: #fff;
+}
 
 .nav-toggle { display: none; position: relative; z-index: 2; flex-direction: column; gap: 5px; background: none; border: none; cursor: pointer; padding: .7rem; margin-right: -.7rem; }
 .nav-toggle span { display: block; width: 24px; height: 2px; background: #fff; border-radius: 2px; transition: transform var(--ease), opacity var(--ease), background var(--ease); }
@@ -1133,7 +1133,7 @@ button.proof-media {
   .site-head.scrolled .nav-links a, .site-head .nav-links a { color: #fff; font-family: var(--display); font-size: 1.5rem; font-weight: 500; }
   .nav-links a:not(.nav-cta) { padding: .3rem .9rem; }
   .site-head.scrolled .nav-links a.is-current,
-  .site-head .nav-links a.is-current { background: rgba(255, 255, 255, .14); color: var(--saffron-bright); }
+  .site-head .nav-links a.is-current { background: var(--nav-current); color: #fff; }
   .site-head .nav-links a.nav-cta { font-family: var(--body); font-size: 1rem; margin-top: .5rem; }
 
   .quote-open-btn { width: 100%; }
