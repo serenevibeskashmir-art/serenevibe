@@ -123,6 +123,7 @@ const HOTEL_KB = {
     {id: "hgr",  name: "Hotel Gurcoo Residency",        place: "Srinagar", images: []},
     {id: "hdw",  name: "Hotel Deewan",                  place: "Srinagar", images: []},
     {id: "hsd",  name: "Hotel Sadaf",                   place: "Srinagar", images: []},
+    {id: "hgm",  name: "Hotel Golden Maple",            place: "Srinagar", images: []},
     {id: "sghb", name: "Srinagar Group of House-Boats", place: "Srinagar", images: []},
     {id: "hicl", name: "Hotel Iceland",                 place: "Srinagar", images: []},
   ],
