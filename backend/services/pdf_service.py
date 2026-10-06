@@ -1390,6 +1390,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         "hsd":  {"name": "Hotel Sadaf",                    "place": "Srinagar", "images": []},
         "hgm":  {"name": "Hotel Golden Maple",             "place": "Srinagar", "images": []},
         "sghb": {"name": "Srinagar Group of House-Boats",  "place": "Srinagar", "images": []},
+        "hicl": {"name": "Hotel Iceland",                  "place": "Srinagar", "images": []},
         "hri":  {"name": "Hotel Riverside Inn",            "place": "Pahalgam", "images": []},
         "hsr":  {"name": "Hotel Supreme Resorts",          "place": "Pahalgam", "images": [
 			"https://www.supremeresortspahalgam.com/img/villa.jpg",
@@ -1404,7 +1405,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         "hil":  {"name": "Hotel Ice Land",                 "place": "Pahalgam", "images": []},
         "her":  {"name": "Hotel Eden Resorts and Spa",     "place": "Pahalgam", "images": []},
         "hatr": {"name": "Hotel Apple Tree Resorts",       "place": "Gulmarg",  "images": []},
-        "ggr":  {"name": "Gateway Resorts",                "place": "Gulmarg",  "images": []},
+        "ggr":  {"name": "Gulmarg Gateway Resorts",              "place": "Gulmarg",  "images": []},
         "hghv": {"name": "Hotel Grand Hill View",          "place": "Gulmarg",  "images": []},
         "hmsp": {"name": "Hotel Marina By Stay Pattern",   "place": "Gulmarg",  "images": []},
 		"nrs":  {"name": "Namrose Resorts",                 "place": "Sonamarg", "images": []},
