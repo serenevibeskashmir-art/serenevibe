@@ -13,6 +13,8 @@ from reportlab.platypus import (
     HRFlowable, KeepTogether, PageBreak
 )
 from reportlab.platypus.flowables import Flowable
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.graphics.shapes import Drawing, Rect, String, Line, Circle
 from reportlab.graphics import renderPDF
 import datetime
@@ -48,24 +50,73 @@ BLACK     = colors.HexColor("#0f172a")
 PAGE_W, PAGE_H = A4          # 210 × 297 mm
 MARGIN = 18 * mm
 
+# ─── Fonts ───────────────────────────────────────────────────────────────────
+# Lato (SIL OFL) is bundled in backend/assets/fonts and *embedded* in the PDF,
+# so the output looks identical on every device and supports ₹, – — “ ” → etc.
+# If the files are ever missing we fall back to the built-in Helvetica family.
+_FONT_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
+
+def _register_fonts():
+    faces = {
+        "Lato":            "Lato-Regular.ttf",
+        "Lato-Bold":       "Lato-Bold.ttf",
+        "Lato-Italic":     "Lato-Italic.ttf",
+        "Lato-BoldItalic": "Lato-BoldItalic.ttf",
+    }
+    try:
+        for name, fname in faces.items():
+            if name not in pdfmetrics.getRegisteredFontNames():
+                pdfmetrics.registerFont(TTFont(name, str(_FONT_DIR / fname)))
+        pdfmetrics.registerFontFamily(
+            "Lato", normal="Lato", bold="Lato-Bold",
+            italic="Lato-Italic", boldItalic="Lato-BoldItalic")
+    except Exception as e:                       # pragma: no cover
+        print(f"Font registration failed ({e}); using Helvetica fallback")
+        for name, fb in {"Lato": "Helvetica", "Lato-Bold": "Helvetica-Bold",
+                         "Lato-Italic": "Helvetica-Oblique",
+                         "Lato-BoldItalic": "Helvetica-BoldOblique"}.items():
+            try:
+                pdfmetrics.registerFont(pdfmetrics.Font(
+                    name, fb, "WinAnsiEncoding"))
+            except Exception:
+                pass
+
+_register_fonts()
+
 # ─── Text Sanitiser ──────────────────────────────────────────────────────────
 def clean(text):
+    """Escape ReportLab XML special characters. Typography (– — “ ” ₹ →) is
+    kept as-is because the embedded Lato font supports it."""
     if not text:
         return ""
-    replacements = {
-        "\u2014": "-", "\u2013": "-", "\u2022": "-",
-        "\u201c": '"', "\u201d": '"', "\u2018": "'", "\u2019": "'"
-    }
-    s = str(text)
-    for orig, rep in replacements.items():
-        s = s.replace(orig, rep)
-    # Escape ReportLab XML special chars
-    s = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    return s
+    s = str(text).replace("\u00a0", " ")
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 # ─── Hotel Image Fetcher ─────────────────────────────────────────────────────
 _IMAGE_CACHE = {}
+_MAX_IMG_PX = 1400      # longest side kept in the PDF (plenty for a ~85 mm print slot)
+_JPEG_QUALITY = 82
+
+
+def _compress_image(raw: bytes) -> "io.BytesIO":
+    """Downscale + re-encode a photo as JPEG so a single 4500x3000 upload
+    doesn't turn an 8-page PDF into a 39 MB file."""
+    from PIL import Image
+    im = Image.open(io.BytesIO(raw))
+    im.load()
+    if im.mode in ("RGBA", "LA", "P"):
+        im = im.convert("RGBA")
+        bg = Image.new("RGB", im.size, (255, 255, 255))
+        bg.paste(im, mask=im.split()[-1])
+        im = bg
+    elif im.mode != "RGB":
+        im = im.convert("RGB")
+    im.thumbnail((_MAX_IMG_PX, _MAX_IMG_PX), Image.LANCZOS)
+    out = io.BytesIO()
+    im.save(out, "JPEG", quality=_JPEG_QUALITY, optimize=True, progressive=False)
+    out.seek(0)
+    return out
 
 def fetch_image_reader(src):
     """
@@ -89,16 +140,16 @@ def fetch_image_reader(src):
             import base64 as _b64
             header, encoded = src.split(",", 1)
             img_bytes = _b64.b64decode(encoded)
-            reader = ImageReader(io.BytesIO(img_bytes))
+            reader = ImageReader(_compress_image(img_bytes))
         elif src.startswith("http://") or src.startswith("https://"):
             resp = requests.get(src, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
             resp.raise_for_status()
-            reader = ImageReader(io.BytesIO(resp.content))
+            reader = ImageReader(_compress_image(resp.content))
         else:
             # Treat as a local file path (e.g. output/hotel_photos/xyz.jpg)
             p = Path(src)
             if p.exists():
-                reader = ImageReader(str(p))
+                reader = ImageReader(_compress_image(p.read_bytes()))
     except Exception as e:
         print(f"Hotel image fetch failed for '{src[:80]}...': {e}")
         reader = None
@@ -171,12 +222,12 @@ class HeroHeader(Flowable):
 
         # ── Brand name ──────────────────────────────────────────────────────
         c.setFillColor(WHITE)
-        c.setFont("Helvetica-Bold", 16.5)
+        c.setFont("Lato-Bold", 16.5)
         c.drawString(6*mm, h - 13*mm, "SERENE VIBES KASHMIR")
 
         # Tagline with small decorative bars
         c.setFillColor(SKY)
-        c.setFont("Helvetica-Oblique", 8.5)
+        c.setFont("Lato-Italic", 8.5)
         tagline = "  A Poem In Motion  "
         c.drawString(6*mm, h - 18.5*mm, tagline)
 
@@ -190,12 +241,12 @@ class HeroHeader(Flowable):
 
         # ── Document label ──────────────────────────────────────────────────
         c.setFillColor(GRAY_400)
-        c.setFont("Helvetica", 7)
+        c.setFont("Lato", 7)
         c.drawString(6*mm, h - 24.5*mm, "CUSTOMISED TOUR ITINERARY")
 
         # ── Client name ─────────────────────────────────────────────────────
         c.setFillColor(WHITE)
-        c.setFont("Helvetica-Bold", 14)
+        c.setFont("Lato-Bold", 14)
         c.drawString(6*mm, h - 32*mm, clean(self.client_name))
 
         # ── Stat pills (Days / Pax / Date / Vehicle) ────────────────────────
@@ -208,7 +259,7 @@ class HeroHeader(Flowable):
         px, py = 6*mm, h - 43.5*mm
         pill_h = 6.5*mm
         for label, bg in pills:
-            lw = c.stringWidth(label, "Helvetica-Bold", 8) + 12
+            lw = c.stringWidth(label, "Lato-Bold", 8) + 12
             # Pill shadow
             c.setFillColor(colors.HexColor("#00000033"))
             c.roundRect(px + 0.5, py - 2*mm, lw, pill_h, 2.2*mm, fill=1, stroke=0)
@@ -217,13 +268,13 @@ class HeroHeader(Flowable):
             c.roundRect(px, py - 1.5*mm, lw, pill_h, 2.2*mm, fill=1, stroke=0)
             # Pill text
             c.setFillColor(WHITE)
-            c.setFont("Helvetica-Bold", 8)
+            c.setFont("Lato-Bold", 8)
             c.drawString(px + 6, py + 1*mm, label)
             px += lw + 5
 
         # ── Budget badge — ribbon style (top-right) ──────────────────────────
         badge_label = clean(str(self.budget_tier)) + " Package"
-        bw = c.stringWidth(badge_label, "Helvetica-Bold", 9) + 18
+        bw = c.stringWidth(badge_label, "Lato-Bold", 9) + 18
         bx = w - bw - 6*mm
         by = h - 19*mm
         # Badge shadow
@@ -236,23 +287,23 @@ class HeroHeader(Flowable):
         c.setFillColor(GOLD)
         c.roundRect(bx, by - 2.5*mm, 5*mm, 9*mm, 0, fill=1, stroke=0)
         c.setFillColor(WHITE)
-        c.setFont("Helvetica-Bold", 9)
+        c.setFont("Lato-Bold", 9)
         c.drawString(bx + 9, by + 0.8*mm, badge_label)
 
         # ── Total cost (bottom-right) with emerald pill ───────────────────────
         cost_str = f"INR {int(self.total_cost):,}" if str(self.total_cost).replace(",","").isdigit() else clean(str(self.total_cost))
         # Cost label
         c.setFillColor(GRAY_400)
-        c.setFont("Helvetica", 7)
+        c.setFont("Lato", 7)
         c.drawRightString(w - 6*mm, h - 38*mm, "ESTIMATED TOTAL COST")
         # Cost value in emerald pill
-        cw = c.stringWidth(cost_str, "Helvetica-Bold", 11.5) + 14
+        cw = c.stringWidth(cost_str, "Lato-Bold", 11.5) + 14
         cx = w - cw - 6*mm
         cy = h - 34.5*mm
         c.setFillColor(EMERALD)
         c.roundRect(cx, cy - 1.5*mm, cw, 7*mm, 2*mm, fill=1, stroke=0)
         c.setFillColor(WHITE)
-        c.setFont("Helvetica-Bold", 11.5)
+        c.setFont("Lato-Bold", 11.5)
         c.drawString(cx + 7, cy + 0.8*mm, cost_str)
 
 
@@ -292,23 +343,23 @@ class DayBanner(Flowable):
         c.setFillColor(colors.HexColor("#0369a1"))
         c.roundRect(pill_x, pill_y, pill_w, pill_h2, 1.8*mm, fill=1, stroke=0)
         c.setFillColor(WHITE)
-        c.setFont("Helvetica-Bold", 9.5)
+        c.setFont("Lato-Bold", 9.5)
         c.drawCentredString(7.5*mm, pill_y + 2.2*mm, str(self.day_num))
 
         # Title
         c.setFillColor(WHITE)
-        c.setFont("Helvetica-Bold", 9.5)
+        c.setFont("Lato-Bold", 9.5)
         title = clean(self.title)
         max_w = w - 18*mm - 34*mm
-        while c.stringWidth(title, "Helvetica-Bold", 9.5) > max_w and len(title) > 10:
-            title = title[:-4] + "..."
+        while c.stringWidth(title, "Lato-Bold", 9.5) > max_w and len(title) > 10:
+            title = title[:-2].rstrip() + "…"
         c.drawString(17*mm, h/2 - 3, title)
 
         # Overnight badge with moon symbol
         if self.overnight and self.overnight.lower() not in ("departure", ""):
             moon = "\u25D0"  # half circle as moon approximation
             ov_label = f"Stay: {clean(self.overnight)}"
-            ov_w = c.stringWidth(ov_label, "Helvetica-Bold", 7.5) + 14
+            ov_w = c.stringWidth(ov_label, "Lato-Bold", 7.5) + 9.5 * mm
             ox = w - ov_w - 4*mm
             oy = 2*mm
             # Badge shadow
@@ -319,10 +370,10 @@ class DayBanner(Flowable):
             c.roundRect(ox, oy, ov_w, 7*mm, 2*mm, fill=1, stroke=0)
             # Moon dot accent
             c.setFillColor(colors.HexColor("#99f6e4"))
-            c.circle(ox + 5, oy + 3.5*mm, 2*mm, fill=1, stroke=0)
+            c.circle(ox + 3.6*mm, oy + 3.5*mm, 1.15*mm, fill=1, stroke=0)
             c.setFillColor(WHITE)
-            c.setFont("Helvetica-Bold", 7.5)
-            c.drawString(ox + 10, oy + 2*mm, ov_label)
+            c.setFont("Lato-Bold", 7.5)
+            c.drawString(ox + 6.4*mm, oy + 2.25*mm, ov_label)
 
 
 class RouteBadge(Flowable):
@@ -340,13 +391,13 @@ class RouteBadge(Flowable):
         c.setLineWidth(0.5)
         c.roundRect(0, 0, self.width, self.height, 2*mm, fill=1, stroke=1)
         c.setFillColor(GOLD)
-        c.setFont("Helvetica-Bold", 8)
+        c.setFont("Lato-Bold", 8)
         c.drawString(8, self.height/2 - 3, "ROUTE:")
         c.setFillColor(BLACK)
-        c.setFont("Helvetica", 8)
+        c.setFont("Lato", 8)
         route_txt = clean(self.route)
         max_w = self.width - 40
-        while c.stringWidth(route_txt, "Helvetica", 8) > max_w and len(route_txt) > 6:
+        while c.stringWidth(route_txt, "Lato", 8) > max_w and len(route_txt) > 6:
             route_txt = route_txt[:-4] + "..."
         c.drawString(38, self.height/2 - 3, route_txt)
 
@@ -386,10 +437,10 @@ class HotelPhotoStrip(Flowable):
         c.setFillColor(GRAY_100)
         c.roundRect(0, self.height - self.header_h, w, self.header_h, 1.5*mm, fill=1, stroke=0)
         c.setFillColor(NAVY)
-        c.setFont("Helvetica-Bold", 8.5)
+        c.setFont("Lato-Bold", 8.5)
         c.drawString(3*mm, self.height - self.header_h + 2.3*mm, clean(self.hotel_name))
         c.setFillColor(GRAY_600)
-        c.setFont("Helvetica", 7.5)
+        c.setFont("Lato", 7.5)
         c.drawRightString(w - 3*mm, self.height - self.header_h + 2.3*mm, clean(self.hotel_place))
 
         # Photo row
@@ -429,7 +480,7 @@ class HotelPhotoStrip(Flowable):
         c.setFillColor(GRAY_100)
         c.rect(x, y, slot_w, self.photo_h, fill=1, stroke=0)
         c.setFillColor(GRAY_400)
-        c.setFont("Helvetica-Oblique", 7.5)
+        c.setFont("Lato-Italic", 7.5)
         c.drawCentredString(x + slot_w/2, y + self.photo_h/2, "Photo unavailable")
 
 
@@ -544,7 +595,7 @@ class OfficialSeal(Flowable):
         step     = -span / (n - 1)
 
         c.setFillColor(colors.HexColor("#c9a227"))
-        c.setFont("Helvetica-Bold", font_sz)
+        c.setFont("Lato-Bold", font_sz)
         for i, ch in enumerate(label):
             a  = math.radians(start + i * step)
             lx = cx + arc_r * math.cos(a)
@@ -552,7 +603,7 @@ class OfficialSeal(Flowable):
             c.saveState()
             c.translate(lx, ly)
             c.rotate(math.degrees(a) - 90)
-            c.drawString(-c.stringWidth(ch, "Helvetica-Bold", font_sz) / 2, 0, ch)
+            c.drawString(-c.stringWidth(ch, "Lato-Bold", font_sz) / 2, 0, ch)
             c.restoreState()
 
         # ── Layer 6: arc text "A POEM IN MOTION" (bottom) ─────────────────
@@ -565,7 +616,7 @@ class OfficialSeal(Flowable):
         step2    = span2 / (n2 - 1)
 
         c.setFillColor(colors.HexColor("#93c5fd"))
-        c.setFont("Helvetica-Oblique", sub_sz)
+        c.setFont("Lato-Italic", sub_sz)
         for i, ch in enumerate(sub):
             a  = math.radians(start2 + i * step2)
             lx = cx + arc_r2 * math.cos(a)
@@ -573,7 +624,7 @@ class OfficialSeal(Flowable):
             c.saveState()
             c.translate(lx, ly)
             c.rotate(math.degrees(a) + 90)
-            c.drawString(-c.stringWidth(ch, "Helvetica-Oblique", sub_sz) / 2, 0, ch)
+            c.drawString(-c.stringWidth(ch, "Lato-Italic", sub_sz) / 2, 0, ch)
             c.restoreState()
 
         # ── Layer 7: logo image clipped into inner circle ──────────────────
@@ -649,7 +700,7 @@ class SectionTitle(Flowable):
         c.line(0, 2.2*mm, self.width, 2.2*mm)
         # Text
         c.setFillColor(WHITE)
-        c.setFont("Helvetica-Bold", 11)
+        c.setFont("Lato-Bold", 11)
         label = (self.icon + "  " if self.icon else "") + self.title
         c.drawString(10*mm, self.height - 5*mm, label)
 
@@ -657,12 +708,19 @@ class SectionTitle(Flowable):
 # ─── Kashmir Route Map (Layout 3: map top + legend table below) ──────────────
 class KashmirRouteMap(Flowable):
     """
-    Full-width map panel with real GPS pin positions for Kashmir tour stops,
-    topped by a stylised terrain map and followed by a per-day legend table.
-    All drawing uses ReportLab canvas primitives — no external image needed.
+    Full-width route map + day-by-day legend table.
+
+    * Stylised terrain (valley floor, ridges, Dal / Wular lakes, Jhelum river)
+      projected from real lat/lon with a cos(latitude) correction so distances
+      look right and the 50 km scale bar is accurate.
+    * Every distinct stop gets ONE pin (Srinagar is the hub for arrival, day
+      trips and departure), roads are drawn as spokes from the hub, and each
+      road carries a "Day n" chip - so nothing overlaps and the story reads
+      at a glance.
+    All drawing uses ReportLab canvas primitives - no external image needed.
     """
 
-    # Real GPS coordinates for key Kashmir destinations
+    # Real GPS coordinates (lat, lon)
     STOPS = {
         "srinagar":    (34.0837, 74.7973),
         "gulmarg":     (34.0484, 74.3805),
@@ -670,459 +728,415 @@ class KashmirRouteMap(Flowable):
         "sonamarg":    (34.3088, 75.2969),
         "doodhpathri": (33.8700, 74.3700),
     }
+    DISPLAY = {"srinagar": "Srinagar", "gulmarg": "Gulmarg", "pahalgam": "Pahalgam",
+               "sonamarg": "Sonamarg", "doodhpathri": "Doodhpathri"}
+    GPS_LABEL = {
+        "srinagar":    "34.08°N  74.80°E",
+        "gulmarg":     "34.05°N  74.38°E",
+        "pahalgam":    "34.02°N  75.31°E",
+        "sonamarg":    "34.31°N  75.30°E",
+        "doodhpathri": "33.87°N  74.37°E",
+    }
+    # Stylised road geometry, hub (Srinagar) -> destination
+    ROADS = {
+        "gulmarg":     [(34.0837, 74.7973), (34.095, 74.64), (34.078, 74.51), (34.0484, 74.3805)],
+        "pahalgam":    [(34.0837, 74.7973), (33.93, 75.02), (33.82, 75.12), (33.90, 75.25), (34.0161, 75.3147)],
+        "sonamarg":    [(34.0837, 74.7973), (34.18, 74.90), (34.24, 75.05), (34.30, 75.20), (34.3088, 75.2969)],
+        "doodhpathri": [(34.0837, 74.7973), (33.99, 74.62), (33.90, 74.48), (33.8700, 74.3700)],
+    }
+    # Where each pin label sits relative to its pin
+    LABEL_SIDE = {"srinagar": "below-left", "gulmarg": "above", "pahalgam": "right",
+                  "sonamarg": "right", "doodhpathri": "right"}
 
-    # Bounding box of the map viewport
-    LAT_MIN, LAT_MAX = 33.3, 34.85
-    LON_MIN, LON_MAX = 73.6, 76.1
+    # Map viewport (cos-corrected to the panel aspect ratio in __init__)
+    LAT_MIN, LAT_MAX = 33.76, 34.46
+    LON_MIN, LON_MAX = 73.93, 75.77
 
-    # Colours used only inside this flowable
-    MAP_BG      = colors.HexColor("#dbeafe")
-    LAND_COL    = colors.HexColor("#bbf7d0")
-    SNOW_COL    = colors.HexColor("#e0f2fe")
-    LAKE_COL    = colors.HexColor("#60a5fa")
-    ROAD_COL    = colors.HexColor("#94a3b8")
-    ROUTE_COL   = colors.HexColor("#0284c7")
-    PIN_COLORS  = {
+    # Palette (map only)
+    HILL_BG    = colors.HexColor("#e9eef3")
+    VALLEY     = colors.HexColor("#dcefdc")
+    VALLEY_EDG = colors.HexColor("#b9dcbc")
+    WATER      = colors.HexColor("#8ec5f0")
+    WATER_EDG  = colors.HexColor("#6aaee6")
+    PEAK       = colors.HexColor("#c3ccd6")
+    PEAK_SNOW  = colors.HexColor("#f8fafc")
+    GRID       = colors.Color(1, 1, 1, alpha=0.75)
+
+    PIN_COLORS = {                      # (dark, bright)
         "srinagar":    (colors.HexColor("#1e3a5f"), colors.HexColor("#3b82f6")),
         "gulmarg":     (colors.HexColor("#0f4c3a"), colors.HexColor("#14b8a6")),
         "pahalgam":    (colors.HexColor("#78350f"), colors.HexColor("#f59e0b")),
         "sonamarg":    (colors.HexColor("#3b0764"), colors.HexColor("#8b5cf6")),
         "doodhpathri": (colors.HexColor("#374151"), colors.HexColor("#9ca3af")),
-        "departure":   (colors.HexColor("#7f1d1d"), colors.HexColor("#ef4444")),
     }
-    ROW_COLORS = [
-        colors.HexColor("#eff6ff"),  # blue-50
-        colors.HexColor("#f0fdf4"),  # green-50 (teal tone)
-        colors.HexColor("#fffbeb"),  # amber-50
-        colors.HexColor("#fffbeb"),  # amber-50
-        colors.HexColor("#f5f3ff"),  # purple-50
-        colors.HexColor("#fff1f2"),  # rose-50
-    ]
-    HDR_ACCENT = [
-        colors.HexColor("#3b82f6"),
-        colors.HexColor("#14b8a6"),
-        colors.HexColor("#f59e0b"),
-        colors.HexColor("#f59e0b"),
-        colors.HexColor("#8b5cf6"),
-        colors.HexColor("#ef4444"),
-    ]
+    ROW_TINT = {
+        "srinagar":    colors.HexColor("#eff6ff"),
+        "gulmarg":     colors.HexColor("#f0fdfa"),
+        "pahalgam":    colors.HexColor("#fffbeb"),
+        "sonamarg":    colors.HexColor("#f5f3ff"),
+        "doodhpathri": colors.HexColor("#f9fafb"),
+    }
 
-    MAP_H   = 62 * mm   # height of the terrain map panel
-    TABLE_H = 9 * mm    # height of each legend row
-    HDR_H   = 7 * mm    # height of legend header row
+    MAP_H   = 82 * mm
+    TABLE_H = 8.5 * mm
+    HDR_H   = 7 * mm
 
     def __init__(self, width, timeline):
         super().__init__()
         self.width    = width
         self.timeline = timeline
-        self._build_legend_rows()
+        self._build_rows()
         self.height = self.MAP_H + self.HDR_H + self.TABLE_H * len(self._rows) + 2 * mm
+        # Fit the lon span to the panel aspect so 1 deg lat / 1 deg lon keep true proportions
+        import math
+        lat_span = self.LAT_MAX - self.LAT_MIN
+        coslat   = math.cos(math.radians((self.LAT_MAX + self.LAT_MIN) / 2))
+        lon_span = lat_span * (self.width / self.MAP_H) / coslat
+        mid_lon  = 74.85
+        self.LON_MIN, self.LON_MAX = mid_lon - lon_span / 2, mid_lon + lon_span / 2
+        self._coslat = coslat
 
-    # ── helpers ──────────────────────────────────────────────────────────────
-    def _build_legend_rows(self):
-        """Convert timeline entries into legend rows with GPS coords.
-
-        Pin placement uses the *destination* the vehicle actually drives to,
-        derived from transit_route (e.g. "Srinagar to Gulmarg: Overnight Srinagar"
-        → pin on Gulmarg).  overnight_stay is kept as a fallback for days that
-        have no transit_route set, and is always shown in the "Overnight" column.
-        """
-        GPS_LABEL = {
-            "srinagar":    "34.08°N  74.80°E",
-            "gulmarg":     "34.05°N  74.38°E",
-            "pahalgam":    "34.02°N  75.31°E",
-            "sonamarg":    "34.31°N  75.30°E",
-            "doodhpathri": "33.87°N  74.37°E",
-        }
-
-        def _extract_destination(route_str):
-            """
-            Parse the travel destination from a transit_route label.
-            Handles patterns like:
-              "Srinagar to Gulmarg: Overnight Srinagar"  → "gulmarg"
-              "Airport Pickup and Local Sightseeing: Overnight Srinagar" → "srinagar"
-              "Airport Drop-Departure"                   → "departure"
-              "Pahalgam to Srinagar: Overnight Srinagar" → "srinagar"
-            Returns a key matching self.STOPS or "departure".
-            """
-            r = route_str.lower().strip()
-
-            # Departure day — no meaningful destination pin
-            if "departure" in r or "airport drop" in r:
-                return "departure"
-
-            # "X to Y: ..." — the destination is Y (before any colon)
-            if " to " in r:
-                after_to = r.split(" to ", 1)[1]
-                dest_word = after_to.split(":")[0].split()[0]  # first word after "to"
-                for k in self.STOPS:
-                    if k in dest_word:
-                        return k
-
-            # Arrival / pickup day — pin on the first recognised city in the label
+    # ── data ────────────────────────────────────────────────────────────────
+    def _destination(self, route_str):
+        r = (route_str or "").lower().strip()
+        if "departure" in r or "airport drop" in r:
+            return "departure"
+        if " to " in r:
+            after = r.split(" to ", 1)[1].split(":")[0]
             for k in self.STOPS:
-                if k in r:
+                if k in after:
                     return k
+        for k in self.STOPS:
+            if k in r:
+                return k
+        return "srinagar"
 
-            return "srinagar"  # ultimate fallback
-
+    def _build_rows(self):
         self._rows = []
         for idx, day in enumerate(self.timeline, start=1):
-            overnight = str(day.get("overnight_stay", "")).strip()
-            transit_route = str(day.get("transit_route") or day.get("title") or "").strip()
-
-            # Decide which city to PIN on the map (travel destination)
-            if transit_route:
-                matched = _extract_destination(transit_route)
+            overnight = str(day.get("overnight_stay", "") or "").strip()
+            route = str(day.get("transit_route") or day.get("title") or "").strip()
+            if route:
+                key = self._destination(route)
             else:
-                # No route info — fall back to overnight_stay as before
-                key = overnight.lower()
-                matched = "srinagar"
+                key = "srinagar"
                 for k in self.STOPS:
-                    if k in key:
-                        matched = k
+                    if k in overnight.lower():
+                        key = k
                         break
-                if "departure" in key or overnight in ("Departure", ""):
-                    matched = "departure"
+                if "departure" in overnight.lower() or not overnight:
+                    key = "departure"
 
-            # Display location label = the destination city (capitalised)
-            if matched == "departure":
-                loc_label = overnight if overnight else "Departure"
-            else:
-                loc_label = matched.capitalize()
+            is_dep = key == "departure"
+            hub_key = "srinagar" if is_dep else key
+            loc = "Srinagar Airport" if is_dep else self.DISPLAY.get(hub_key, hub_key.capitalize())
 
+            # Activity = the route/title without the trailing ": Overnight X"
             title = str(day.get("title") or day.get("date") or f"Day {idx}")
-            if len(title) > 42:
-                title = title[:40] + "..."
-
+            activity = (route or title).split(":")[0].strip() or title
             self._rows.append({
-                "day":      idx,
-                "loc":      loc_label,
-                "gps":      GPS_LABEL.get(matched, "34.08°N  74.80°E"),
-                "activity": title,
-                "night":    overnight if overnight else "Srinagar",
-                "key":      matched,
+                "day": idx, "loc": loc, "key": hub_key, "is_dep": is_dep,
+                "gps": self.GPS_LABEL.get(hub_key, self.GPS_LABEL["srinagar"]),
+                "activity": activity,
+                "night": "-" if (is_dep or overnight.lower() in ("", "departure")) else overnight,
             })
 
-    def _proj(self, lat, lon, map_w, map_h):
-        """Project (lat, lon) → (x, y) within the map rectangle."""
-        x = (lon - self.LON_MIN) / (self.LON_MAX - self.LON_MIN) * map_w
-        y = (1.0 - (lat - self.LAT_MIN) / (self.LAT_MAX - self.LAT_MIN)) * map_h
+    # ── projection / primitives ─────────────────────────────────────────────
+    def _proj(self, lat, lon):
+        x = (lon - self.LON_MIN) / (self.LON_MAX - self.LON_MIN) * self.width
+        y = self._map_y0 + (lat - self.LAT_MIN) / (self.LAT_MAX - self.LAT_MIN) * self.MAP_H
         return x, y
 
-    def _poly(self, c, pts, map_w, map_h, ox, oy, fill=None, stroke=None, lw=0.5):
+    def _path(self, c, pts, close=False):
         p = c.beginPath()
         for i, (lat, lon) in enumerate(pts):
-            x, y = self._proj(lat, lon, map_w, map_h)
-            if i == 0:
-                p.moveTo(ox + x, oy + y)
-            else:
-                p.lineTo(ox + x, oy + y)
-        p.close()
-        fs = 1 if fill else 0
-        ss = 1 if stroke else 0
-        if fill:
-            c.setFillColor(fill)
-        if stroke:
-            c.setStrokeColor(stroke)
-            c.setLineWidth(lw)
-        c.drawPath(p, fill=fs, stroke=ss)
+            x, y = self._proj(lat, lon)
+            (p.moveTo if i == 0 else p.lineTo)(x, y)
+        if close:
+            p.close()
+        return p
 
-    def _line(self, c, pts, map_w, map_h, ox, oy, color, lw, dash=None):
-        if dash:
-            c.setDash(*dash)
-        p = c.beginPath()
-        for i, (lat, lon) in enumerate(pts):
-            x, y = self._proj(lat, lon, map_w, map_h)
-            if i == 0:
-                p.moveTo(ox + x, oy + y)
-            else:
-                p.lineTo(ox + x, oy + y)
-        c.setStrokeColor(color)
-        c.setLineWidth(lw)
-        c.drawPath(p, fill=0, stroke=1)
-        if dash:
-            c.setDash()
+    def _smooth(self, pts, n=2):
+        """Chaikin corner-cutting so roads/rivers look organic, not polyline-ish."""
+        for _ in range(n):
+            out = [pts[0]]
+            for a, b in zip(pts, pts[1:]):
+                out.append((0.75 * a[0] + 0.25 * b[0], 0.75 * a[1] + 0.25 * b[1]))
+                out.append((0.25 * a[0] + 0.75 * b[0], 0.25 * a[1] + 0.75 * b[1]))
+            out.append(pts[-1])
+            pts = out
+        return pts
 
-    def _pin(self, c, lat, lon, map_w, map_h, ox, oy, inner_col, ring_col, label, day_str):
-        x, y = self._proj(lat, lon, map_w, map_h)
-        px, py = ox + x, oy + y
-        R, r = 4.2 * mm, 2.8 * mm
-        # Shadow (offset circle)
-        c.setFillColor(colors.HexColor("#00000022"))
-        c.circle(px + 0.5, py - 0.8, R, fill=1, stroke=0)
-        # Outer ring
-        c.setFillColor(ring_col)
-        c.circle(px, py, R, fill=1, stroke=0)
-        # Inner circle
-        c.setFillColor(inner_col)
-        c.circle(px, py, r, fill=1, stroke=0)
-        # Day number
-        c.setFillColor(WHITE)
-        c.setFont("Helvetica-Bold", 5.5)
-        c.drawCentredString(px, py - 1.8, day_str)
-        # Name bubble above pin
-        bubble_w = c.stringWidth(label, "Helvetica-Bold", 6) + 6
-        bx = px - bubble_w / 2
-        by = py + R + 1
-        c.setFillColor(colors.HexColor("#ffffffee"))
-        c.setStrokeColor(ring_col)
-        c.setLineWidth(0.5)
-        c.roundRect(bx, by, bubble_w, 4.5 * mm, 1 * mm, fill=1, stroke=1)
-        c.setFillColor(inner_col)
-        c.setFont("Helvetica-Bold", 6)
-        c.drawCentredString(px, by + 2.8 * mm, label)
+    def _point_along(self, pts, frac):
+        """Point at `frac` of the way along a polyline (screen space)."""
+        import math
+        xy = [self._proj(*p) for p in pts]
+        seg = [math.dist(a, b) for a, b in zip(xy, xy[1:])]
+        target, acc = sum(seg) * frac, 0.0
+        for (a, b), L in zip(zip(xy, xy[1:]), seg):
+            if acc + L >= target and L > 0:
+                t = (target - acc) / L
+                return a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t
+            acc += L
+        return xy[-1]
 
-    # ── main draw ─────────────────────────────────────────────────────────────
+    def _peak(self, c, x, y, w, h):
+        c.setFillColor(self.PEAK)
+        p = c.beginPath(); p.moveTo(x - w / 2, y); p.lineTo(x, y + h); p.lineTo(x + w / 2, y); p.close()
+        c.drawPath(p, fill=1, stroke=0)
+        c.setFillColor(self.PEAK_SNOW)
+        p = c.beginPath(); p.moveTo(x - w * 0.16, y + h * 0.68); p.lineTo(x, y + h)
+        p.lineTo(x + w * 0.16, y + h * 0.68); p.lineTo(x, y + h * 0.58); p.close()
+        c.drawPath(p, fill=1, stroke=0)
+
+    def _chip(self, c, cx, cy, text, col):
+        c.setFont("Lato-Bold", 6.3)
+        tw = c.stringWidth(text, "Lato-Bold", 6.3)
+        w, h = tw + 3.4 * mm, 4.2 * mm
+        c.setFillColor(WHITE); c.setStrokeColor(col); c.setLineWidth(0.9)
+        c.roundRect(cx - w / 2, cy - h / 2, w, h, h / 2, fill=1, stroke=1)
+        c.setFillColor(col)
+        c.drawCentredString(cx, cy - 2.1, text)
+
+    def _pin(self, c, key, days_txt, sub_txt=None):
+        lat, lon = self.STOPS[key]
+        px, py = self._proj(lat, lon)
+        dark, bright = self.PIN_COLORS[key]
+        hub = key == "srinagar"
+        R = 3.6 * mm if hub else 2.9 * mm
+        c.setFillColor(colors.Color(0, 0, 0, alpha=0.18)); c.circle(px + 0.6, py - 0.9, R, fill=1, stroke=0)
+        c.setFillColor(WHITE);  c.circle(px, py, R + 0.9, fill=1, stroke=0)
+        c.setFillColor(bright); c.circle(px, py, R, fill=1, stroke=0)
+        c.setFillColor(dark);   c.circle(px, py, R * 0.46, fill=1, stroke=0)
+
+        name = self.DISPLAY[key]
+        lines = [(name, "Lato-Bold", 7.6, dark), (days_txt, "Lato", 6.2, GRAY_600)]
+        if sub_txt:
+            lines.append((sub_txt, "Lato-Italic", 5.8, GRAY_400))
+        bw = max(c.stringWidth(t, f, s) for t, f, s, _ in lines) + 4.4 * mm
+        bh = (3.3 * mm * len(lines)) + 1.6 * mm
+        gap = R + 2.2
+        side = self.LABEL_SIDE.get(key, "above")
+        if side == "above":        bx, by = px - bw / 2, py + gap
+        elif side == "below":      bx, by = px - bw / 2, py - gap - bh
+        elif side == "right":      bx, by = px + gap + 1, py - bh / 2
+        elif side == "left":       bx, by = px - gap - 1 - bw, py - bh / 2
+        else:                      bx, by = px - bw + 2 * mm, py - gap - bh   # below-left
+        # keep inside the panel
+        bx = max(1.5 * mm, min(bx, self.width - bw - 1.5 * mm))
+        by = max(self._map_y0 + 1.5 * mm, min(by, self._map_y0 + self.MAP_H - bh - 1.5 * mm))
+        c.setFillColor(colors.Color(0, 0, 0, alpha=0.10)); c.roundRect(bx + 0.5, by - 0.7, bw, bh, 1.4 * mm, fill=1, stroke=0)
+        c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.4)
+        c.roundRect(bx, by, bw, bh, 1.4 * mm, fill=1, stroke=1)
+        c.setFillColor(bright); c.roundRect(bx, by, 1.3 * mm, bh, 0.6 * mm, fill=1, stroke=0)
+        ty = by + bh - 3.5 * mm
+        for t, f, s, col in lines:
+            c.setFillColor(col); c.setFont(f, s)
+            c.drawString(bx + 2.9 * mm, ty, t)
+            ty -= 3.3 * mm
+
+    # ── main draw ───────────────────────────────────────────────────────────
     def draw(self):
-        c    = self.canv
-        w    = self.width
-        mh   = self.MAP_H          # map panel height
-        pad  = 3 * mm
-        map_w = w - 2 * pad
-        map_h = mh - 2 * pad
-        ox   = pad
-        oy_base = self.height - mh  # map sits at top of flowable
+        c, w, mh = self.canv, self.width, self.MAP_H
+        self._map_y0 = self.height - mh
+        y0 = self._map_y0
 
-        # ── MAP PANEL background ─────────────────────────────────────────────
-        c.setFillColor(self.MAP_BG)
-        c.roundRect(0, oy_base, w, mh, 3 * mm, fill=1, stroke=0)
+        # Clip everything map-related to the rounded panel
+        c.saveState()
+        clip = c.beginPath(); clip.roundRect(0, y0, w, mh, 3 * mm)
+        c.clipPath(clip, stroke=0, fill=0)
 
-        # ── Terrain polygons ─────────────────────────────────────────────────
-        # Snow / high peaks band
-        self._poly(c, [
-            (34.7, 73.9), (35.0, 74.5), (34.9, 75.4),
-            (34.6, 75.9), (34.4, 75.7), (34.5, 75.0),
-            (34.6, 74.3), (34.7, 73.9),
-        ], map_w, map_h, ox, oy_base + pad, fill=self.SNOW_COL)
+        c.setFillColor(self.HILL_BG); c.rect(0, y0, w, mh, fill=1, stroke=0)
 
-        # Kashmir valley land
-        self._poly(c, [
-            (34.6, 73.9), (34.7, 74.5), (34.5, 75.5),
-            (34.1, 75.9), (33.7, 75.7), (33.4, 75.1),
-            (33.5, 74.2), (34.0, 73.8), (34.4, 73.9),
-        ], map_w, map_h, ox, oy_base + pad, fill=self.LAND_COL,
-           stroke=colors.HexColor("#6ee7b7"), lw=0.6)
+        # Graticule + degree labels
+        c.setStrokeColor(self.GRID); c.setLineWidth(0.5); c.setDash(1.5, 2.5)
+        for lat in (34.0, 34.25):
+            _, y = self._proj(lat, self.LON_MIN); c.line(0, y, w, y)
+        for lon in (74.5, 75.0, 75.5):
+            x, _ = self._proj(34.0, lon); c.line(x, y0, x, y0 + mh)
+        c.setDash()
 
-        # Dal Lake
-        self._poly(c, [
-            (34.14, 74.85), (34.18, 74.92),
-            (34.12, 74.95), (34.08, 74.90),
-        ], map_w, map_h, ox, oy_base + pad, fill=self.LAKE_COL)
+        # Ridges (decorative peaks along the top and west edges)
+        import random
+        rnd = random.Random(7)
+        x = 3 * mm
+        while x < w - 3 * mm:
+            ph = rnd.uniform(3.0, 5.6) * mm
+            c.saveState(); c.setFillAlpha(0.8)
+            self._peak(c, x, y0 + mh - ph - rnd.uniform(0.8, 3.0) * mm, rnd.uniform(5, 8) * mm, ph)
+            c.restoreState()
+            x += rnd.uniform(5.5, 8.5) * mm
+        yy = y0 + 6 * mm
+        while yy < y0 + mh - 14 * mm:
+            ph = rnd.uniform(2.6, 4.6) * mm
+            c.saveState(); c.setFillAlpha(0.75)
+            self._peak(c, rnd.uniform(2.5, 6) * mm, yy, rnd.uniform(4.5, 7) * mm, ph)
+            c.restoreState()
+            yy += rnd.uniform(7, 10) * mm
 
-        # Wular Lake
-        self._poly(c, [
-            (34.35, 74.52), (34.42, 74.58),
-            (34.38, 74.64), (34.30, 74.60),
-        ], map_w, map_h, ox, oy_base + pad, fill=self.LAKE_COL)
+        # Valley floor
+        valley = self._smooth([
+            (34.30, 74.30), (34.36, 74.60), (34.30, 74.95), (34.22, 75.18), (34.00, 75.24),
+            (33.82, 75.20), (33.76, 75.00), (33.80, 74.70), (33.92, 74.45), (34.10, 74.30),
+        ][:], 2)
+        c.setFillColor(self.VALLEY); c.setStrokeColor(self.VALLEY_EDG); c.setLineWidth(0.8)
+        c.drawPath(self._path(c, valley, close=True), fill=1, stroke=1)
 
-        # ── Roads ────────────────────────────────────────────────────────────
-        # NH44 Jammu–Srinagar
-        self._line(c, [
-            (33.3, 74.5), (33.6, 74.6), (33.9, 74.7), (34.09, 74.82),
-        ], map_w, map_h, ox, oy_base + pad, self.ROAD_COL, 1.2)
+        # Degree labels (drawn after terrain so peaks never sit on top of them)
+        c.setFillColor(GRAY_400); c.setFont("Lato", 5.2)
+        for lat in (34.0, 34.25):
+            _, y = self._proj(lat, self.LON_MIN); c.drawString(9 * mm, y + 0.8, f"{lat:g}°N")
+        for lon in (74.5, 75.0, 75.5):
+            x, _ = self._proj(34.0, lon); c.drawString(x + 1.0, y0 + 11 * mm, f"{lon:g}°E")
 
-        # Srinagar–Gulmarg
-        self._line(c, [
-            (34.09, 74.82), (34.05, 74.60), (34.05, 74.40), (34.048, 74.38),
-        ], map_w, map_h, ox, oy_base + pad, self.ROAD_COL, 0.8)
+        # Jhelum river + lakes
+        river = self._smooth([(33.70, 75.18), (33.85, 75.00), (34.00, 74.86), (34.09, 74.77),
+                              (34.22, 74.62), (34.31, 74.575)], 2)
+        c.setStrokeColor(self.WATER_EDG); c.setLineWidth(1.3)
+        c.drawPath(self._path(c, river), fill=0, stroke=1)
+        for pts in ([(34.150, 74.855), (34.185, 74.905), (34.150, 74.945), (34.105, 74.905)],     # Dal
+                    [(34.335, 74.52), (34.375, 74.565), (34.355, 74.62), (34.31, 74.585)]):             # Wular
+            c.setFillColor(self.WATER); c.setStrokeColor(self.WATER_EDG); c.setLineWidth(0.6)
+            c.drawPath(self._path(c, self._smooth(pts, 2), close=True), fill=1, stroke=1)
+        c.setFillColor(colors.HexColor("#4a90c9")); c.setFont("Lato-Italic", 5.4)
+        dx, dy = self._proj(34.105, 74.945); c.drawString(dx, dy, "Dal Lake")
 
-        # Srinagar–Pahalgam
-        self._line(c, [
-            (34.09, 74.82), (33.95, 75.10), (33.80, 75.20), (34.016, 75.31),
-        ], map_w, map_h, ox, oy_base + pad, self.ROAD_COL, 0.8)
+        # Roads actually used on this itinerary
+        used = {}                                   # road key -> list of day numbers
+        prev_key = "srinagar"
+        for r in self._rows:
+            k = r["key"]
+            if k != "srinagar" and k in self.ROADS:
+                used.setdefault(k, []).append(r["day"])
+            elif k == "srinagar" and prev_key in self.ROADS and not r["is_dep"] and prev_key != "srinagar":
+                used.setdefault(prev_key, []).append(r["day"])          # return leg
+            prev_key = k
+        for k, days in used.items():
+            pts = self._smooth(self.ROADS[k], 3)
+            dark, bright = self.PIN_COLORS[k]
+            c.setStrokeColor(WHITE); c.setLineWidth(4.2); c.setLineCap(1)
+            c.drawPath(self._path(c, pts), fill=0, stroke=1)
+            c.setStrokeColor(bright); c.setLineWidth(2.0); c.setDash(5, 2.6)
+            c.drawPath(self._path(c, pts), fill=0, stroke=1)
+            c.setDash(); c.setLineCap(0)
 
-        # Srinagar–Sonamarg
-        self._line(c, [
-            (34.09, 74.82), (34.20, 74.92), (34.28, 75.15), (34.31, 75.29),
-        ], map_w, map_h, ox, oy_base + pad, self.ROAD_COL, 0.8)
-
-        # Srinagar–Doodhpathri
-        self._line(c, [
-            (34.09, 74.82), (34.00, 74.60), (33.92, 74.44), (33.87, 74.37),
-        ], map_w, map_h, ox, oy_base + pad, self.ROAD_COL, 0.6, dash=[2, 2])
-
-        # ── Journey route (dashed blue) ───────────────────────────────────────
-        # Build ordered route from timeline
-        route_pts = []
-        for row in self._rows:
-            key = row["key"]
-            if key in self.STOPS:
-                route_pts.append(self.STOPS[key])
-            else:
-                route_pts.append(self.STOPS["srinagar"])
-
-        # Glow under route
-        self._line(c, route_pts, map_w, map_h, ox, oy_base + pad,
-                   colors.HexColor("#93c5fd"), 5)
-        # Route itself
-        self._line(c, route_pts, map_w, map_h, ox, oy_base + pad,
-                   self.ROUTE_COL, 1.5, dash=[4, 3])
-
-        # ── Pins ─────────────────────────────────────────────────────────────
-        # Collect unique stops (show each location once, label with all days)
+        # Pins first, chips after so chips are never covered
         seen = {}
-        for row in self._rows:
-            key = row["key"]
-            if key not in seen:
-                seen[key] = []
-            seen[key].append(str(row["day"]))
+        for r in self._rows:
+            seen.setdefault(r["key"], []).append(r["day"])
 
-        placed = set()
-        for row in self._rows:
-            key = row["key"]
-            if key in placed:
+        def _fmt(days):
+            return ("Day " if len(days) == 1 else "Days ") + " · ".join(str(d) for d in days)
+
+        for k, days in seen.items():
+            if k not in self.STOPS:
                 continue
-            placed.add(key)
-            lat, lon = self.STOPS.get(key, self.STOPS["srinagar"])
-            inner, ring = self.PIN_COLORS.get(key, self.PIN_COLORS["srinagar"])
-            days_str = ",".join(seen[key])
-            loc_label = row["loc"].split()[0]  # first word e.g. "Srinagar"
-            self._pin(c, lat, lon, map_w, map_h, ox, oy_base + pad,
-                      inner, ring, loc_label, "D" + days_str)
+            sub = None
+            if k == "srinagar" and any(r["is_dep"] for r in self._rows):
+                sub = "Arrival & departure"
+            self._pin(c, k, _fmt(days), sub)
 
-        # ── Map header label ─────────────────────────────────────────────────
-        c.setFillColor(colors.HexColor("#ffffffee"))
-        c.setStrokeColor(GRAY_200)
-        c.setLineWidth(0.4)
-        c.roundRect(pad + 2 * mm, oy_base + mh - 9 * mm, 52 * mm, 7 * mm, 1.5 * mm, fill=1, stroke=1)
-        c.setFillColor(NAVY)
-        c.setFont("Helvetica-Bold", 8)
-        c.drawString(pad + 4 * mm, oy_base + mh - 5.5 * mm, "TOUR ROUTE  |  KASHMIR VALLEY")
+        for k, days in used.items():
+            fx, fy = self._point_along(self._smooth(self.ROADS[k], 3), 0.5)
+            self._chip(c, fx, fy, _fmt(sorted(set(days))), self.PIN_COLORS[k][0])
 
-        # ── Compass rose ─────────────────────────────────────────────────────
-        cx_c = w - pad - 7 * mm
-        cy_c = oy_base + mh - 9 * mm
-        c.setFillColor(colors.HexColor("#ffffffdd"))
-        c.circle(cx_c, cy_c, 5.5 * mm, fill=1, stroke=0)
-        c.setStrokeColor(GRAY_400)
-        c.setLineWidth(0.3)
-        c.circle(cx_c, cy_c, 5.5 * mm, fill=0, stroke=1)
-        for label, (dx, dy) in [("N", (0, 1)), ("S", (0, -1)), ("E", (1, 0)), ("W", (-1, 0))]:
-            lx = cx_c + dx * 3.8 * mm
-            ly = cy_c + dy * 3.8 * mm - 1.5
-            c.setFillColor(colors.HexColor("#dc2626") if label == "N" else GRAY_600)
-            c.setFont("Helvetica-Bold" if label == "N" else "Helvetica", 5.5)
-            c.drawCentredString(lx, ly, label)
-        # North arrow
+        # Scale bar (true 50 km at this latitude) - bottom-left
+        km_per_deg_lon = 111.32 * self._coslat
+        bar = (50.0 / km_per_deg_lon) / (self.LON_MAX - self.LON_MIN) * w
+        sx, sy = 3 * mm, y0 + 3 * mm
+        c.setFillColor(colors.Color(1, 1, 1, alpha=0.88))
+        c.roundRect(sx - 1.4 * mm, sy - 1.5 * mm, bar + 12 * mm, 7.2 * mm, 1.2 * mm, fill=1, stroke=0)
+        by = sy + 2.0 * mm
+        c.setFillColor(NAVY);  c.rect(sx, by, bar, 1.4 * mm, fill=1, stroke=0)
+        c.setFillColor(WHITE); c.rect(sx, by, bar / 2, 1.4 * mm, fill=1, stroke=0)
+        c.setStrokeColor(NAVY); c.setLineWidth(0.3); c.rect(sx, by, bar, 1.4 * mm, fill=0, stroke=1)
+        c.setFillColor(GRAY_600); c.setFont("Lato", 5.6)
+        c.drawString(sx - 0.6, sy - 0.2 * mm, "0")
+        c.drawCentredString(sx + bar / 2, sy - 0.2 * mm, "25")
+        c.drawString(sx + bar + 1.6 * mm, by - 0.1 * mm, "50 km")
+
+        # Compass - bottom-right
+        cx_c, cy_c = w - 9 * mm, y0 + 9 * mm
+        c.setFillColor(colors.Color(1, 1, 1, alpha=0.92)); c.circle(cx_c, cy_c, 5.6 * mm, fill=1, stroke=0)
+        c.setStrokeColor(GRAY_400); c.setLineWidth(0.3); c.circle(cx_c, cy_c, 5.6 * mm, fill=0, stroke=1)
+        for lab, dx_, dy_ in (("N", 0, 1), ("S", 0, -1), ("E", 1, 0), ("W", -1, 0)):
+            c.setFillColor(colors.HexColor("#dc2626") if lab == "N" else GRAY_600)
+            c.setFont("Lato-Bold" if lab == "N" else "Lato", 5.4)
+            c.drawCentredString(cx_c + dx_ * 3.9 * mm, cy_c + dy_ * 3.9 * mm - 1.6, lab)
         c.setFillColor(colors.HexColor("#dc2626"))
-        p2 = c.beginPath()
-        p2.moveTo(cx_c, cy_c + 2.5 * mm)
-        p2.lineTo(cx_c + 1.2 * mm, cy_c)
-        p2.lineTo(cx_c - 1.2 * mm, cy_c)
-        p2.close()
+        p2 = c.beginPath(); p2.moveTo(cx_c, cy_c + 2.3 * mm); p2.lineTo(cx_c + 1.0 * mm, cy_c); p2.lineTo(cx_c - 1.0 * mm, cy_c); p2.close()
         c.drawPath(p2, fill=1, stroke=0)
+        c.setFillColor(GRAY_400)
+        p3 = c.beginPath(); p3.moveTo(cx_c, cy_c - 2.3 * mm); p3.lineTo(cx_c + 1.0 * mm, cy_c); p3.lineTo(cx_c - 1.0 * mm, cy_c); p3.close()
+        c.drawPath(p3, fill=1, stroke=0)
 
-        # ── Scale bar ────────────────────────────────────────────────────────
-        # 0.5 lon degrees at lat 34 ≈ 46 km
-        lon_span = self.LON_MAX - self.LON_MIN
-        scale_px = (0.5 / lon_span) * map_w
-        sx = pad + 2 * mm
-        sy = oy_base + 3 * mm
-        c.setFillColor(colors.HexColor("#ffffffcc"))
-        c.roundRect(sx - 1 * mm, sy - 1 * mm, scale_px + 20 * mm, 5 * mm, 1 * mm, fill=1, stroke=0)
-        c.setFillColor(NAVY)
-        c.rect(sx, sy + 1 * mm, scale_px, 1.5 * mm, fill=1, stroke=0)
-        c.setFillColor(WHITE)
-        c.rect(sx, sy + 1 * mm, scale_px / 2, 1.5 * mm, fill=1, stroke=0)
-        c.setFillColor(GRAY_600)
-        c.setFont("Helvetica", 5.5)
-        c.drawString(sx + scale_px + 1.5 * mm, sy + 1.2 * mm, "~46 km")
-        c.drawString(sx, sy - 0.2 * mm, "0")
+        # Key - bottom, left of compass
+        kx = w - 22 * mm - 36 * mm
+        c.setFillColor(colors.Color(1, 1, 1, alpha=0.88))
+        c.roundRect(kx, y0 + 3 * mm, 36 * mm, 6.6 * mm, 1.2 * mm, fill=1, stroke=0)
+        c.setStrokeColor(self.PIN_COLORS["srinagar"][1]); c.setLineWidth(1.8); c.setDash(3.5, 2)
+        c.line(kx + 2.2 * mm, y0 + 6.3 * mm, kx + 9 * mm, y0 + 6.3 * mm); c.setDash()
+        c.setFillColor(GRAY_600); c.setFont("Lato", 5.8)
+        c.drawString(kx + 10.5 * mm, y0 + 5.4 * mm, "Driving route")
+        c.drawString(kx + 25 * mm, y0 + 5.4 * mm, "Day n")
 
-        # ── LEGEND TABLE ─────────────────────────────────────────────────────
-        col_w = [
-            w * 0.07,   # Day
-            w * 0.15,   # Location
-            w * 0.20,   # GPS
-            w * 0.40,   # Activity
-            w * 0.18,   # Overnight
-        ]
-        headers = ["Day", "Location", "GPS Coordinates", "Activity / Route", "Overnight"]
+        c.restoreState()
+
+        # Panel border (outside the clip so it is crisp)
+        c.setStrokeColor(GRAY_200); c.setLineWidth(0.7)
+        c.roundRect(0, y0, w, mh, 3 * mm, fill=0, stroke=1)
+
+        # ── Legend table ────────────────────────────────────────────────────
+        col_w = [w * 0.07, w * 0.19, w * 0.19, w * 0.37, w * 0.18]
+        headers = ["Day", "Location", "GPS", "Activity / Route", "Overnight"]
         col_x = [sum(col_w[:i]) for i in range(len(col_w))]
-
-        # Header bar
-        hy = oy_base - self.HDR_H
-        c.setFillColor(NAVY)
-        c.rect(0, hy, w, self.HDR_H, fill=1, stroke=0)
-        c.setFillColor(WHITE)
-        c.setFont("Helvetica-Bold", 7)
+        hy = y0 - self.HDR_H
+        c.setFillColor(NAVY); c.rect(0, hy, w, self.HDR_H, fill=1, stroke=0)
+        c.setFillColor(WHITE); c.setFont("Lato-Bold", 7)
         for i, hdr in enumerate(headers):
-            tx = col_x[i] + (col_w[i] / 2 if i == 0 else 3 * mm)
-            align = "centre" if i == 0 else "left"
-            if align == "centre":
-                c.drawCentredString(tx, hy + self.HDR_H / 2 - 2, hdr)
+            if i == 0:
+                c.drawCentredString(col_x[0] + col_w[0] / 2, hy + self.HDR_H / 2 - 2.3, hdr)
             else:
-                c.drawString(tx, hy + self.HDR_H / 2 - 2, hdr)
+                c.drawString(col_x[i] + 3 * mm, hy + self.HDR_H / 2 - 2.3, hdr)
 
-        # Data rows
         for ri, row in enumerate(self._rows):
             ry = hy - (ri + 1) * self.TABLE_H
-            row_bg = self.ROW_COLORS[ri] if ri < len(self.ROW_COLORS) else GRAY_50
-            c.setFillColor(row_bg)
-            c.rect(0, ry, w, self.TABLE_H, fill=1, stroke=0)
+            key = row["key"]
+            _, accent = self.PIN_COLORS.get(key, self.PIN_COLORS["srinagar"])
+            c.setFillColor(self.ROW_TINT.get(key, GRAY_50)); c.rect(0, ry, w, self.TABLE_H, fill=1, stroke=0)
+            c.setStrokeColor(GRAY_200); c.setLineWidth(0.3); c.line(0, ry, w, ry)
+            mid = ry + self.TABLE_H / 2
 
-            # Row border
-            c.setStrokeColor(GRAY_200)
-            c.setLineWidth(0.3)
-            c.line(0, ry, w, ry)
-
-            accent = self.HDR_ACCENT[ri] if ri < len(self.HDR_ACCENT) else SKY
-
-            # Day circle
             cx2 = col_x[0] + col_w[0] / 2
-            cy2 = ry + self.TABLE_H / 2
-            c.setFillColor(accent)
-            c.circle(cx2, cy2, 3 * mm, fill=1, stroke=0)
-            c.setFillColor(WHITE)
-            c.setFont("Helvetica-Bold", 7)
-            c.drawCentredString(cx2, cy2 - 2, str(row["day"]))
+            c.setFillColor(accent); c.circle(cx2, mid, 3 * mm, fill=1, stroke=0)
+            c.setFillColor(WHITE); c.setFont("Lato-Bold", 7.2); c.drawCentredString(cx2, mid - 2.5, str(row["day"]))
 
-            # Location
-            c.setFillColor(BLACK)
-            c.setFont("Helvetica-Bold", 7)
-            c.drawString(col_x[1] + 3 * mm, ry + self.TABLE_H / 2 - 1.5, clean(row["loc"]))
+            c.setFillColor(BLACK); c.setFont("Lato-Bold", 7.4)
+            c.drawString(col_x[1] + 3 * mm, mid - 2.5, clean(row["loc"]))
+            c.setFillColor(GRAY_600); c.setFont("Lato", 6.8)
+            c.drawString(col_x[2] + 3 * mm, mid - 2.4, row["gps"])
 
-            # GPS
-            c.setFillColor(GRAY_600)
-            c.setFont("Helvetica", 6.5)
-            c.drawString(col_x[2] + 3 * mm, ry + self.TABLE_H / 2 - 1.5, row["gps"])
+            act, maxw = clean(row["activity"]), col_w[3] - 6 * mm
+            c.setFont("Lato", 7)
+            while c.stringWidth(act, "Lato", 7) > maxw and len(act) > 4:
+                act = act[:-2].rstrip() + "…"
+            c.setFillColor(SLATE); c.drawString(col_x[3] + 3 * mm, mid - 2.4, act)
 
-            # Activity (truncate to fit)
-            act = clean(row["activity"])
-            max_act_w = col_w[3] - 6 * mm
-            c.setFont("Helvetica", 6.5)
-            while c.stringWidth(act, "Helvetica", 6.5) > max_act_w and len(act) > 6:
-                act = act[:-4] + "..."
-            c.setFillColor(SLATE)
-            c.drawString(col_x[3] + 3 * mm, ry + self.TABLE_H / 2 - 1.5, act)
-
-            # Overnight badge
             night = clean(row["night"])
-            nw = c.stringWidth(night, "Helvetica-Bold", 6) + 4 * mm
-            nx2 = col_x[4] + 3 * mm
-            ny2 = ry + self.TABLE_H / 2 - 2.2 * mm
-            c.setFillColor(colors.HexColor("#e0f2fe"))
-            c.setStrokeColor(accent)
-            c.setLineWidth(0.4)
-            c.roundRect(nx2, ny2, nw, 4 * mm, 1 * mm, fill=1, stroke=1)
-            c.setFillColor(accent)
-            c.setFont("Helvetica-Bold", 6)
-            c.drawString(nx2 + 2 * mm, ny2 + 1.2 * mm, night)
+            if night == "-":
+                c.setFillColor(GRAY_400); c.setFont("Lato", 7); c.drawString(col_x[4] + 3 * mm, mid - 2.4, "—")
+            else:
+                nw = c.stringWidth(night, "Lato-Bold", 6.4) + 4.4 * mm
+                nx, ny = col_x[4] + 3 * mm, mid - 2.1 * mm
+                c.setFillColor(WHITE); c.setStrokeColor(accent); c.setLineWidth(0.5)
+                c.roundRect(nx, ny, nw, 4.2 * mm, 2.1 * mm, fill=1, stroke=1)
+                c.setFillColor(accent); c.setFont("Lato-Bold", 6.4)
+                c.drawString(nx + 2.2 * mm, ny + 1.35 * mm, night)
 
-        # Bottom border of table
-        bot_y = hy - len(self._rows) * self.TABLE_H
-        c.setStrokeColor(GRAY_200)
-        c.setLineWidth(0.3)
-        c.line(0, bot_y, w, bot_y)
-
-        # Column dividers across full table height
-        table_top = hy + self.HDR_H
-        table_bot = bot_y
+        bot = hy - len(self._rows) * self.TABLE_H
+        c.setStrokeColor(GRAY_200); c.setLineWidth(0.3); c.line(0, bot, w, bot)
         for i in range(1, len(col_x)):
-            c.setStrokeColor(GRAY_200)
-            c.setLineWidth(0.3)
-            c.line(col_x[i], table_bot, col_x[i], table_top)
+            c.line(col_x[i], bot, col_x[i], hy + self.HDR_H)
 
 
 # ─── Helper: build styles ─────────────────────────────────────────────────────
@@ -1134,73 +1148,116 @@ def make_styles():
 
     return {
         "activity_time": P("AT",
-            fontName="Helvetica-Bold", fontSize=8.5, textColor=SKY,
+            fontName="Lato-Bold", fontSize=8.5, textColor=SKY,
             leftIndent=4, spaceAfter=1),
         "activity_desc": P("AD",
-            fontName="Helvetica", fontSize=8.5, textColor=BLACK,
+            fontName="Lato", fontSize=8.5, textColor=BLACK,
             leftIndent=4, spaceAfter=4, leading=13.5),
+        "activity_dot": P("ADT",
+            fontName="Lato", fontSize=6, textColor=SKY, alignment=TA_CENTER,
+            leading=13.5),
         "hotel_cell": P("HC",
-            fontName="Helvetica", fontSize=8, textColor=BLACK, leading=11),
+            fontName="Lato", fontSize=8, textColor=BLACK, leading=11),
         "hotel_cell_bold": P("HCB",
-            fontName="Helvetica-Bold", fontSize=8.5, textColor=NAVY, leading=11),
+            fontName="Lato-Bold", fontSize=8.5, textColor=NAVY, leading=11),
         "footer_note": P("FN",
-            fontName="Helvetica-Oblique", fontSize=7.5, textColor=GRAY_400,
+            fontName="Lato-Italic", fontSize=7.5, textColor=GRAY_400,
             alignment=TA_CENTER),
         "inclusion": P("INC",
-            fontName="Helvetica", fontSize=8.5, textColor=BLACK, leftIndent=8,
+            fontName="Lato", fontSize=8.5, textColor=BLACK, leftIndent=8,
             spaceAfter=3, leading=13),
         "summary_label": P("SL",
-            fontName="Helvetica-Bold", fontSize=8, textColor=GRAY_600),
+            fontName="Lato-Bold", fontSize=8, textColor=GRAY_600),
         "summary_value": P("SV",
-            fontName="Helvetica", fontSize=8.5, textColor=BLACK),
+            fontName="Lato", fontSize=8.5, textColor=BLACK),
     }
 
 
 # ─── Page decorators ─────────────────────────────────────────────────────────
 def _draw_watermark(canvas, w, h):
+    """Very light diagonal wordmark behind the content.
+
+    Kept deliberately quiet: small, letter-spaced, ~5 % opacity and centred on
+    the page body, so it reads as a brand/anti-copy mark without ever fighting
+    with the text, tables or photos that sit on top of it."""
     canvas.saveState()
-    canvas.translate(w / 2, h / 2)
-    canvas.rotate(-38)
-    wm_color = colors.Color(0.008, 0.518, 0.780, alpha=0.09)
-    canvas.setFillColor(wm_color)
-    canvas.setFont("Helvetica-Bold", 46)
-    canvas.drawCentredString(0, 8*mm, "Serene Vibes Kashmir")
-    canvas.setFont("Helvetica-Oblique", 18)
-    canvas.drawCentredString(0, -10*mm, "A Poem In Motion")
-    rule_w = 110 * mm
-    canvas.setStrokeColor(wm_color)
-    canvas.setLineWidth(0.8)
-    canvas.line(-rule_w / 2, 3*mm, rule_w / 2, 3*mm)
+    canvas.translate(w / 2, h / 2 + 4 * mm)
+    canvas.rotate(35)
+    col = colors.Color(0.008, 0.518, 0.780, alpha=0.055)
+    canvas.setFillColor(col)
+    canvas.setStrokeColor(col)
+
+    text, size, tracking = "SERENE VIBES KASHMIR", 30, 5.0
+    canvas.setFont("Lato-Bold", size)
+    total = canvas.stringWidth(text, "Lato-Bold", size) + tracking * (len(text) - 1)
+    x = -total / 2
+    for ch in text:                                   # manual letter-spacing
+        canvas.drawString(x, 0, ch)
+        x += canvas.stringWidth(ch, "Lato-Bold", size) + tracking
+
+    canvas.setLineWidth(0.7)
+    canvas.line(-total / 2, -6 * mm, total / 2, -6 * mm)
+    canvas.setFont("Lato-Italic", 12)
+    canvas.drawCentredString(0, -13 * mm, "A Poem In Motion")
     canvas.restoreState()
 
 
 def _page_frame(canvas, doc):
-    """Watermark + footer on every page."""
+    """Watermark (not on the branded cover) + footer on every page."""
     canvas.saveState()
     w, h = A4
-    _draw_watermark(canvas, w, h)
+    if doc.page > 1:
+        _draw_watermark(canvas, w, h)
     canvas.setFillColor(NAVY)
     canvas.rect(0, 0, w, 10*mm, fill=1, stroke=0)
     canvas.setFillColor(SKY)
     canvas.rect(0, 0, 4*mm, 10*mm, fill=1, stroke=0)
     canvas.setFillColor(WHITE)
-    canvas.setFont("Helvetica", 7)
-    canvas.drawString(8*mm, 3.5*mm, "Serene Vibes Kashmir  |  serenevibeskashmir@gmail.com  |  +91-9419766510")
-    page_str = f"  {doc.page}  "
-    pw = canvas.stringWidth(page_str, "Helvetica-Bold", 7.5) + 4
-    px = w - pw - MARGIN
-    canvas.setFillColor(SKY)
-    canvas.roundRect(px, 2*mm, pw, 6*mm, 1.5*mm, fill=1, stroke=0)
-    canvas.setFillColor(WHITE)
-    canvas.setFont("Helvetica-Bold", 7.5)
-    canvas.drawCentredString(px + pw/2, 4*mm, str(doc.page))
+    canvas.setFont("Lato", 7)
+    canvas.drawString(8*mm, 3.6*mm, "Serene Vibes Kashmir  |  serenevibeskashmir@gmail.com  |  +91-9419766510")
     canvas.setStrokeColor(NAVY)
     canvas.setLineWidth(0.5)
     canvas.line(0, h - 1*mm, w, h - 1*mm)
     canvas.restoreState()
 
 
-# ─── Main generator ──────────────────────────────────────────────────────────
+from reportlab.pdfgen import canvas as _rl_canvas
+
+
+class NumberedCanvas(_rl_canvas.Canvas):
+    """Two-pass canvas so the footer can say "Page 3 of 8"."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._saved_pages = []
+
+    def showPage(self):
+        self._saved_pages.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        total = len(self._saved_pages)
+        for state in self._saved_pages:
+            self.__dict__.update(state)
+            self._draw_page_number(total)
+            super().showPage()
+        super().save()
+
+    def _draw_page_number(self, total):
+        w, _ = A4
+        label = f"Page {self._pageNumber} of {total}"
+        self.saveState()
+        self.setFont("Lato-Bold", 7.5)
+        tw = self.stringWidth(label, "Lato-Bold", 7.5)
+        pw = tw + 8 * mm
+        px = w - pw - MARGIN + 6 * mm
+        self.setFillColor(SKY)
+        self.roundRect(px, 2 * mm, pw, 6 * mm, 1.5 * mm, fill=1, stroke=0)
+        self.setFillColor(WHITE)
+        self.drawCentredString(px + pw / 2, 4.1 * mm, label)
+        self.restoreState()
+
+
 def generate_pdf(itinerary_data: dict) -> str:
     import os as _os; _out = _os.environ.get("OUTPUT_DIR", "/tmp/output"); Path(_out).mkdir(exist_ok=True)
     client_name = str(itinerary_data.get("client_name", "Client"))
@@ -1267,7 +1324,7 @@ def generate_pdf(itinerary_data: dict) -> str:
                 f"<b><font color='#059669'>INR {int(custom_cost):,}</font></b>"
                 if str(custom_cost).replace(".", "").isdigit()
                 else clean(str(custom_cost)),
-                ParagraphStyle("cv", fontName="Helvetica-Bold", fontSize=9, textColor=EMERALD)
+                ParagraphStyle("cv", fontName="Lato-Bold", fontSize=9, textColor=EMERALD)
             ),
         ],
     ]
@@ -1316,29 +1373,42 @@ def generate_pdf(itinerary_data: dict) -> str:
         route     = day_info.get("transit_route", "")
         schedule  = day_info.get("schedule", [])
 
+        # "Srinagar to Sonamarg: Overnight Srinagar" -> banner shows the trip,
+        # the right-hand badge already shows where the guests sleep.
+        banner_title = title
+        if ":" in title and title.split(":", 1)[1].strip().lower().startswith("overnight"):
+            banner_title = title.split(":", 1)[0].strip()
+
         block = []
-        block.append(DayBanner(usable_w, idx, title, overnight))
+        block.append(DayBanner(usable_w, idx, banner_title, overnight))
         block.append(Spacer(1, 2*mm))
 
-        if route:
+        # Only show the ROUTE strip when it adds something the banner doesn't say
+        if route and route.strip().lower() != str(title).strip().lower():
             block.append(RouteBadge(usable_w, route))
             block.append(Spacer(1, 2*mm))
 
         if schedule:
             # Build a 2-col activity table: [time | description]
             act_rows = []
+            has_real_label = False
             for slot in schedule:
                 time_val = slot.get("time_slot") or slot.get("time", "")
                 desc_val = slot.get("description") or slot.get("activity") or ""
                 act_title = slot.get("activity_title", "")
-                if not time_val:
-                    time_val = "—"
-                cell_time = Paragraph(clean(str(time_val)), styles["activity_time"])
+                time_txt = str(time_val or "").strip()
+                if time_txt in ("", "***", "*", "—", "–", "-"):
+                    # placeholder label from the admin form -> neat bullet
+                    cell_time = Paragraph("&#9679;", styles["activity_dot"])
+                else:
+                    has_real_label = True
+                    cell_time = Paragraph(clean(time_txt), styles["activity_time"])
                 desc_text = (f"<b>{clean(act_title)}</b><br/>" if act_title else "") + clean(str(desc_val))
                 cell_desc = Paragraph(desc_text, styles["activity_desc"])
                 act_rows.append([cell_time, cell_desc])
 
-            act_col_w = [usable_w * 0.17, usable_w * 0.83]
+            _lw = 0.17 if has_real_label else 0.055
+            act_col_w = [usable_w * _lw, usable_w * (1 - _lw)]
             act_table = Table(act_rows, colWidths=act_col_w, hAlign="LEFT")
             act_table.setStyle(TableStyle([
                 ("BACKGROUND",    (0, 0), (-1, -1), WHITE),
@@ -1356,15 +1426,16 @@ def generate_pdf(itinerary_data: dict) -> str:
         else:
             block.append(Paragraph(
                 "<i>Details to be confirmed with your travel coordinator.</i>",
-                ParagraphStyle("na", fontName="Helvetica-Oblique", fontSize=8,
+                ParagraphStyle("na", fontName="Lato-Italic", fontSize=8,
                                textColor=GRAY_400, leftIndent=6)
             ))
 
         block.append(Spacer(1, 5*mm))
         story.append(KeepTogether(block))
 
-    # Rule 5: Itinerary occupies pages 2–3; force next section to new page
-    story.append(PageBreak())
+    # Sections now flow straight on after the last day card (no forced page
+    # break) so the page after the itinerary isn't left mostly empty.
+    story.append(Spacer(1, 2*mm))
 
     # ── Hotel data + selections (used by both the photo section and the
     #    Hotel Assignments table below) ─────────────────────────────────────
@@ -1446,6 +1517,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         if hid and str(hid) in HOTEL_LOOKUP and str(hid) not in selected_hotel_ids:
             selected_hotel_ids.append(str(hid))
 
+    photo_flow = None
     if selected_hotel_ids:
         # ── Rule 6: ALL hotels (up to 3) must fit on ONE page ─────────────
         # A4 usable body height ≈ 257mm (297 - top margin 18 - bottom footer 22).
@@ -1472,24 +1544,23 @@ def generate_pdf(itinerary_data: dict) -> str:
             photo_block.append(Spacer(1, 3*mm))
         # KeepTogether forces the entire photos section onto one page.
         # If it doesn't fit on the current page it triggers its own page break.
-        story.append(KeepTogether(photo_block))
+        photo_flow = KeepTogether(photo_block)
 
     # ── 4–6. Hotel Assignments + Inclusions/Exclusions + Payment Schedule ───────
     # Rule 1: These three sections always live on ONE page together.
-    story.append(PageBreak())
-    page_block_1 = []   # collect all three sections into this list
+    page_block_1 = []   # Hotel Assignments first, flushed below
     page_block_1.append(SectionTitle(usable_w, "HOTEL ASSIGNMENTS", icon=""))
     page_block_1.append(Spacer(1, 4*mm))
 
     # Header row
     hotel_header = [
-        Paragraph("<b>Day</b>", ParagraphStyle("hh", fontName="Helvetica-Bold",
+        Paragraph("<b>Day</b>", ParagraphStyle("hh", fontName="Lato-Bold",
                   fontSize=8.5, textColor=WHITE, alignment=TA_CENTER)),
-        Paragraph("<b>Hotel / Property</b>", ParagraphStyle("hh2", fontName="Helvetica-Bold",
+        Paragraph("<b>Hotel / Property</b>", ParagraphStyle("hh2", fontName="Lato-Bold",
                   fontSize=8.5, textColor=WHITE)),
-        Paragraph("<b>Location</b>", ParagraphStyle("hh3", fontName="Helvetica-Bold",
+        Paragraph("<b>Location</b>", ParagraphStyle("hh3", fontName="Lato-Bold",
                   fontSize=8.5, textColor=WHITE, alignment=TA_CENTER)),
-        Paragraph("<b>Meal Plan</b>", ParagraphStyle("hh4", fontName="Helvetica-Bold",
+        Paragraph("<b>Meal Plan</b>", ParagraphStyle("hh4", fontName="Lato-Bold",
                   fontSize=8.5, textColor=WHITE, alignment=TA_CENTER)),
     ]
 
@@ -1532,12 +1603,12 @@ def generate_pdf(itinerary_data: dict) -> str:
         meal_plan = "-" if is_departure_day else "Breakfast &amp; Dinner"
 
         hotel_rows.append([
-            Paragraph(f"<b>Day {idx}</b>", ParagraphStyle("dc", fontName="Helvetica-Bold",
+            Paragraph(f"<b>Day {idx}</b>", ParagraphStyle("dc", fontName="Lato-Bold",
                       fontSize=8.5, textColor=NAVY, alignment=TA_CENTER)),
             Paragraph(clean(hotel_name), styles["hotel_cell_bold"]),
-            Paragraph(clean(hotel_place), ParagraphStyle("hp", fontName="Helvetica",
+            Paragraph(clean(hotel_place), ParagraphStyle("hp", fontName="Lato",
                       fontSize=8, textColor=GRAY_600, alignment=TA_CENTER)),
-            Paragraph(meal_plan, ParagraphStyle("mp", fontName="Helvetica",
+            Paragraph(meal_plan, ParagraphStyle("mp", fontName="Lato",
                       fontSize=8, textColor=TEAL, alignment=TA_CENTER)),
         ])
 
@@ -1565,6 +1636,13 @@ def generate_pdf(itinerary_data: dict) -> str:
     ]))
     page_block_1.append(hotel_table)
     page_block_1.append(Spacer(1, 5*mm))
+    # Hotel Assignments sit right after the itinerary; the reference photos
+    # follow them (on their own page if they don't fit), then Inclusions/Payment.
+    story.append(KeepTogether(page_block_1))
+    if photo_flow is not None:
+        story.append(photo_flow)
+        story.append(Spacer(1, 4*mm))
+    page_block_1 = []
 
     # ── 5. Inclusions / Exclusions ────────────────────────────────────────────
     inc_items = [
@@ -1591,7 +1669,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         for item in items:
             rows.append([
                 Paragraph(f"<font color='#{color}'><b>{icon}</b></font>",
-                          ParagraphStyle("ic", fontName="Helvetica-Bold",
+                          ParagraphStyle("ic", fontName="Lato-Bold",
                                         fontSize=11, alignment=TA_CENTER)),
                 Paragraph(clean(item), styles["inclusion"]),
             ])
@@ -1606,11 +1684,11 @@ def generate_pdf(itinerary_data: dict) -> str:
         return t
 
     inc_header = Table([[
-        Paragraph("<b>INCLUSIONS</b>", ParagraphStyle("ih", fontName="Helvetica-Bold",
+        Paragraph("<b>INCLUSIONS</b>", ParagraphStyle("ih", fontName="Lato-Bold",
                   fontSize=9.5, textColor=WHITE)),
-        Paragraph("<b>EXCLUSIONS</b>", ParagraphStyle("eh", fontName="Helvetica-Bold",
+        Paragraph("<b>EXCLUSIONS</b>", ParagraphStyle("eh", fontName="Lato-Bold",
                   fontSize=9.5, textColor=WHITE)),
-    ]], colWidths=[usable_w/2 - 2*mm, usable_w/2 - 2*mm])
+    ]], colWidths=[usable_w/2, usable_w/2])
     inc_header.setStyle(TableStyle([
         ("BACKGROUND", (0,0),(0,0), EMERALD),
         ("BACKGROUND", (1,0),(1,0), ROSE),
@@ -1624,7 +1702,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     inc_body = Table([[
         bullet_list(inc_items, "+", "059669"),
         bullet_list(exc_items, "x", "e11d48"),
-    ]], colWidths=[usable_w/2 - 2*mm, usable_w/2 - 2*mm])
+    ]], colWidths=[usable_w/2, usable_w/2])
     inc_body.setStyle(TableStyle([
         ("BACKGROUND", (0,0),(0,0), colors.HexColor("#f0fdf4")),
         ("BACKGROUND", (1,0),(1,0), colors.HexColor("#fff1f2")),
@@ -1651,13 +1729,13 @@ def generate_pdf(itinerary_data: dict) -> str:
     inst2_amt   = round(total_amt * 0.25)
     inst3_amt   = total_amt - inst1_amt - inst2_amt
 
-    pay_header_style = ParagraphStyle("pyh", fontName="Helvetica-Bold",
+    pay_header_style = ParagraphStyle("pyh", fontName="Lato-Bold",
                                       fontSize=8.5, textColor=WHITE, alignment=TA_CENTER)
-    pay_body_style   = ParagraphStyle("pyb", fontName="Helvetica",
+    pay_body_style   = ParagraphStyle("pyb", fontName="Lato",
                                       fontSize=8.5, textColor=BLACK, alignment=TA_CENTER)
-    pay_amt_style    = ParagraphStyle("pya", fontName="Helvetica-Bold",
+    pay_amt_style    = ParagraphStyle("pya", fontName="Lato-Bold",
                                       fontSize=9.5, textColor=EMERALD, alignment=TA_CENTER)
-    pay_note_style   = ParagraphStyle("pyn", fontName="Helvetica-Oblique",
+    pay_note_style   = ParagraphStyle("pyn", fontName="Lato-Italic",
                                       fontSize=7.5, textColor=GRAY_600, alignment=TA_CENTER)
 
     pay_rows = [[
@@ -1688,13 +1766,13 @@ def generate_pdf(itinerary_data: dict) -> str:
 
     for label, amt, due, mode, status in pay_data:
         pay_rows.append([
-            Paragraph(clean(label), ParagraphStyle("pl", fontName="Helvetica",
+            Paragraph(clean(label), ParagraphStyle("pl", fontName="Lato",
                       fontSize=8.5, textColor=BLACK)),
             Paragraph(f"<b>{clean(amt)}</b>", pay_amt_style),
             Paragraph(clean(due),  pay_body_style),
             Paragraph(clean(mode), pay_body_style),
             Paragraph(f"<font color='#b45309'>{clean(status)}</font>",
-                      ParagraphStyle("ps", fontName="Helvetica-Bold",
+                      ParagraphStyle("ps", fontName="Lato-Bold",
                                      fontSize=8, textColor=GOLD, alignment=TA_CENTER)),
         ])
 
@@ -1718,7 +1796,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     page_block_1.append(Spacer(1, 3*mm))
 
     # Bank details sub-note
-    bank_note_style = ParagraphStyle("bn", fontName="Helvetica", fontSize=7.5,
+    bank_note_style = ParagraphStyle("bn", fontName="Lato", fontSize=7.5,
                                      textColor=GRAY_600, leading=11)
     page_block_1.append(Paragraph(
         "<b>Bank Transfer Details:</b>  Account Name: Serene Vibes Kashmir  |  "
@@ -1731,16 +1809,15 @@ def generate_pdf(itinerary_data: dict) -> str:
 
     # ── 7–9. Cancellation Policy + Travel Notes + Contact Card ────────────────
     # Rule 2: These three sections always live on ONE page together.
-    story.append(PageBreak())
     page_block_2 = []
     page_block_2.append(SectionTitle(usable_w, "CANCELLATION POLICY", icon=""))
     page_block_2.append(Spacer(1, 4*mm))
 
-    canc_header_st = ParagraphStyle("cnh", fontName="Helvetica-Bold",
+    canc_header_st = ParagraphStyle("cnh", fontName="Lato-Bold",
                                     fontSize=8.5, textColor=WHITE)
-    canc_body_st   = ParagraphStyle("cnb", fontName="Helvetica",
+    canc_body_st   = ParagraphStyle("cnb", fontName="Lato",
                                     fontSize=8.5, textColor=BLACK, alignment=TA_CENTER)
-    canc_pct_st    = ParagraphStyle("cnp", fontName="Helvetica-Bold",
+    canc_pct_st    = ParagraphStyle("cnp", fontName="Lato-Bold",
                                     fontSize=9, textColor=ROSE, alignment=TA_CENTER)
 
     canc_rows = [[
@@ -1761,7 +1838,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     for i, (timeline_txt, charge, refund, proc) in enumerate(canc_data):
         row_bg = colors.HexColor("#fff1f2") if refund == "Nil" else WHITE
         canc_rows.append([
-            Paragraph(clean(timeline_txt), ParagraphStyle("cntl", fontName="Helvetica",
+            Paragraph(clean(timeline_txt), ParagraphStyle("cntl", fontName="Lato",
                       fontSize=8.5, textColor=BLACK)),
             Paragraph(clean(charge),  canc_body_st),
             Paragraph(f"<b>{clean(refund)}</b>", canc_pct_st),
@@ -1791,9 +1868,9 @@ def generate_pdf(itinerary_data: dict) -> str:
     page_block_2.append(SectionTitle(usable_w, "IMPORTANT TRAVEL NOTES", icon=""))
     page_block_2.append(Spacer(1, 4*mm))
 
-    note_heading_st = ParagraphStyle("noh", fontName="Helvetica-Bold",
-                                     fontSize=8, textColor=GOLD, spaceBefore=2, spaceAfter=1)
-    note_body_st    = ParagraphStyle("nob", fontName="Helvetica",
+    note_heading_st = ParagraphStyle("noh", fontName="Lato-Bold",
+                                     fontSize=8.2, textColor=GOLD, spaceBefore=6, spaceAfter=1.5)
+    note_body_st    = ParagraphStyle("nob", fontName="Lato",
                                      fontSize=8, textColor=BLACK, leading=12, spaceAfter=3)
 
     travel_notes = [
@@ -1823,7 +1900,10 @@ def generate_pdf(itinerary_data: dict) -> str:
     ]
 
     # Two-column layout for notes
-    note_col_w = (usable_w - 6*mm) / 2
+    # Each outer cell has 10pt padding on both sides, so the inner column
+    # tables must be 20pt narrower than the cell or text spills over the edge.
+    note_cell_w = usable_w / 2
+    note_col_w  = note_cell_w - 20
     left_notes  = travel_notes[:3]
     right_notes = travel_notes[3:]
 
@@ -1844,7 +1924,7 @@ def generate_pdf(itinerary_data: dict) -> str:
 
     notes_outer = Table(
         [[make_note_col(left_notes), make_note_col(right_notes)]],
-        colWidths=[note_col_w, note_col_w],
+        colWidths=[note_cell_w, note_cell_w],
         hAlign="LEFT"
     )
     notes_outer.setStyle(TableStyle([
@@ -1855,9 +1935,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         ("TOPPADDING",   (0,0),(-1,-1), 8),
         ("BOTTOMPADDING",(0,0),(-1,-1), 8),
         ("LEFTPADDING",  (0,0),(-1,-1), 10),
-        ("RIGHTPADDING", (0,0),(0,-1), 8),
-        ("LEFTPADDING",  (1,0),(1,-1), 12),
-        ("RIGHTPADDING", (1,0),(1,-1), 10),
+        ("RIGHTPADDING", (0,0),(-1,-1), 10),
     ]))
     page_block_2.append(notes_outer)
     page_block_2.append(Spacer(1, 5*mm))
@@ -1866,20 +1944,20 @@ def generate_pdf(itinerary_data: dict) -> str:
     page_block_2.append(SectionTitle(usable_w, "GET IN TOUCH WITH US", icon=""))
     page_block_2.append(Spacer(1, 3*mm))
 
-    contact_label_st = ParagraphStyle("ctl", fontName="Helvetica-Bold",
+    contact_label_st = ParagraphStyle("ctl", fontName="Lato-Bold",
                                       fontSize=7.5, textColor=GRAY_600)
-    contact_val_st   = ParagraphStyle("ctv", fontName="Helvetica",
+    contact_val_st   = ParagraphStyle("ctv", fontName="Lato",
                                       fontSize=8.5, textColor=BLACK)
-    contact_link_st  = ParagraphStyle("ctlnk", fontName="Helvetica",
+    contact_link_st  = ParagraphStyle("ctlnk", fontName="Lato",
                                       fontSize=8.5, textColor=SKY)
 
     contact_rows = [
         [
             Paragraph("Company", contact_label_st),
-            Paragraph("Serene Vibes Kashmir", ParagraphStyle("cvb", fontName="Helvetica-Bold",
+            Paragraph("Serene Vibes Kashmir", ParagraphStyle("cvb", fontName="Lato-Bold",
                       fontSize=9, textColor=NAVY)),
             Paragraph("Tagline", contact_label_st),
-            Paragraph("A Poem In Motion", ParagraphStyle("cvi", fontName="Helvetica-Oblique",
+            Paragraph("A Poem In Motion", ParagraphStyle("cvi", fontName="Lato-Italic",
                       fontSize=8.5, textColor=SKY)),
         ],
         [
@@ -1928,10 +2006,10 @@ def generate_pdf(itinerary_data: dict) -> str:
 
     # Compact style definitions for T&C
     tc_heading = ParagraphStyle("tch",
-        fontName="Helvetica-Bold", fontSize=8, textColor=NAVY,
+        fontName="Lato-Bold", fontSize=8, textColor=NAVY,
         spaceBefore=6, spaceAfter=2)
     tc_body = ParagraphStyle("tcb",
-        fontName="Helvetica", fontSize=7.5, textColor=GRAY_600,
+        fontName="Lato", fontSize=7.5, textColor=GRAY_600,
         leading=11.5, spaceAfter=1)
 
     # T&C data: (heading, body_text)
@@ -2062,13 +2140,13 @@ def generate_pdf(itinerary_data: dict) -> str:
     # General Terms compact box
     story.append(Paragraph(
         "<b>GENERAL TERMS</b>",
-        ParagraphStyle("gth", fontName="Helvetica-Bold", fontSize=8,
+        ParagraphStyle("gth", fontName="Lato-Bold", fontSize=8,
                        textColor=NAVY, spaceAfter=4)
     ))
     bullet_rows = []
     for b in general_bullets:
         bullet_rows.append([
-            Paragraph("-", ParagraphStyle("bd", fontName="Helvetica-Bold",
+            Paragraph("-", ParagraphStyle("bd", fontName="Lato-Bold",
                       fontSize=8, textColor=SKY, alignment=TA_CENTER)),
             Paragraph(clean(b), tc_body),
         ])
@@ -2090,7 +2168,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     story.append(SectionTitle(usable_w, "CLIENT ACKNOWLEDGEMENT", icon=""))
     story.append(Spacer(1, 5*mm))
 
-    ack_body_st = ParagraphStyle("ackb", fontName="Helvetica", fontSize=8,
+    ack_body_st = ParagraphStyle("ackb", fontName="Lato", fontSize=8,
                                  textColor=GRAY_600, leading=12, spaceAfter=4)
     story.append(Paragraph(
         "I / We, the undersigned, confirm that I / We have read, understood, and agree to all the "
@@ -2102,9 +2180,9 @@ def generate_pdf(itinerary_data: dict) -> str:
     story.append(Spacer(1, 10*mm))
 
     # Signature boxes — 3 columns: client name, signature, date
-    sig_label_st = ParagraphStyle("sigl", fontName="Helvetica-Bold",
+    sig_label_st = ParagraphStyle("sigl", fontName="Lato-Bold",
                                   fontSize=7.5, textColor=GRAY_600, alignment=TA_CENTER)
-    sig_line_st  = ParagraphStyle("sigln", fontName="Helvetica",
+    sig_line_st  = ParagraphStyle("sigln", fontName="Lato",
                                   fontSize=9, textColor=BLACK, alignment=TA_CENTER)
 
     sig_col_w = usable_w / 3 - 4*mm
@@ -2158,7 +2236,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     story.append(Spacer(1, 8*mm))
 
     # Quote validity notice
-    validity_st = ParagraphStyle("vld", fontName="Helvetica-Oblique", fontSize=7.5,
+    validity_st = ParagraphStyle("vld", fontName="Lato-Italic", fontSize=7.5,
                                  textColor=GRAY_400, alignment=TA_CENTER)
     ts_gen = datetime.datetime.now(IST)
     ts_valid = (ts_gen + datetime.timedelta(days=7)).strftime("%d %b %Y")
@@ -2179,5 +2257,6 @@ def generate_pdf(itinerary_data: dict) -> str:
     ))
 
     # ── Build PDF ─────────────────────────────────────────────────────────────
-    doc.build(story, onFirstPage=_page_frame, onLaterPages=_page_frame)
+    doc.build(story, onFirstPage=_page_frame, onLaterPages=_page_frame,
+              canvasmaker=NumberedCanvas)
     return f"output/{filename}"
