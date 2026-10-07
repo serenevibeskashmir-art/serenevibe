@@ -807,27 +807,67 @@ class KashmirRouteMap(Flowable):
     TABLE_H = 8.5 * mm
     HDR_H   = 7 * mm
 
-    def __init__(self, width, timeline):
+    MIN_ROW_H, MIN_MAP_H, MAX_MAP_H = 4.2 * mm, 58 * mm, 100 * mm
+
+    def __init__(self, width, timeline, max_height=None):
+        """max_height: total height the whole block (map + legend table) may use.
+        The legend rows shrink for long trips and the map takes the rest."""
         super().__init__()
         self.width    = width
         self.timeline = timeline
         self._build_rows()
+        n = max(len(self._rows), 1)
+        if max_height:
+            fixed = self.HDR_H + 2 * mm
+            self.TABLE_H = max(self.MIN_ROW_H, min(self.TABLE_H, (max_height - fixed - self.MIN_MAP_H) / n))
+            self.MAP_H = max(self.MIN_MAP_H, min(self.MAX_MAP_H, max_height - fixed - n * self.TABLE_H))
         self.height = self.MAP_H + self.HDR_H + self.TABLE_H * len(self._rows) + 2 * mm
-        # Viewport: centred on the valley, Web-Mercator (same as the satellite tiles),
-        # fitted to the panel aspect so x and y have identical ground scale.
-        import math
-        lat_c, lon_c, lat_span = 34.08, 74.85, 0.76
-        coslat   = math.cos(math.radians(lat_c))
-        lon_span = lat_span * (self.width / self.MAP_H) / coslat
-        self.LON_MIN, self.LON_MAX = lon_c - lon_span / 2, lon_c + lon_span / 2
-        self._my_span = math.radians(lon_span) * (self.MAP_H / self.width)
-        my_c = self._merc_y(lat_c)
-        self._my_min = my_c - self._my_span / 2
-        self.LAT_MIN = self._inv_merc_y(my_c - self._my_span / 2)
-        self.LAT_MAX = self._inv_merc_y(my_c + self._my_span / 2)
-        self._coslat = coslat
         self._sat = None            # JPEG bytes once loaded
         self._sat_tried = False
+        self._fit_viewport()
+
+    def _fit_viewport(self):
+        """Zoom the satellite view to the places this itinerary actually visits
+        (more places / farther apart -> wider view), Web-Mercator, true scale."""
+        import math
+        S, W, N, E = (satellite_map.master_bounds() if satellite_map else (33.62, 73.80, 34.56, 75.90))
+        keys = {r["key"] for r in self._rows if r["key"] in self.STOPS} | {"srinagar"}
+        pts = [self.STOPS[k] for k in keys]
+        for k in keys:
+            if k in self.ROADS:
+                pts += self._road_pts(k)
+        lat_lo, lat_hi = min(p[0] for p in pts), max(p[0] for p in pts)
+        lon_lo, lon_hi = min(p[1] for p in pts), max(p[1] for p in pts)
+        my_lo, my_hi = self._merc_y(lat_lo), self._merc_y(lat_hi)
+        my_ext, lon_ext = my_hi - my_lo, lon_hi - lon_lo
+        aspect = self.width / self.MAP_H
+
+        # room for pin labels (they sit right / above) and the footer + scale bar (below)
+        lon_a = lon_lo - max(0.12, 0.16 * lon_ext)
+        lon_b = lon_hi + max(0.28, 0.26 * lon_ext)
+        pad_top, pad_bot = 0.30 * my_ext + math.radians(0.035), 0.45 * my_ext + math.radians(0.05)
+        my_need = my_ext + pad_top + pad_bot
+
+        lon_span = max(lon_b - lon_a, math.degrees(my_need * aspect), 0.9)
+        my_n, my_s = self._merc_y(N), self._merc_y(S)
+        lon_span = min(lon_span, (E - W) - 0.02, math.degrees((my_n - my_s) * aspect) - 0.02)
+        my_span = math.radians(lon_span) / aspect
+        # imagery coverage is the limit: shrink the label padding rather than cut off a stop
+        room = my_span - my_ext
+        if room < pad_top + pad_bot:
+            k = max(room, 0.0) / (pad_top + pad_bot)
+            pad_top, pad_bot = pad_top * k, pad_bot * k
+
+        lon_c = (lon_a + lon_b) / 2
+        my_c = (my_lo - pad_bot + my_hi + pad_top) / 2
+        lon_c = max(W + lon_span / 2, min(lon_c, E - lon_span / 2))
+        my_c = max(my_s + my_span / 2, min(my_c, my_n - my_span / 2))
+
+        self.LON_MIN, self.LON_MAX = lon_c - lon_span / 2, lon_c + lon_span / 2
+        self._my_span, self._my_min = my_span, my_c - my_span / 2
+        self.LAT_MIN = self._inv_merc_y(my_c - my_span / 2)
+        self.LAT_MAX = self._inv_merc_y(my_c + my_span / 2)
+        self._coslat = math.cos(math.radians(self._inv_merc_y(my_c)))
 
     @staticmethod
     def _merc_y(lat):
@@ -992,16 +1032,48 @@ class KashmirRouteMap(Flowable):
         bw = max(c.stringWidth(t, f, s) for t, f, s, _ in lines) + 4.4 * mm
         bh = (3.3 * mm * len(lines)) + 1.6 * mm
         gap = R + 2.2
-        side = self.LABEL_SIDE.get(key, "above")
-        if side == "above":        bx, by = px - bw / 2, py + gap
-        elif side == "below":      bx, by = px - bw / 2, py - gap - bh
-        elif side == "right":      bx, by = px + gap + 1, py - bh / 2
-        elif side == "left":       bx, by = px - gap - 1 - bw, py - bh / 2
-        elif side == "above-left": bx, by = px - bw - 3 * mm, py + gap * 0.6    # clear of the roads and of Dal Lake
-        else:                      bx, by = px - bw + 2 * mm, py - gap - bh   # below-left
-        # keep inside the panel
-        bx = max(1.5 * mm, min(bx, self.width - bw - 1.5 * mm))
-        by = max(self._map_y0 + 1.5 * mm, min(by, self._map_y0 + self.MAP_H - bh - 1.5 * mm))
+
+        def place(side):
+            if side == "above":        bx, by = px - bw / 2, py + gap
+            elif side == "below":      bx, by = px - bw / 2, py - gap - bh
+            elif side == "right":      bx, by = px + gap + 1, py - bh / 2
+            elif side == "left":       bx, by = px - gap - 1 - bw, py - bh / 2
+            elif side == "above-left": bx, by = px - bw - 3 * mm, py + gap * 0.6
+            elif side == "above-right": bx, by = px + gap, py + gap * 0.6
+            elif side == "below-right": bx, by = px + gap, py - gap * 0.6 - bh
+            else:                      bx, by = px - bw + 2 * mm, py - gap - bh   # below-left
+            # keep inside the panel
+            bx = max(1.5 * mm, min(bx, self.width - bw - 1.5 * mm))
+            by = max(self._map_y0 + 1.5 * mm + getattr(self, "_foot", 0),
+                     min(by, self._map_y0 + self.MAP_H - bh - 1.5 * mm))
+            return bx, by
+
+        def cost(bx, by):
+            """Lower is better: huge for hitting labels/chips/pins, small per road sample covered."""
+            box = (bx - 1, by - 1, bx + bw + 1, by + bh + 1)
+            total = 0.0
+            for (qx, qy, qw, qh) in getattr(self, "_placed", []):          # labels + day chips
+                if box[0] < qx + qw and box[2] > qx and box[1] < qy + qh and box[3] > qy:
+                    total += 1000
+            for (ox, oy, orad) in getattr(self, "_pin_pts", []):           # every pin (incl. own)
+                if box[0] < ox + orad and box[2] > ox - orad and box[1] < oy + orad and box[3] > oy - orad:
+                    total += 1000
+            for (rx, ry) in getattr(self, "_road_dots", []):               # don't bury the route
+                if box[0] < rx < box[2] and box[1] < ry < box[3]:
+                    total += 1
+            return total
+
+        pref = self.LABEL_SIDE.get(key, "above")
+        order = [pref] + [x for x in ("above", "right", "left", "below", "above-right", "above-left",
+                                      "below-right", "below-left") if x != pref]
+        best = None
+        for idx, side in enumerate(order):
+            cx_, cy_ = place(side)
+            sc = cost(cx_, cy_) + idx * 0.4
+            if best is None or sc < best[0]:
+                best = (sc, cx_, cy_)
+        _, bx, by = best
+        self._placed = getattr(self, "_placed", []) + [(bx, by, bw, bh)]
         c.setFillColor(colors.Color(0, 0, 0, alpha=0.10)); c.roundRect(bx + 0.5, by - 0.7, bw, bh, 1.4 * mm, fill=1, stroke=0)
         c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.4)
         c.roundRect(bx, by, bw, bh, 1.4 * mm, fill=1, stroke=1)
@@ -1088,20 +1160,40 @@ class KashmirRouteMap(Flowable):
         c.setFillColor(colors.Color(0.03, 0.08, 0.16, alpha=0.10)); c.rect(0, y0, w, mh, fill=1, stroke=0)
 
         # graticule + degree labels
+        import math
+        lon_step = 0.5 if (self.LON_MAX - self.LON_MIN) > 1.3 else 0.25
+        lats = [round(v * 0.25, 2) for v in range(math.ceil(self.LAT_MIN / 0.25), int(self.LAT_MAX / 0.25) + 1)]
+        lons = [round(v * lon_step, 2) for v in range(math.ceil(self.LON_MIN / lon_step), int(self.LON_MAX / lon_step) + 1)]
         c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.38)); c.setLineWidth(0.4); c.setDash(1.5, 2.5)
-        for lat in (34.0, 34.25):
+        for lat in lats:
             _, y = self._proj(lat, self.LON_MIN); c.line(0, y, w, y)
-        for lon in (74.5, 75.0, 75.5):
+        for lon in lons:
             x, _ = self._proj(34.0, lon); c.line(x, y0, x, y0 + mh)
         c.setDash()
-        for lat in (34.0, 34.25):
-            _, y = self._proj(lat, self.LON_MIN); self._halo_text(c, 2.5 * mm, y + 1.0, f"{lat:g}°N", "Lato", 5.4)
-        for lon in (74.5, 75.0, 75.5):
-            x, _ = self._proj(34.0, lon); self._halo_text(c, x + 1.2, y0 + mh - 3.4 * mm, f"{lon:g}°E", "Lato", 5.4)
+        for lat in lats:                     # skip labels that would sit under the key or footer
+            _, y = self._proj(lat, self.LON_MIN)
+            if y0 + 7 * mm < y < y0 + mh - 12 * mm:
+                self._halo_text(c, 2.5 * mm, y + 1.0, f"{lat:g}°N", "Lato", 5.4)
+        for lon in lons:
+            x, _ = self._proj(34.0, lon)
+            if x > 41 * mm and x < w - 12 * mm:
+                self._halo_text(c, x + 1.2, y0 + mh - 3.4 * mm, f"{lon:g}°E", "Lato", 5.4)
 
-        # a few orientation labels
-        dx, dy = self._proj(34.098, 74.905); self._halo_text(c, dx, dy, "Dal Lake", "Lato-Italic", 6.2)
-        wx, wy = self._proj(34.345, 74.625); self._halo_text(c, wx, wy, "Wular Lake", "Lato-Italic", 6.2)
+    def _draw_sat_captions(self, c):
+        """Lake names - drawn last and only where they don't collide with a label, chip or pin."""
+        for lat, lon, text in ((34.098, 74.905, "Dal Lake"), (34.345, 74.625, "Wular Lake")):
+            x, y = self._proj(lat, lon)
+            tw = c.stringWidth(text, "Lato-Italic", 6.2)
+            box = (x - 1, y - 2, x + tw + 1, y + 7)
+            if not (self._map_y0 + self._foot + 2 * mm < y < self._map_y0 + self.MAP_H - 11 * mm
+                    and 2 * mm < x < self.width - tw - 2 * mm):
+                continue
+            hit = any(box[0] < qx + qw and box[2] > qx and box[1] < qy + qh and box[3] > qy
+                      for qx, qy, qw, qh in self._placed)
+            hit = hit or any(box[0] < ox + r and box[2] > ox - r and box[1] < oy + r and box[3] > oy - r
+                             for ox, oy, r in self._pin_pts)
+            if not hit:
+                self._halo_text(c, x, y, text, "Lato-Italic", 6.2)
 
     # ── main draw ───────────────────────────────────────────────────────────
     def draw(self):
@@ -1152,6 +1244,26 @@ class KashmirRouteMap(Flowable):
         def _fmt(days):
             return ("Day " if len(days) == 1 else "Days ") + " · ".join(str(d) for d in days)
 
+        self._foot, self._placed = foot, []
+        self._pin_pts = []
+        for k in seen:
+            if k in self.STOPS:
+                px_, py_ = self._proj(*self.STOPS[k])
+                self._pin_pts.append((px_, py_, (3.6 if k == "srinagar" else 2.9) * mm + 1.5))
+        self._road_dots = []                       # sampled route points (labels avoid them)
+        import math
+        for k, days in used.items():
+            xy = [self._proj(*q) for q in self._road_pts(k)]
+            for (ax, ay), (bx2, by2) in zip(xy, xy[1:]):
+                n = max(1, int(math.dist((ax, ay), (bx2, by2)) / 4))
+                for i in range(n):
+                    dx_, dy_ = ax + (bx2 - ax) * i / n, ay + (by2 - ay) * i / n
+                    if all(math.dist((dx_, dy_), (ox, oy)) > orad + 6 for ox, oy, orad in self._pin_pts):
+                        self._road_dots.append((dx_, dy_))
+            fx, fy = self._point_along(self._road_pts(k), 0.5)           # reserve the day chip
+            c.setFont("Lato-Bold", 6.3)
+            cw = c.stringWidth(_fmt(sorted(set(days))), "Lato-Bold", 6.3) + 3.4 * mm
+            self._placed.append((fx - cw / 2, fy - 2.1 * mm, cw, 4.2 * mm))
         for k, days in seen.items():
             if k not in self.STOPS:
                 continue
@@ -1163,6 +1275,9 @@ class KashmirRouteMap(Flowable):
         for k, days in used.items():
             fx, fy = self._point_along(self._road_pts(k), 0.5)
             self._chip(c, fx, fy, _fmt(sorted(set(days))), self.PIN_COLORS[k][0])
+
+        if sat:
+            self._draw_sat_captions(c)
 
         # Attribution strip (required by the imagery provider)
         if sat:
@@ -1241,7 +1356,7 @@ class KashmirRouteMap(Flowable):
             mid = ry + self.TABLE_H / 2
 
             cx2 = col_x[0] + col_w[0] / 2
-            c.setFillColor(accent); c.circle(cx2, mid, 3 * mm, fill=1, stroke=0)
+            c.setFillColor(accent); c.circle(cx2, mid, min(3 * mm, self.TABLE_H * 0.38), fill=1, stroke=0)
             c.setFillColor(WHITE); c.setFont("Lato-Bold", 7.2); c.drawCentredString(cx2, mid - 2.5, str(row["day"]))
 
             c.setFillColor(BLACK); c.setFont("Lato-Bold", 7.4)
@@ -1260,11 +1375,12 @@ class KashmirRouteMap(Flowable):
                 c.setFillColor(GRAY_400); c.setFont("Lato", 7); c.drawString(col_x[4] + 3 * mm, mid - 2.4, "—")
             else:
                 nw = c.stringWidth(night, "Lato-Bold", 6.4) + 4.4 * mm
-                nx, ny = col_x[4] + 3 * mm, mid - 2.1 * mm
+                ph = min(4.2 * mm, self.TABLE_H * 0.7)
+                nx, ny = col_x[4] + 3 * mm, mid - ph / 2
                 c.setFillColor(WHITE); c.setStrokeColor(accent); c.setLineWidth(0.5)
-                c.roundRect(nx, ny, nw, 4.2 * mm, 2.1 * mm, fill=1, stroke=1)
+                c.roundRect(nx, ny, nw, ph, ph / 2, fill=1, stroke=1)
                 c.setFillColor(accent); c.setFont("Lato-Bold", 6.4)
-                c.drawString(nx + 2.2 * mm, ny + 1.35 * mm, night)
+                c.drawString(nx + 2.2 * mm, ny + ph / 2 - 2.2, night)
 
         bot = hy - len(self._rows) * self.TABLE_H
         c.setStrokeColor(GRAY_200); c.setLineWidth(0.3); c.line(0, bot, w, bot)
@@ -1551,17 +1667,22 @@ def generate_pdf(itinerary_data: dict) -> str:
     story.append(summary_table)
     story.append(Spacer(1, 7*mm))
 
-    # ── 2b. Tour Route Map (Layout 3: terrain map + GPS legend table) ─────────
-    # Wrapped in KeepTogether so the heading and the map graphic are always
-    # rendered together (never split across a page break). A PageBreak
-    # follows so the Day-by-Day section always starts cleanly on the next
-    # page, regardless of how many days/legend rows the map has.
+    # ── 2b. Tour Route Map - ALWAYS the lower part of page 1 ──────────────────
+    # Measure what is already on page 1 (hero + summary), give the map block the
+    # remaining height (legend rows shrink for long trips, the map takes the rest)
+    # and push the block to the bottom of the page with a spacer.  A PageBreak
+    # follows so the Day-by-Day section starts cleanly on page 2.
     timeline_for_map = itinerary_data.get("timeline", [])
-    story.append(KeepTogether([
-        SectionTitle(usable_w, "TOUR ROUTE MAP", icon=""),
-        Spacer(1, 3*mm),
-        KashmirRouteMap(usable_w, timeline_for_map),
-    ]))
+    used_h = sum(f.wrap(usable_w, 10000)[1] for f in story)
+    avail  = (doc.height - 12) - used_h - 4 * mm          # frame has 6pt padding top+bottom
+    map_title = SectionTitle(usable_w, "TOUR ROUTE MAP", icon="")
+    gap_h  = 3 * mm
+    route_map = KashmirRouteMap(usable_w, timeline_for_map,
+                                max_height=avail - map_title.height - gap_h)
+    spare = avail - (map_title.height + gap_h + route_map.height)
+    if spare > 1 * mm:
+        story.append(Spacer(1, spare))
+    story.append(KeepTogether([map_title, Spacer(1, gap_h), route_map]))
     story.append(PageBreak())
 
     # ── 3. Day-by-day itinerary ───────────────────────────────────────────────
