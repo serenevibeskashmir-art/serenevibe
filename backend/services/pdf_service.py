@@ -909,18 +909,30 @@ class KashmirRouteMap(Flowable):
 
     # ── data ────────────────────────────────────────────────────────────────
     def _destination(self, route_str):
+        """Which pin a day belongs to.  Srinagar is the hub and appears in almost
+        every route string ("Srinagar to Gulmarg to Srinagar"), so it must never
+        win over a real destination that is also mentioned."""
         r = (route_str or "").lower().strip()
         if "departure" in r or "airport drop" in r:
             return "departure"
-        if " to " in r:
-            after = r.split(" to ", 1)[1].split(":")[0]
-            for k in self.STOPS:
-                if k in after:
+
+        def first_stop(text, skip_hub):
+            hits = [(text.find(k), k) for k in self.STOPS if k in text]
+            if skip_hub:
+                hits = [h for h in hits if h[1] != "srinagar"]
+            return min(hits)[1] if hits else None
+
+        head = r.split(":")[0]
+        if " to " in head:
+            # legs after the first "to": prefer the first non-Srinagar stop
+            for leg in head.split(" to ")[1:]:
+                k = first_stop(leg, skip_hub=True)
+                if k:
                     return k
-        for k in self.STOPS:
-            if k in r:
+            k = first_stop(head.split(" to ", 1)[1], skip_hub=False)
+            if k:
                 return k
-        return "srinagar"
+        return first_stop(head, skip_hub=True) or first_stop(r, skip_hub=True) or "srinagar"
 
     def _build_rows(self):
         self._rows = []
