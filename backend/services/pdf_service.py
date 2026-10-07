@@ -963,6 +963,13 @@ class KashmirRouteMap(Flowable):
                 "activity": activity,
                 "night": "-" if (is_dep or overnight.lower() in ("", "departure")) else overnight,
             })
+        # A day starts from where the guest slept the night before (a Sonamarg day
+        # trip with "Overnight Srinagar" starts the next day from Srinagar).
+        prev = "srinagar"
+        for r in self._rows:
+            r["origin"] = prev
+            night = r["night"].lower()
+            prev = next((k for k in self.STOPS if k in night), r["key"] if not r["is_dep"] else "srinagar")
 
     # ── projection / primitives ─────────────────────────────────────────────
     def _proj(self, lat, lon):
@@ -1227,14 +1234,12 @@ class KashmirRouteMap(Flowable):
 
         # Roads actually used on this itinerary
         used = {}                                   # road key -> list of day numbers
-        prev_key = "srinagar"
         for r in self._rows:
-            k = r["key"]
+            k, o = r["key"], r.get("origin", "srinagar")
             if k != "srinagar" and k in self.ROADS:
-                used.setdefault(k, []).append(r["day"])
-            elif k == "srinagar" and prev_key in self.ROADS and not r["is_dep"] and prev_key != "srinagar":
-                used.setdefault(prev_key, []).append(r["day"])          # return leg
-            prev_key = k
+                used.setdefault(k, []).append(r["day"])             # hub -> destination
+            if o != "srinagar" and o != k and o in self.ROADS:
+                used.setdefault(o, []).append(r["day"])             # starting place -> hub
         for k, days in used.items():
             pts = self._road_pts(k)
             dark, bright = self.PIN_COLORS[k]
@@ -1252,6 +1257,11 @@ class KashmirRouteMap(Flowable):
         seen = {}
         for r in self._rows:
             seen.setdefault(r["key"], []).append(r["day"])
+        for r in self._rows:
+            o = r.get("origin", "srinagar")
+            if o != "srinagar" and o != r["key"] and o in self.STOPS:
+                seen.setdefault(o, []).append(r["day"])
+        seen = {k: sorted(set(v)) for k, v in seen.items()}
 
         def _fmt(days):
             return ("Day " if len(days) == 1 else "Days ") + " · ".join(str(d) for d in days)
