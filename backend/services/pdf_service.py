@@ -51,35 +51,41 @@ PAGE_W, PAGE_H = A4          # 210 × 297 mm
 MARGIN = 18 * mm
 
 # ─── Fonts ───────────────────────────────────────────────────────────────────
-# Lato (SIL OFL) is bundled in backend/assets/fonts and *embedded* in the PDF,
-# so the output looks identical on every device and supports ₹, – — “ ” → etc.
-# If the files are ever missing we fall back to the built-in Helvetica family.
-_FONT_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
+# Lato (SIL OFL) lives in backend/assets/fonts and is *embedded* in the PDF, so
+# the output looks identical on every device and supports ₹, – — “ ” → etc.
+# If the font files cannot be found we fall back to the built-in Helvetica
+# family (same layout, plainer look) instead of failing PDF generation.
+_FONT_DIRS = [
+    Path(__file__).resolve().parent.parent / "assets" / "fonts",
+    Path(__file__).resolve().parent / "fonts",
+    Path.cwd() / "backend" / "assets" / "fonts",
+    Path.cwd() / "assets" / "fonts",
+]
+_FACES = {
+    "Lato":            ("Lato-Regular.ttf",    "Helvetica"),
+    "Lato-Bold":       ("Lato-Bold.ttf",       "Helvetica-Bold"),
+    "Lato-Italic":     ("Lato-Italic.ttf",     "Helvetica-Oblique"),
+    "Lato-BoldItalic": ("Lato-BoldItalic.ttf", "Helvetica-BoldOblique"),
+}
 
 def _register_fonts():
-    faces = {
-        "Lato":            "Lato-Regular.ttf",
-        "Lato-Bold":       "Lato-Bold.ttf",
-        "Lato-Italic":     "Lato-Italic.ttf",
-        "Lato-BoldItalic": "Lato-BoldItalic.ttf",
-    }
-    try:
-        for name, fname in faces.items():
-            if name not in pdfmetrics.getRegisteredFontNames():
-                pdfmetrics.registerFont(TTFont(name, str(_FONT_DIR / fname)))
-        pdfmetrics.registerFontFamily(
-            "Lato", normal="Lato", bold="Lato-Bold",
-            italic="Lato-Italic", boldItalic="Lato-BoldItalic")
-    except Exception as e:                       # pragma: no cover
-        print(f"Font registration failed ({e}); using Helvetica fallback")
-        for name, fb in {"Lato": "Helvetica", "Lato-Bold": "Helvetica-Bold",
-                         "Lato-Italic": "Helvetica-Oblique",
-                         "Lato-BoldItalic": "Helvetica-BoldOblique"}.items():
-            try:
-                pdfmetrics.registerFont(pdfmetrics.Font(
-                    name, fb, "WinAnsiEncoding"))
-            except Exception:
-                pass
+    font_dir = next((d for d in _FONT_DIRS
+                     if all((d / f).exists() for f, _ in _FACES.values())), None)
+    for name, (fname, fallback) in _FACES.items():
+        if name in pdfmetrics.getRegisteredFontNames():
+            continue
+        if font_dir is not None:
+            pdfmetrics.registerFont(TTFont(name, str(font_dir / fname)))
+        else:
+            # alias our face name to the matching built-in Helvetica face
+            pdfmetrics.registerFont(pdfmetrics.Font(name, fallback, "WinAnsiEncoding"))
+    if font_dir is None:
+        print("WARNING: Lato fonts not found in backend/assets/fonts - using Helvetica fallback")
+    # Needed so <b>/<i> inside Paragraphs resolve for *every* face name
+    # (e.g. <b> inside a style whose fontName is "Lato-Bold").
+    pdfmetrics.registerFontFamily(
+        "Lato", normal="Lato", bold="Lato-Bold",
+        italic="Lato-Italic", boldItalic="Lato-BoldItalic")
 
 _register_fonts()
 
