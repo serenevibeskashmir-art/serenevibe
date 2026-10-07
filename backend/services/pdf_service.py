@@ -1208,22 +1208,92 @@ def _draw_watermark(canvas, w, h):
     canvas.restoreState()
 
 
+BORDER_GOLD = colors.HexColor("#c8a24a")
+
+
+def _diamond(canvas, cx, cy, r, fill):
+    p = canvas.beginPath()
+    p.moveTo(cx, cy + r); p.lineTo(cx + r, cy); p.lineTo(cx, cy - r); p.lineTo(cx - r, cy); p.close()
+    canvas.setFillColor(fill)
+    canvas.drawPath(p, fill=1, stroke=0)
+
+
+def _draw_page_border(canvas, w, h):
+    """Professional page frame: header band, double-line border with gold
+    corner brackets + diamonds, and a gold-trimmed footer. Everything sits
+    outside the 18 mm content margin so it never touches text or tables."""
+    canvas.saveState()
+
+    # ── Header band (navy, sky accent, gold hairline) ────────────────────────
+    band_h = 5 * mm
+    canvas.setFillColor(NAVY)
+    canvas.rect(0, h - band_h, w, band_h, fill=1, stroke=0)
+    canvas.setFillColor(SKY)
+    canvas.rect(0, h - band_h, 46 * mm, band_h, fill=1, stroke=0)
+    canvas.setFillColor(NAVY_DEEP)
+    canvas.rect(46 * mm, h - band_h, 3 * mm, band_h, fill=1, stroke=0)
+    canvas.setStrokeColor(BORDER_GOLD)
+    canvas.setLineWidth(0.9)
+    canvas.line(0, h - band_h - 0.9 * mm, w, h - band_h - 0.9 * mm)
+
+    # ── Double-line frame ────────────────────────────────────────────────────
+    left, right = 7 * mm, w - 7 * mm
+    top, bottom = h - 10 * mm, 14.5 * mm
+    canvas.setStrokeColor(NAVY)
+    canvas.setLineWidth(1.1)
+    canvas.rect(left, bottom, right - left, top - bottom, fill=0, stroke=1)
+    ins = 1.7 * mm
+    canvas.setStrokeColor(SKY_MID)
+    canvas.setLineWidth(0.45)
+    canvas.rect(left + ins, bottom + ins, right - left - 2 * ins, top - bottom - 2 * ins, fill=0, stroke=1)
+
+    # ── Gold corner brackets + diamonds ──────────────────────────────────────
+    arm = 11 * mm
+    canvas.setStrokeColor(BORDER_GOLD)
+    canvas.setLineWidth(2.2)
+    canvas.setLineCap(0)
+    for cx, cy, sx, sy in ((left, top, 1, -1), (right, top, -1, -1),
+                           (left, bottom, 1, 1), (right, bottom, -1, 1)):
+        p = canvas.beginPath()
+        p.moveTo(cx + sx * arm, cy)
+        p.lineTo(cx, cy)
+        p.lineTo(cx, cy + sy * arm)
+        canvas.drawPath(p, fill=0, stroke=1)
+        _diamond(canvas, cx + sx * 3.4 * mm, cy + sy * 3.4 * mm, 1.15 * mm, BORDER_GOLD)
+
+    # ── Small centred diamonds on the top and bottom rules ───────────────────
+    for yy in (top, bottom):
+        canvas.setFillColor(WHITE)
+        canvas.rect(w / 2 - 9 * mm, yy - 1.4 * mm, 18 * mm, 2.8 * mm, fill=1, stroke=0)
+        _diamond(canvas, w / 2, yy, 1.3 * mm, BORDER_GOLD)
+        _diamond(canvas, w / 2 - 5 * mm, yy, 0.7 * mm, SKY)
+        _diamond(canvas, w / 2 + 5 * mm, yy, 0.7 * mm, SKY)
+
+    # ── Footer band with gold trim ───────────────────────────────────────────
+    canvas.setFillColor(NAVY)
+    canvas.rect(0, 0, w, 10 * mm, fill=1, stroke=0)
+    canvas.setFillColor(SKY)
+    canvas.rect(0, 0, 46 * mm, 10 * mm, fill=1, stroke=0)
+    canvas.setFillColor(NAVY_DEEP)
+    canvas.rect(46 * mm, 0, 3 * mm, 10 * mm, fill=1, stroke=0)
+    canvas.setStrokeColor(BORDER_GOLD)
+    canvas.setLineWidth(0.9)
+    canvas.line(0, 10.9 * mm, w, 10.9 * mm)
+    canvas.restoreState()
+
+
 def _page_frame(canvas, doc):
-    """Watermark (not on the branded cover) + footer on every page."""
+    """Watermark (not on the branded cover) + border + footer on every page."""
     canvas.saveState()
     w, h = A4
     if doc.page > 1:
         _draw_watermark(canvas, w, h)
-    canvas.setFillColor(NAVY)
-    canvas.rect(0, 0, w, 10*mm, fill=1, stroke=0)
-    canvas.setFillColor(SKY)
-    canvas.rect(0, 0, 4*mm, 10*mm, fill=1, stroke=0)
+    _draw_page_border(canvas, w, h)
     canvas.setFillColor(WHITE)
+    canvas.setFont("Lato-Bold", 7.4)
+    canvas.drawString(6 * mm, 3.7 * mm, "SERENE VIBES KASHMIR")
     canvas.setFont("Lato", 7)
-    canvas.drawString(8*mm, 3.6*mm, "Serene Vibes Kashmir  |  serenevibeskashmir@gmail.com  |  +91-9419766510")
-    canvas.setStrokeColor(NAVY)
-    canvas.setLineWidth(0.5)
-    canvas.line(0, h - 1*mm, w, h - 1*mm)
+    canvas.drawString(53 * mm, 3.7 * mm, "serenevibeskashmir@gmail.com   |   +91-9419766510   |   www.serenevibeskashmir.com")
     canvas.restoreState()
 
 
