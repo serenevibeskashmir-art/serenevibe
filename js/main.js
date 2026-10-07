@@ -6,9 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initReachChart();
   initSeasonCards();
   initWhatsAppLinks();
-  initQuoteModal();
+  initFooterMenus();
   initForms();
-  initQuotePicks();
   initDestinationCards();
   initPackages();
   initPackageEnquire();
@@ -532,11 +531,11 @@ function initSeasonCards() {
 /* ------------------------------------------------------------------ */
 /* Forms + enquiry prefills                                            */
 /* ------------------------------------------------------------------ */
-function showNote(elementId, message) {
+function showNote(elementId, message, isError) {
   const note = document.getElementById(elementId);
   if (!note) return;
   note.textContent = message;
-  note.className = 'form-note success';
+  note.className = isError ? 'form-note error' : 'form-note success';
   setTimeout(() => {
     note.textContent = '';
     note.className = 'form-note';
@@ -548,67 +547,22 @@ function scrollToContact() {
   if (contact) contact.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth' });
 }
 
-function initQuoteModal() {
-  const overlay  = document.getElementById('quoteModalOverlay');
-  const openBtn  = document.getElementById('quoteOpenBtn');
-  const closeBtn = document.getElementById('quoteModalClose');
-  if (!overlay || !openBtn) return;
-  let closing = null;
-
-  function openModal() {
-    clearTimeout(closing);
-    overlay.hidden = false;
-    document.body.style.overflow = 'hidden';
-    // two frames so the browser paints the closed state first and the fade-in actually animates
-    requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('is-open')));
-    closeBtn && closeBtn.focus();
-  }
-  function closeModal() {
-    overlay.classList.remove('is-open');
-    document.body.style.overflow = '';
-    closing = setTimeout(() => { overlay.hidden = true; }, prefersReducedMotion ? 0 : 240);
-    openBtn.focus();
-  }
-
-  openBtn.addEventListener('click', openModal);
-  closeBtn && closeBtn.addEventListener('click', closeModal);
-  overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
-
-  // Escape closes; Tab stays inside the dialog while it is open
-  document.addEventListener('keydown', e => {
-    if (overlay.hidden) return;
-    if (e.key === 'Escape') { closeModal(); return; }
-    if (e.key !== 'Tab') return;
-    const items = [...overlay.querySelectorAll('button, select, input, a[href]')].filter(el => !el.disabled && el.offsetParent !== null);
-    if (!items.length) return;
-    const first = items[0], last = items[items.length - 1];
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-  });
-}
-
-function initQuotePicks() {
-  const picks = document.querySelectorAll('.quote-pick');
-  const destSelect = document.getElementById('destination');
-  if (!picks.length || !destSelect) return;
-
-  picks.forEach(pick => {
-    pick.addEventListener('click', () => {
-      picks.forEach(p => p.classList.remove('active'));
-      pick.classList.add('active');
-      destSelect.value = pick.dataset.dest || '';
-    });
-  });
-
-  destSelect.addEventListener('change', () => {
-    const matching = [...picks].find(p => p.dataset.dest === destSelect.value);
-    picks.forEach(p => p.classList.toggle('active', p === matching));
-  });
+function initFooterMenus() {
+  // Footer groups are accordions on phones and always open on larger screens
+  const menus = [...document.querySelectorAll('.footer-links, .footer-contact')];
+  if (!menus.length) return;
+  const wide = window.matchMedia('(min-width: 901px)');
+  const sync = () => { if (wide.matches) menus.forEach(d => { d.open = true; }); };
+  menus.forEach(d => d.querySelector('summary').addEventListener('click', e => { if (wide.matches) e.preventDefault(); }));
+  sync();
+  wide.addEventListener('change', sync);
 }
 
 function initForms() {
   const searchForm = document.getElementById('searchForm');
   const contactForm = document.getElementById('contactForm');
+  const destField = document.getElementById('destination');
+  if (destField) destField.addEventListener('change', () => destField.removeAttribute('aria-invalid'));
 
   // Quote pop-up -> WhatsApp
   if (searchForm) {
@@ -616,7 +570,10 @@ function initForms() {
       e.preventDefault();
       const dest = document.getElementById('destination').selectedOptions[0]?.text;
       if (!dest || dest === 'Select destination') {
-        showNote('searchNote', 'Please select a destination first.');
+        const field = document.getElementById('destination');
+        field.setAttribute('aria-invalid', 'true');
+        field.focus();
+        showNote('searchNote', 'Choose a destination so we can quote the right trip.', true);
         return;
       }
       const travelers = document.getElementById('travelers').value;
@@ -628,11 +585,6 @@ function initForms() {
         `Guests: ${travelers}`
       ].join('\n'));
       showNote('searchNote', 'Opening WhatsApp… tap Send there to deliver your request to our team.');
-      setTimeout(() => {
-        const close = document.getElementById('quoteModalClose');
-        const overlay = document.getElementById('quoteModalOverlay');
-        if (close && overlay && !overlay.hidden) close.click();
-      }, 2500);
     });
   }
 
@@ -752,9 +704,12 @@ function renderPackages(packages) {
 
     initFeatureSlideshow(node.querySelector('[data-package-features]'), pkg.features || []);
 
-    const priceStrong = node.querySelector('.package-price strong');
-    priceStrong.textContent = pkg.price_label ? `₹${pkg.price_label}` : 'Enquire';
-    node.querySelector('.package-per').textContent = pkg.price_note || '';
+    if (pkg.price_label) {
+      node.querySelector('.package-price strong').textContent = `₹${pkg.price_label}`;
+      node.querySelector('.package-per').textContent = pkg.price_note || '';
+    } else {
+      node.querySelector('.package-price').textContent = 'Price on request';
+    }
 
     const cta = node.querySelector('[data-package]');
     cta.dataset.package = pkg.name || '';
