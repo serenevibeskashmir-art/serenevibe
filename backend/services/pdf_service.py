@@ -19,6 +19,11 @@ from reportlab.graphics.shapes import Drawing, Rect, String, Line, Circle
 from reportlab.graphics import renderPDF
 import datetime
 
+try:                                   # real satellite imagery for the route map
+    from backend.services import satellite_map
+except Exception:                      # never let imagery break PDF generation
+    satellite_map = None
+
 # India Standard Time is a fixed UTC+5:30 offset (no DST), so a simple
 # timezone object is sufficient and avoids an extra dependency (e.g. pytz/zoneinfo tzdata).
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30), name="IST")
@@ -97,6 +102,12 @@ def clean(text):
         return ""
     s = str(text).replace("\u00a0", " ")
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _raw(text):
+    """Plain text for direct canvas drawing (clean() escapes for Paragraphs, which would print '&amp;')."""
+    import html
+    return html.unescape(clean(text))
 
 
 # ─── Hotel Image Fetcher ─────────────────────────────────────────────────────
@@ -716,14 +727,15 @@ class KashmirRouteMap(Flowable):
     """
     Full-width route map + day-by-day legend table.
 
-    * Stylised terrain (valley floor, ridges, Dal / Wular lakes, Jhelum river)
-      projected from real lat/lon with a cos(latitude) correction so distances
-      look right and the 50 km scale bar is accurate.
+    * Real satellite imagery (Web-Mercator tiles, see satellite_map.py) with the
+      pins / roads projected from real lat/lon on the same projection, so
+      distances are true and the 50 km scale bar is accurate.  If imagery is
+      unavailable it falls back to a stylised terrain drawing.
     * Every distinct stop gets ONE pin (Srinagar is the hub for arrival, day
       trips and departure), roads are drawn as spokes from the hub, and each
       road carries a "Day n" chip - so nothing overlaps and the story reads
       at a glance.
-    All drawing uses ReportLab canvas primitives - no external image needed.
+    Everything except the basemap is drawn with ReportLab canvas primitives.
     """
 
     # Real GPS coordinates (lat, lon)
@@ -743,15 +755,23 @@ class KashmirRouteMap(Flowable):
         "sonamarg":    "34.31°N  75.30°E",
         "doodhpathri": "33.87°N  74.37°E",
     }
-    # Stylised road geometry, hub (Srinagar) -> destination
+    # Road geometry, hub (Srinagar) -> destination.  These waypoints follow the real
+    # highways (via Magam/Tangmarg, Ganderbal/Kangan/Gund, Awantipora/Anantnag,
+    # Budgam).  `python scripts/build_map_assets.py` can replace them with exact
+    # road geometry in backend/assets/maps/routes.json.
     ROADS = {
-        "gulmarg":     [(34.0837, 74.7973), (34.095, 74.64), (34.078, 74.51), (34.0484, 74.3805)],
-        "pahalgam":    [(34.0837, 74.7973), (33.93, 75.02), (33.82, 75.12), (33.90, 75.25), (34.0161, 75.3147)],
-        "sonamarg":    [(34.0837, 74.7973), (34.18, 74.90), (34.24, 75.05), (34.30, 75.20), (34.3088, 75.2969)],
-        "doodhpathri": [(34.0837, 74.7973), (33.99, 74.62), (33.90, 74.48), (33.8700, 74.3700)],
+        "gulmarg":     [(34.0837, 74.7973), (34.060, 74.700), (34.030, 74.610), (34.022, 74.500),
+                        (34.030, 74.430), (34.0484, 74.3805)],
+        "pahalgam":    [(34.0837, 74.7973), (34.020, 74.930), (33.920, 75.010), (33.800, 75.110),
+                        (33.775, 75.165), (33.820, 75.235), (33.900, 75.260), (34.0161, 75.3147)],
+        "sonamarg":    [(34.0837, 74.7973), (34.140, 74.790), (34.226, 74.775), (34.262, 74.955),
+                        (34.275, 75.110), (34.3088, 75.2969)],
+        "doodhpathri": [(34.0837, 74.7973), (34.010, 74.720), (33.940, 74.660), (33.900, 74.560),
+                        (33.8700, 74.3700)],
     }
+    _baked_routes = None
     # Where each pin label sits relative to its pin
-    LABEL_SIDE = {"srinagar": "below-left", "gulmarg": "above", "pahalgam": "right",
+    LABEL_SIDE = {"srinagar": "above-left", "gulmarg": "above", "pahalgam": "right",
                   "sonamarg": "right", "doodhpathri": "right"}
 
     # Map viewport (cos-corrected to the panel aspect ratio in __init__)
@@ -783,7 +803,7 @@ class KashmirRouteMap(Flowable):
         "doodhpathri": colors.HexColor("#f9fafb"),
     }
 
-    MAP_H   = 82 * mm
+    MAP_H   = 88 * mm
     TABLE_H = 8.5 * mm
     HDR_H   = 7 * mm
 
@@ -793,14 +813,59 @@ class KashmirRouteMap(Flowable):
         self.timeline = timeline
         self._build_rows()
         self.height = self.MAP_H + self.HDR_H + self.TABLE_H * len(self._rows) + 2 * mm
-        # Fit the lon span to the panel aspect so 1 deg lat / 1 deg lon keep true proportions
+        # Viewport: centred on the valley, Web-Mercator (same as the satellite tiles),
+        # fitted to the panel aspect so x and y have identical ground scale.
         import math
-        lat_span = self.LAT_MAX - self.LAT_MIN
-        coslat   = math.cos(math.radians((self.LAT_MAX + self.LAT_MIN) / 2))
+        lat_c, lon_c, lat_span = 34.08, 74.85, 0.76
+        coslat   = math.cos(math.radians(lat_c))
         lon_span = lat_span * (self.width / self.MAP_H) / coslat
-        mid_lon  = 74.85
-        self.LON_MIN, self.LON_MAX = mid_lon - lon_span / 2, mid_lon + lon_span / 2
+        self.LON_MIN, self.LON_MAX = lon_c - lon_span / 2, lon_c + lon_span / 2
+        self._my_span = math.radians(lon_span) * (self.MAP_H / self.width)
+        my_c = self._merc_y(lat_c)
+        self._my_min = my_c - self._my_span / 2
+        self.LAT_MIN = self._inv_merc_y(my_c - self._my_span / 2)
+        self.LAT_MAX = self._inv_merc_y(my_c + self._my_span / 2)
         self._coslat = coslat
+        self._sat = None            # JPEG bytes once loaded
+        self._sat_tried = False
+
+    @staticmethod
+    def _merc_y(lat):
+        import math
+        return math.log(math.tan(math.pi / 4 + math.radians(lat) / 2))
+
+    @staticmethod
+    def _inv_merc_y(my):
+        import math
+        return math.degrees(2 * math.atan(math.exp(my)) - math.pi / 2)
+
+    def _satellite(self):
+        """Satellite JPEG for this viewport, or None (-> stylised fallback)."""
+        if not self._sat_tried:
+            self._sat_tried = True
+            if satellite_map is not None:
+                try:
+                    self._sat = satellite_map.get_viewport_jpeg(
+                        self.LAT_MIN, self.LON_MIN, self.LAT_MAX, self.LON_MAX)
+                except Exception as exc:
+                    print(f"WARNING: satellite basemap unavailable ({exc}); using stylised map")
+        return self._sat
+
+    @classmethod
+    def _road_pts(cls, key):
+        """Baked real road geometry if present, else smoothed waypoints."""
+        if cls._baked_routes is None:
+            cls._baked_routes = {}
+            try:
+                import json
+                f = Path(__file__).resolve().parent.parent / "assets" / "maps" / "routes.json"
+                if f.exists():
+                    cls._baked_routes = {k: [tuple(p) for p in v] for k, v in json.loads(f.read_text()).items()}
+            except Exception as exc:
+                print(f"WARNING: could not read routes.json ({exc})")
+        if key in cls._baked_routes and len(cls._baked_routes[key]) > 1:
+            return cls._baked_routes[key]
+        return cls._smooth_pts(cls.ROADS[key], 3)
 
     # ── data ────────────────────────────────────────────────────────────────
     def _destination(self, route_str):
@@ -850,7 +915,7 @@ class KashmirRouteMap(Flowable):
     # ── projection / primitives ─────────────────────────────────────────────
     def _proj(self, lat, lon):
         x = (lon - self.LON_MIN) / (self.LON_MAX - self.LON_MIN) * self.width
-        y = self._map_y0 + (lat - self.LAT_MIN) / (self.LAT_MAX - self.LAT_MIN) * self.MAP_H
+        y = self._map_y0 + (self._merc_y(lat) - self._my_min) / self._my_span * self.MAP_H
         return x, y
 
     def _path(self, c, pts, close=False):
@@ -862,8 +927,10 @@ class KashmirRouteMap(Flowable):
             p.close()
         return p
 
-    def _smooth(self, pts, n=2):
+    @staticmethod
+    def _smooth_pts(pts, n=2):
         """Chaikin corner-cutting so roads/rivers look organic, not polyline-ish."""
+        pts = list(pts)
         for _ in range(n):
             out = [pts[0]]
             for a, b in zip(pts, pts[1:]):
@@ -872,6 +939,9 @@ class KashmirRouteMap(Flowable):
             out.append(pts[-1])
             pts = out
         return pts
+
+    def _smooth(self, pts, n=2):
+        return self._smooth_pts(pts, n)
 
     def _point_along(self, pts, frac):
         """Point at `frac` of the way along a polyline (screen space)."""
@@ -927,6 +997,7 @@ class KashmirRouteMap(Flowable):
         elif side == "below":      bx, by = px - bw / 2, py - gap - bh
         elif side == "right":      bx, by = px + gap + 1, py - bh / 2
         elif side == "left":       bx, by = px - gap - 1 - bw, py - bh / 2
+        elif side == "above-left": bx, by = px - bw - 3 * mm, py + gap * 0.6    # clear of the roads and of Dal Lake
         else:                      bx, by = px - bw + 2 * mm, py - gap - bh   # below-left
         # keep inside the panel
         bx = max(1.5 * mm, min(bx, self.width - bw - 1.5 * mm))
@@ -941,17 +1012,9 @@ class KashmirRouteMap(Flowable):
             c.drawString(bx + 2.9 * mm, ty, t)
             ty -= 3.3 * mm
 
-    # ── main draw ───────────────────────────────────────────────────────────
-    def draw(self):
-        c, w, mh = self.canv, self.width, self.MAP_H
-        self._map_y0 = self.height - mh
-        y0 = self._map_y0
-
-        # Clip everything map-related to the rounded panel
-        c.saveState()
-        clip = c.beginPath(); clip.roundRect(0, y0, w, mh, 3 * mm)
-        c.clipPath(clip, stroke=0, fill=0)
-
+    def _draw_stylised_terrain(self, c):
+        """Fallback basemap (used only when satellite imagery is unavailable)."""
+        w, mh, y0 = self.width, self.MAP_H, self._map_y0
         c.setFillColor(self.HILL_BG); c.rect(0, y0, w, mh, fill=1, stroke=0)
 
         # Graticule + degree labels
@@ -1007,6 +1070,57 @@ class KashmirRouteMap(Flowable):
         c.setFillColor(colors.HexColor("#4a90c9")); c.setFont("Lato-Italic", 5.4)
         dx, dy = self._proj(34.105, 74.945); c.drawString(dx, dy, "Dal Lake")
 
+    # ── satellite overlays ──────────────────────────────────────────────────
+    def _halo_text(self, c, x, y, text, font, size, align="left"):
+        """White label with a soft dark outline, legible on any imagery."""
+        draw = {"left": c.drawString, "center": c.drawCentredString, "right": c.drawRightString}[align]
+        c.setFont(font, size)
+        c.setFillColor(colors.Color(0.04, 0.09, 0.16, alpha=0.55))
+        for dx, dy in ((-.45, 0), (.45, 0), (0, -.45), (0, .45), (-.35, -.35), (.35, .35), (-.35, .35), (.35, -.35)):
+            draw(x + dx, y + dy, text)
+        c.setFillColor(WHITE)
+        draw(x, y, text)
+
+    def _draw_satellite(self, c, jpeg):
+        w, mh, y0 = self.width, self.MAP_H, self._map_y0
+        c.drawImage(ImageReader(io.BytesIO(jpeg)), 0, y0, w, mh)
+        # whisper-thin navy wash: lifts white labels/lines without hiding the terrain
+        c.setFillColor(colors.Color(0.03, 0.08, 0.16, alpha=0.10)); c.rect(0, y0, w, mh, fill=1, stroke=0)
+
+        # graticule + degree labels
+        c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.38)); c.setLineWidth(0.4); c.setDash(1.5, 2.5)
+        for lat in (34.0, 34.25):
+            _, y = self._proj(lat, self.LON_MIN); c.line(0, y, w, y)
+        for lon in (74.5, 75.0, 75.5):
+            x, _ = self._proj(34.0, lon); c.line(x, y0, x, y0 + mh)
+        c.setDash()
+        for lat in (34.0, 34.25):
+            _, y = self._proj(lat, self.LON_MIN); self._halo_text(c, 2.5 * mm, y + 1.0, f"{lat:g}°N", "Lato", 5.4)
+        for lon in (74.5, 75.0, 75.5):
+            x, _ = self._proj(34.0, lon); self._halo_text(c, x + 1.2, y0 + mh - 3.4 * mm, f"{lon:g}°E", "Lato", 5.4)
+
+        # a few orientation labels
+        dx, dy = self._proj(34.098, 74.905); self._halo_text(c, dx, dy, "Dal Lake", "Lato-Italic", 6.2)
+        wx, wy = self._proj(34.345, 74.625); self._halo_text(c, wx, wy, "Wular Lake", "Lato-Italic", 6.2)
+
+    # ── main draw ───────────────────────────────────────────────────────────
+    def draw(self):
+        c, w, mh = self.canv, self.width, self.MAP_H
+        self._map_y0 = self.height - mh
+        y0 = self._map_y0
+        sat = self._satellite()
+        foot = 3.8 * mm if sat else 0          # attribution strip height
+
+        # Clip everything map-related to the rounded panel
+        c.saveState()
+        clip = c.beginPath(); clip.roundRect(0, y0, w, mh, 3 * mm)
+        c.clipPath(clip, stroke=0, fill=0)
+
+        if sat:
+            self._draw_satellite(c, sat)
+        else:
+            self._draw_stylised_terrain(c)
+
         # Roads actually used on this itinerary
         used = {}                                   # road key -> list of day numbers
         prev_key = "srinagar"
@@ -1018,13 +1132,17 @@ class KashmirRouteMap(Flowable):
                 used.setdefault(prev_key, []).append(r["day"])          # return leg
             prev_key = k
         for k, days in used.items():
-            pts = self._smooth(self.ROADS[k], 3)
+            pts = self._road_pts(k)
             dark, bright = self.PIN_COLORS[k]
-            c.setStrokeColor(WHITE); c.setLineWidth(4.2); c.setLineCap(1)
+            c.setLineCap(1); c.setLineJoin(1)
+            if sat:                                  # soft shadow so the route lifts off the imagery
+                c.setStrokeColor(colors.Color(0, 0, 0, alpha=0.35)); c.setLineWidth(6.2)
+                c.drawPath(self._path(c, pts), fill=0, stroke=1)
+            c.setStrokeColor(WHITE); c.setLineWidth(4.6 if sat else 4.2)
             c.drawPath(self._path(c, pts), fill=0, stroke=1)
-            c.setStrokeColor(bright); c.setLineWidth(2.0); c.setDash(5, 2.6)
+            c.setStrokeColor(bright); c.setLineWidth(2.1); c.setDash(5, 2.6)
             c.drawPath(self._path(c, pts), fill=0, stroke=1)
-            c.setDash(); c.setLineCap(0)
+            c.setDash(); c.setLineCap(0); c.setLineJoin(0)
 
         # Pins first, chips after so chips are never covered
         seen = {}
@@ -1043,14 +1161,23 @@ class KashmirRouteMap(Flowable):
             self._pin(c, k, _fmt(days), sub)
 
         for k, days in used.items():
-            fx, fy = self._point_along(self._smooth(self.ROADS[k], 3), 0.5)
+            fx, fy = self._point_along(self._road_pts(k), 0.5)
             self._chip(c, fx, fy, _fmt(sorted(set(days))), self.PIN_COLORS[k][0])
+
+        # Attribution strip (required by the imagery provider)
+        if sat:
+            c.setFillColor(colors.Color(0.04, 0.09, 0.16, alpha=0.62)); c.rect(0, y0, w, foot, fill=1, stroke=0)
+            c.setFillColor(colors.Color(1, 1, 1, alpha=0.92)); c.setFont("Lato", 4.6)
+            attrib = satellite_map.attribution() if satellite_map else ""
+            c.drawString(3 * mm, y0 + 1.2 * mm, attrib)
+            c.drawRightString(w - 3 * mm, y0 + 1.2 * mm, "Routes are indicative")
+        base = y0 + foot
 
         # Scale bar (true 50 km at this latitude) - bottom-left
         km_per_deg_lon = 111.32 * self._coslat
         bar = (50.0 / km_per_deg_lon) / (self.LON_MAX - self.LON_MIN) * w
-        sx, sy = 3 * mm, y0 + 3 * mm
-        c.setFillColor(colors.Color(1, 1, 1, alpha=0.88))
+        sx, sy = 3 * mm, base + 3 * mm
+        c.setFillColor(colors.Color(1, 1, 1, alpha=0.90))
         c.roundRect(sx - 1.4 * mm, sy - 1.5 * mm, bar + 12 * mm, 7.2 * mm, 1.2 * mm, fill=1, stroke=0)
         by = sy + 2.0 * mm
         c.setFillColor(NAVY);  c.rect(sx, by, bar, 1.4 * mm, fill=1, stroke=0)
@@ -1062,7 +1189,7 @@ class KashmirRouteMap(Flowable):
         c.drawString(sx + bar + 1.6 * mm, by - 0.1 * mm, "50 km")
 
         # Compass - bottom-right
-        cx_c, cy_c = w - 9 * mm, y0 + 9 * mm
+        cx_c, cy_c = w - 9 * mm, base + 9 * mm
         c.setFillColor(colors.Color(1, 1, 1, alpha=0.92)); c.circle(cx_c, cy_c, 5.6 * mm, fill=1, stroke=0)
         c.setStrokeColor(GRAY_400); c.setLineWidth(0.3); c.circle(cx_c, cy_c, 5.6 * mm, fill=0, stroke=1)
         for lab, dx_, dy_ in (("N", 0, 1), ("S", 0, -1), ("E", 1, 0), ("W", -1, 0)):
@@ -1076,15 +1203,15 @@ class KashmirRouteMap(Flowable):
         p3 = c.beginPath(); p3.moveTo(cx_c, cy_c - 2.3 * mm); p3.lineTo(cx_c + 1.0 * mm, cy_c); p3.lineTo(cx_c - 1.0 * mm, cy_c); p3.close()
         c.drawPath(p3, fill=1, stroke=0)
 
-        # Key - bottom, left of compass
-        kx = w - 22 * mm - 36 * mm
-        c.setFillColor(colors.Color(1, 1, 1, alpha=0.88))
-        c.roundRect(kx, y0 + 3 * mm, 36 * mm, 6.6 * mm, 1.2 * mm, fill=1, stroke=0)
+        # Key - top-left (keeps the road corridors clear)
+        kx, ky = 3 * mm, y0 + mh - 3 * mm - 6.6 * mm
+        c.setFillColor(colors.Color(1, 1, 1, alpha=0.90))
+        c.roundRect(kx, ky, 36 * mm, 6.6 * mm, 1.2 * mm, fill=1, stroke=0)
         c.setStrokeColor(self.PIN_COLORS["srinagar"][1]); c.setLineWidth(1.8); c.setDash(3.5, 2)
-        c.line(kx + 2.2 * mm, y0 + 6.3 * mm, kx + 9 * mm, y0 + 6.3 * mm); c.setDash()
+        c.line(kx + 2.2 * mm, ky + 3.3 * mm, kx + 9 * mm, ky + 3.3 * mm); c.setDash()
         c.setFillColor(GRAY_600); c.setFont("Lato", 5.8)
-        c.drawString(kx + 10.5 * mm, y0 + 5.4 * mm, "Driving route")
-        c.drawString(kx + 25 * mm, y0 + 5.4 * mm, "Day n")
+        c.drawString(kx + 10.5 * mm, ky + 2.4 * mm, "Driving route")
+        c.drawString(kx + 25 * mm, ky + 2.4 * mm, "Day n")
 
         c.restoreState()
 
@@ -1118,17 +1245,17 @@ class KashmirRouteMap(Flowable):
             c.setFillColor(WHITE); c.setFont("Lato-Bold", 7.2); c.drawCentredString(cx2, mid - 2.5, str(row["day"]))
 
             c.setFillColor(BLACK); c.setFont("Lato-Bold", 7.4)
-            c.drawString(col_x[1] + 3 * mm, mid - 2.5, clean(row["loc"]))
+            c.drawString(col_x[1] + 3 * mm, mid - 2.5, _raw(row["loc"]))
             c.setFillColor(GRAY_600); c.setFont("Lato", 6.8)
             c.drawString(col_x[2] + 3 * mm, mid - 2.4, row["gps"])
 
-            act, maxw = clean(row["activity"]), col_w[3] - 6 * mm
+            act, maxw = _raw(row["activity"]), col_w[3] - 6 * mm
             c.setFont("Lato", 7)
             while c.stringWidth(act, "Lato", 7) > maxw and len(act) > 4:
                 act = act[:-2].rstrip() + "…"
             c.setFillColor(SLATE); c.drawString(col_x[3] + 3 * mm, mid - 2.4, act)
 
-            night = clean(row["night"])
+            night = _raw(row["night"])
             if night == "-":
                 c.setFillColor(GRAY_400); c.setFont("Lato", 7); c.drawString(col_x[4] + 3 * mm, mid - 2.4, "—")
             else:
