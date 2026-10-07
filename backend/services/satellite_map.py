@@ -50,7 +50,7 @@ ATTRIBUTION = os.environ.get(
 USER_AGENT = "SereneVibesKashmir-ItineraryPDF/1.0"
 
 # (south, west, north, east) - generous, so any PDF layout/margin fits inside it
-MASTER_BBOX = (33.62, 73.80, 34.56, 75.90)
+MASTER_BBOX = (33.50, 73.55, 34.70, 76.15)
 
 ASSET_DIR = Path(__file__).resolve().parent.parent / "assets" / "maps"
 CACHE_DIR = Path(tempfile.gettempdir()) / "serenevibe_maps"
@@ -200,6 +200,19 @@ def get_viewport_jpeg(south, west, north, east, max_px=2200):
     crop.save(buf, "JPEG", quality=84, optimize=True)
     _viewport_cache[key] = buf.getvalue()
     return _viewport_cache[key]
+
+
+def master_bounds():
+    """(south, west, north, east) actually covered by the imagery in use
+    (falls back to MASTER_BBOX if no imagery can be loaded)."""
+    loaded = load_master()
+    if not loaded:
+        return MASTER_BBOX
+    _, m = loaded
+    n = TILE_SIZE * 2 ** m["z"]
+    lon = lambda x: x / n * 360.0 - 180.0
+    lat = lambda y: inv_merc_y(math.pi * (1 - 2 * y / n))
+    return (lat(m["y0"] + m["h"]), lon(m["x0"]), lat(m["y0"]), lon(m["x0"] + m["w"]))
 
 
 def attribution():
