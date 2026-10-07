@@ -1234,8 +1234,15 @@ class KashmirRouteMap(Flowable):
 
         # Roads actually used on this itinerary
         used = {}                                   # road key -> list of day numbers
+        through = []                                # (day, from, to) legs that pass via the hub
         for r in self._rows:
             k, o = r["key"], r.get("origin", "srinagar")
+            if (k != "srinagar" and k in self.ROADS and o != "srinagar"
+                    and o != k and o in self.ROADS):
+                # place -> Srinagar -> place: drawn as its own line below
+                through.append((r["day"], o, k))
+                used.setdefault(k, []); used.setdefault(o, [])
+                continue
             if k != "srinagar" and k in self.ROADS:
                 used.setdefault(k, []).append(r["day"])             # hub -> destination
             if o != "srinagar" and o != k and o in self.ROADS:
@@ -1253,6 +1260,40 @@ class KashmirRouteMap(Flowable):
             c.drawPath(self._path(c, pts), fill=0, stroke=1)
             c.setDash(); c.setLineCap(0); c.setLineJoin(0)
 
+        # Legs between two outer places (e.g. Gulmarg -> Pahalgam) run through Srinagar:
+        # draw each as its own line, offset beside the shared roads so it can be followed.
+        import math
+        self._through_chips, self._pre_placed = [], []
+        for day, o, k in through:
+            pts = list(reversed(self._road_pts(o))) + list(self._road_pts(k))[1:]
+            xy = [self._proj(*q) for q in pts]
+            off, out = 1.9 * mm, []
+            for i, (x, y) in enumerate(xy):
+                a = xy[max(i - 1, 0)]; b = xy[min(i + 1, len(xy) - 1)]
+                dx, dy = b[0] - a[0], b[1] - a[1]
+                L = math.hypot(dx, dy) or 1.0
+                out.append((x - dy / L * off, y + dx / L * off))
+            pp = c.beginPath()
+            for i, (x, y) in enumerate(out):
+                (pp.moveTo if i == 0 else pp.lineTo)(x, y)
+            dark, bright = self.PIN_COLORS[k]
+            c.setLineCap(1); c.setLineJoin(1)
+            c.setStrokeColor(WHITE); c.setLineWidth(3.4); c.drawPath(pp, fill=0, stroke=1)
+            c.setStrokeColor(dark); c.setLineWidth(1.5); c.setDash(1.2, 2.2)
+            c.drawPath(pp, fill=0, stroke=1)
+            c.setDash(); c.setLineCap(0); c.setLineJoin(0)
+            seg = [math.dist(a, b) for a, b in zip(out, out[1:])]
+            target, acc, pos = sum(seg) * 0.90, 0.0, out[-1]
+            for (a, b), L in zip(zip(out, out[1:]), seg):
+                if acc + L >= target and L > 0:
+                    t = (target - acc) / L
+                    pos = (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t); break
+                acc += L
+            self._through_chips.append((pos, f"Day {day}", dark))
+            c.setFont("Lato-Bold", 6.3)
+            cw = c.stringWidth(f"Day {day}", "Lato-Bold", 6.3) + 3.4 * mm
+            self._pre_placed += [(pos[0] - cw / 2, pos[1] - 2.1 * mm, cw, 4.2 * mm)]
+
         # Pins first, chips after so chips are never covered
         seen = {}
         for r in self._rows:
@@ -1266,7 +1307,7 @@ class KashmirRouteMap(Flowable):
         def _fmt(days):
             return ("Day " if len(days) == 1 else "Days ") + " · ".join(str(d) for d in days)
 
-        self._foot, self._placed = foot, []
+        self._foot, self._placed = foot, list(self._pre_placed)
         self._pin_pts = []
         for k in seen:
             if k in self.STOPS:
@@ -1282,6 +1323,8 @@ class KashmirRouteMap(Flowable):
                     dx_, dy_ = ax + (bx2 - ax) * i / n, ay + (by2 - ay) * i / n
                     if all(math.dist((dx_, dy_), (ox, oy)) > orad + 6 for ox, oy, orad in self._pin_pts):
                         self._road_dots.append((dx_, dy_))
+            if not days:
+                continue
             fx, fy = self._point_along(self._road_pts(k), 0.5)           # reserve the day chip
             c.setFont("Lato-Bold", 6.3)
             cw = c.stringWidth(_fmt(sorted(set(days))), "Lato-Bold", 6.3) + 3.4 * mm
@@ -1295,8 +1338,12 @@ class KashmirRouteMap(Flowable):
             self._pin(c, k, _fmt(days), sub)
 
         for k, days in used.items():
+            if not days:
+                continue
             fx, fy = self._point_along(self._road_pts(k), 0.5)
             self._chip(c, fx, fy, _fmt(sorted(set(days))), self.PIN_COLORS[k][0])
+        for (fx, fy), txt, col in self._through_chips:
+            self._chip(c, fx, fy, txt, col)
 
         if sat:
             self._draw_sat_captions(c)
