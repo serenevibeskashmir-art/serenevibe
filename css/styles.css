@@ -1228,3 +1228,20 @@ html:not(.js) .package-skeleton { display: none; }
 @media (max-width: 900px) { .top-bar-inner { justify-content: space-between; } }
 .top-bar-link { white-space: nowrap; }
 @media (max-width: 900px) { .top-bar .top-bar-email, .top-bar .top-bar-badge { display: none; } }
+
+/* Hero image: slow Ken Burns drift (zoom + pan), alternating so it never snaps back */
+@media (prefers-reduced-motion: no-preference) {
+  .hero-media img {
+    transform-origin: 60% 50%; will-change: transform;
+    animation: heroDrift 24s ease-in-out infinite alternate;
+  }
+  .hero-media.ph--hero { animation: heroRidge 24s ease-in-out infinite alternate; }
+}
+@keyframes heroDrift {
+  from { transform: scale(1.02) translate3d(0, 0, 0); }
+  to   { transform: scale(1.14) translate3d(-2.2%, -1.5%, 0); }
+}
+@keyframes heroRidge {
+  from { background-position: center bottom, 50% 50%; background-size: 100% auto, 100% 100%; }
+  to   { background-position: 45% bottom, 60% 40%; background-size: 112% auto, 130% 130%; }
+}
