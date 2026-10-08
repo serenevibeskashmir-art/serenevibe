@@ -1221,3 +1221,10 @@ html:not(.js) .package-skeleton { display: none; }
 /* Trust section: never show a fake certificate or an empty photo tile */
 .cert-doc:not(.has-photo) { display: none; }
 .proof-card--wide:has(.guest-slideshow:not(.has-photos)) { display: none; }
+
+/* Staff login lives in the top bar (desktop and mobile) */
+.top-bar-staff { margin-left: auto; padding-left: 1.2rem; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(255,255,255,.4); white-space: nowrap; }
+.top-bar-badge + .top-bar-staff { margin-left: 0; }
+@media (max-width: 900px) { .top-bar-inner { justify-content: space-between; } }
+.top-bar-link { white-space: nowrap; }
+@media (max-width: 900px) { .top-bar .top-bar-email, .top-bar .top-bar-badge { display: none; } }
