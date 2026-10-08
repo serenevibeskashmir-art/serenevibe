@@ -1165,3 +1165,59 @@ html { scrollbar-color: var(--pine-700) var(--glacier); }
   .footer-links summary, .footer-contact summary { cursor: default; pointer-events: none; }
   .footer-links summary::after, .footer-contact summary::after { display: none; }
 }
+
+
+/* ============================================================
+   Design review fixes
+   ============================================================ */
+
+/* Focus ring: dark on light surfaces (saffron is only ~2.3:1 on white), saffron on dark ones */
+:focus-visible { outline: 2px solid var(--pine-900); outline-offset: 3px; }
+.hero :focus-visible, .top-bar :focus-visible, .footer :focus-visible, .reach :focus-visible,
+.destination-card :focus-visible, .season-card :focus-visible, .testimonials :focus-visible,
+.site-head:not(.scrolled) :focus-visible, .nav-links.open :focus-visible, .packages :focus-visible { outline-color: var(--saffron-bright); }
+.btn:focus-visible { outline-offset: 3px; box-shadow: 0 0 0 2px #fff; }
+
+/* Minimum text size: 12.8px */
+.logo-tagline, .proof-tag, .team-avatar-name, .destination-elev, .destination-region,
+.destination-spots li, .season-badge, .reach-grid span { font-size: .8rem; }
+.rq-author { font-size: .82rem; }
+
+/* Tap targets */
+.top-bar-link { display: inline-flex; align-items: center; min-height: 32px; }
+.hero-assure a { display: inline-flex; align-items: center; min-height: 44px; }
+.slider-dot { width: 32px; height: 32px; }
+.slider-dot::after { inset: 12px; }
+.contact-item a { display: inline-block; padding: .35rem 0; min-height: 32px; }
+.footer-links a, .footer-contact a { display: inline-block; padding: .4rem 0; min-height: 32px; }
+.footer-links li { margin-bottom: .1rem; }
+.footer-staff { display: inline-block; padding: .5rem 0; }
+.logo { min-height: 44px; }
+@media (max-width: 1099px) { .reach-name { min-height: 44px; } }
+
+/* Hero helper row: no dangling separators when it wraps */
+@media (max-width: 700px) {
+  .hero-assure { flex-direction: column; align-items: flex-start; gap: 0; }
+  .hero-assure [aria-hidden] { display: none; }
+  .hero-assure > span { padding: .25rem 0; }
+}
+
+/* Mobile drawer: direct contact actions */
+.nav-drawer-contact { display: none; }
+@media (max-width: 900px) {
+  .nav-drawer-contact { display: flex; flex-direction: column; gap: .2rem; margin-top: 1.6rem; padding-top: 1.2rem; border-top: 1px solid rgba(255, 255, 255, .18); width: 100%; }
+  .site-head .nav-links .nav-drawer-contact a { font-family: var(--body); font-size: 1rem; color: rgba(255, 255, 255, .9); padding: .7rem 0; min-height: 44px; display: flex; align-items: center; }
+}
+
+/* Packages: loading skeleton + empty state */
+.package-skeleton { min-height: 360px; border-radius: var(--r-card); background: linear-gradient(100deg, rgba(255,255,255,.06) 30%, rgba(255,255,255,.14) 50%, rgba(255,255,255,.06) 70%) 0 0 / 200% 100%; animation: pkgShimmer 1.4s linear infinite; }
+@keyframes pkgShimmer { to { background-position: -200% 0; } }
+.packages-empty { grid-column: 1 / -1; max-width: 40rem; margin: 0 auto; padding: 2.5rem 1.5rem; text-align: center; color: rgba(255, 255, 255, .85); }
+.packages-empty h3 { font-family: var(--display); font-weight: 500; font-size: 1.6rem; color: #fff; margin-bottom: .7rem; }
+.packages-empty p { line-height: 1.7; margin-bottom: 1.5rem; }
+/* Without JS, drop the skeleton rather than show blank cards */
+html:not(.js) .package-skeleton { display: none; }
+
+/* Trust section: never show a fake certificate or an empty photo tile */
+.cert-doc:not(.has-photo) { display: none; }
+.proof-card--wide:has(.guest-slideshow:not(.has-photos)) { display: none; }
