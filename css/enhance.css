@@ -1,0 +1,135 @@
+/* ============================================================
+   SERENE VIBES KASHMIR — visual enhancement layer
+   Loads after styles.css. Direction: dawn over Dal Lake.
+   Motifs taken from the valley: Mughal arch, khatamband lattice,
+   chinar autumn, shikara on still water.
+   ============================================================ */
+
+@font-face { font-family: 'Young Serif'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('/fonts/young-serif-latin-400-normal.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Young Serif'; font-style: normal; font-weight: 400; font-display: swap;
+  src: url('/fonts/young-serif-latin-ext-400-normal.woff2') format('woff2'); unicode-range: U+0100-02AF, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Hanken Grotesk'; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url('/fonts/hanken-grotesk-latin-wght-normal.woff2') format('woff2'); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Hanken Grotesk'; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url('/fonts/hanken-grotesk-latin-ext-wght-normal.woff2') format('woff2'); unicode-range: U+0100-02AF, U+1E00-1EFF, U+2020, U+20A0-20AB, U+20AD-20CF, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+
+:root {
+  --display: 'Young Serif', Georgia, 'Times New Roman', serif;
+  --chinar: #a3302a;          /* autumn chinar leaf, used once or twice, never as a button */
+  --dawn: #e8b98b;
+  /* khatamband-style lattice: two nested diamonds, tiles at 28px */
+  --lattice: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='14' viewBox='0 0 28 14'%3E%3Cg fill='none' stroke='%23d9a441' stroke-width='1'%3E%3Cpath d='M7 1l6 6-6 6-6-6z'/%3E%3Cpath d='M21 1l6 6-6 6-6-6z'/%3E%3Cpath d='M7 4.5L9.5 7 7 9.5 4.5 7z'/%3E%3Cpath d='M21 4.5L23.5 7 21 9.5 18.5 7z'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* ---------- Type ---------- */
+h1, h2, h3, h4, .logo-name, .proof-title, .review-score, .trust-pill-num, .reach-name, .package-price strong, .about-list strong, .testimonial p {
+  font-weight: 400; letter-spacing: -.012em;
+}
+h2 { font-size: clamp(1.9rem, 3.2vw, 2.7rem); line-height: 1.12; text-wrap: balance; }
+.hero h1 { font-size: clamp(2.5rem, 5vw, 4.3rem); line-height: 1.06; letter-spacing: -.02em; }
+.section-header p { font-size: 1.08rem; line-height: 1.7; max-width: 38rem; }
+body { font-feature-settings: 'ss01', 'kern'; }
+.testimonial p { font-style: normal; }
+
+/* ---------- Hero: dawn over Dal Lake ---------- */
+.hero { background: #08202b; }
+.hero-scene { position: absolute; inset: 0; z-index: -2; overflow: hidden; background: #08202b; }
+.hero-media.has-photo ~ .hero-scene { display: none; }
+.hero-media { z-index: -3; }
+.hero-scene-svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.hs-mist { position: absolute; left: -30%; width: 160%; height: 26%; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, .34), rgba(255, 255, 255, 0)); filter: blur(10px); opacity: .55; }
+.hs-mist-1 { bottom: 24%; }
+.hs-mist-2 { bottom: 14%; height: 20%; opacity: .4; }
+.hs-mist-3 { bottom: 33%; height: 18%; opacity: .3; }
+.hero-shade {
+  background:
+    linear-gradient(180deg, rgba(5, 22, 30, .6) 0%, rgba(5, 22, 30, 0) 22%),
+    linear-gradient(90deg, rgba(5, 22, 30, .8) 0%, rgba(5, 22, 30, .45) 46%, rgba(5, 22, 30, 0) 80%),
+    linear-gradient(0deg, rgba(5, 22, 30, .85) 0%, rgba(5, 22, 30, 0) 40%);
+}
+.hero-tag { color: var(--dawn); font-weight: 600; }
+.hero h1 { text-shadow: 0 2px 40px rgba(0, 0, 0, .35); }
+/* lattice band closing the hero */
+.hero::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 14px; z-index: 1;
+  background: var(--lattice) repeat-x center / 28px 14px; opacity: .55; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .hs-mist-1 { animation: mistA 46s ease-in-out infinite alternate; }
+  .hs-mist-2 { animation: mistB 62s ease-in-out infinite alternate; }
+  .hs-mist-3 { animation: mistA 80s ease-in-out infinite alternate-reverse; }
+  .hs-shikara { animation: shikara 70s ease-in-out infinite alternate; }
+  .hs-ridge-0 { animation: ridgeSway 40s ease-in-out infinite alternate; }
+  .hero-scene-svg { animation: heroDrift 30s ease-in-out infinite alternate; transform-origin: 70% 60%; }
+}
+@keyframes mistA { to { transform: translateX(14%); } }
+@keyframes mistB { to { transform: translateX(-12%); } }
+@keyframes shikara { from { transform: translateX(-60px); } to { transform: translateX(90px); } }
+@keyframes ridgeSway { to { transform: translateY(6px); } }
+
+/* Quote card: a sheet laid over the lake */
+.quote-card { border-radius: 20px; border: 0; border-top: 3px solid var(--saffron);
+  background: rgba(255, 255, 255, .96); box-shadow: 0 30px 60px -28px rgba(0, 0, 0, .65); }
+.quote-card-title { font-family: var(--display); font-weight: 400; font-size: 1.3rem; letter-spacing: -.01em; }
+.btn-primary { box-shadow: 0 8px 20px -10px rgba(217, 164, 65, .9); }
+
+/* ---------- Trust band ---------- */
+.trust-pills { border: 0; border-radius: 14px; box-shadow: 0 30px 60px -34px rgba(10, 39, 51, .45); }
+.trust-pill-num { color: var(--pine-900); }
+.trust-pill:first-child { box-shadow: inset 3px 0 0 var(--saffron); }
+.proof-card, .contact-form { border-radius: 8px; box-shadow: none; }
+.proof-card { border-top: 3px solid var(--pine-900); }
+.proof-card:nth-child(3) { border-top-color: var(--saffron); }
+.proof-heading { font-size: clamp(1.9rem, 3.2vw, 2.7rem); }
+.hero-inner > h1 { max-width: 46rem; }
+
+/* ---------- Destinations: Mughal-arch frames ---------- */
+.destinations-grid { grid-template-rows: repeat(2, 300px); gap: 1.1rem; }
+.destination-card { border-radius: 999px 999px 10px 10px; }
+.destination-card--large { border-radius: 999px 999px 10px 10px; }
+.destination-info { padding: 1.6rem 1.4rem 1.5rem; text-align: center;
+  background: linear-gradient(transparent, rgba(7, 28, 38, .94) 60%); }
+.destination-card--large .destination-info { padding: 2rem 2.4rem 2rem; }
+.destination-spots { justify-content: center; }
+.destination-info p { margin-inline: auto; max-width: 30rem; }
+.destination-card::after { content: ''; position: absolute; inset: 7px; border: 1px solid rgba(255, 255, 255, .3); border-radius: inherit; pointer-events: none; z-index: 1; }
+.destination-elev { color: var(--saffron-bright); }
+.destination-card > .ph { transition: filter .5s ease; }
+.destination-card:hover > .ph { filter: saturate(1.15) brightness(1.06); }
+
+/* ---------- Packages ---------- */
+.packages { background: radial-gradient(120% 90% at 50% 0%, #174659 0%, var(--pine-900) 55%, var(--pine-950) 100%); position: relative; }
+.packages::before { content: ''; position: absolute; inset: 0; background: var(--lattice) repeat center / 56px 28px; opacity: .06; pointer-events: none; }
+.packages > .container { position: relative; }
+.package-card { border-radius: 14px; }
+
+/* ---------- About ---------- */
+.about-list > * { border-left-width: 3px; }
+
+/* ---------- Seasons: each one wears its own colour ---------- */
+.season-card { border-radius: 14px; }
+.season-item:nth-child(1) .season-photo.ph { background-image: var(--ridge), linear-gradient(165deg, #6aa57a 0%, #2c6a4c 45%, #123a2c 100%); }
+.season-item:nth-child(2) .season-photo.ph { background-image: var(--ridge), linear-gradient(165deg, #5aa0c8 0%, #2a6c98 45%, #123a5a 100%); }
+.season-item:nth-child(3) .season-photo.ph { background-image: var(--ridge), linear-gradient(165deg, #e0903f 0%, #b5502c 45%, #5e1f1c 100%); }
+.season-item:nth-child(4) .season-photo.ph { background-image: var(--ridge), linear-gradient(165deg, #cfe3ee 0%, #7fa6bd 45%, #27465f 100%); }
+.season-card::after { background: linear-gradient(180deg, rgba(7, 28, 38, 0) 0%, rgba(7, 28, 38, .1) 38%, rgba(7, 28, 38, .9) 100%); }
+.season-item:nth-child(3) .season-card::after { background: linear-gradient(180deg, rgba(40, 8, 8, 0) 0%, rgba(40, 8, 8, .1) 38%, rgba(40, 8, 8, .9) 100%); }
+.season-months { color: #fff; opacity: .95; }
+
+/* ---------- Testimonials ---------- */
+.testimonials { background: radial-gradient(90% 120% at 50% 0%, #0f3140 0%, var(--pine-950) 70%); position: relative; }
+.testimonial p { font-size: clamp(1.3rem, 2.4vw, 1.7rem); line-height: 1.55; text-wrap: balance; }
+
+/* ---------- Contact ---------- */
+.contact-form { border-radius: 14px; border-top: 3px solid var(--saffron); box-shadow: 0 30px 60px -36px rgba(10, 39, 51, .4); }
+.contact-form-title { font-family: var(--display); }
+
+/* ---------- Footer ---------- */
+.footer::before { height: 14px; background: var(--lattice) repeat-x center / 28px 14px; opacity: .6; }
+
+@media (max-width: 700px) {
+  .destinations-grid { grid-auto-rows: 300px; }
+  .destination-card--large { grid-row: span 1; }
+  .hero h1 { font-size: clamp(2.3rem, 10vw, 3rem); }
+}
