@@ -669,13 +669,20 @@ function initPackages() {
   fetch('/api/site-packages', { cache: 'no-cache' })
     .then(res => (res.ok ? res.json() : null))
     .then(data => renderPackages((data && data.packages) || []))
-    .catch(() => {});
+    .catch(() => renderPackages([]));
 }
 
 function renderPackages(packages) {
   const grid = document.querySelector('[data-packages-grid]');
   const template = document.getElementById('packageCardTemplate');
-  if (!grid || !template || !packages.length) return;
+  if (!grid || !template) return;
+  grid.removeAttribute('aria-busy');
+  if (!packages.length) {
+    grid.innerHTML = '<div class="packages-empty"><h3>Custom itineraries, built around you</h3>' +
+      '<p>Our fixed-departure list is being updated. Tell us your dates and group size and we will send a priced itinerary within one business day.</p>' +
+      '<a href="#contact" class="btn btn-primary">Request an itinerary</a></div>';
+    return;
+  }
 
   grid.innerHTML = '';
   packages.forEach(pkg => {
@@ -832,7 +839,7 @@ function initCountUp() {
   const els = [...document.querySelectorAll('[data-count]')];
   if (!els.length || prefersReducedMotion || !('IntersectionObserver' in window)) return;
   const run = el => {
-    const end = Number(el.dataset.count), suffix = el.dataset.suffix || '', t0 = performance.now(), dur = 1400;
+    const end = el.dataset.count === '15' ? Math.max(15, new Date().getFullYear() - 2009) : Number(el.dataset.count), suffix = el.dataset.suffix || '', t0 = performance.now(), dur = 1400;
     const tick = now => {
       const p = Math.min((now - t0) / dur, 1);
       el.textContent = Math.round(end * (1 - Math.pow(1 - p, 3))).toLocaleString('en-IN') + suffix;
