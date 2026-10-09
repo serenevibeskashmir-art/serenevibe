@@ -224,8 +224,13 @@ _CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 _PHONE = re.compile(r"(?<![\d,])(?:\+?\d{1,3}[\s-]?)?\d{5}[\s-]?\d{5}(?![\d,])")
 
 
+# Odd typographic characters (e.g. non-breaking hyphen) that fonts and PDFs often can't draw.
+_ODD_CHARS = {0x2010: "-", 0x2011: "-", 0x2012: "-", 0x2212: "-", 0x00A0: " ", 0x202F: " ", 0x2009: " ",
+              0x200A: " ", 0x00AD: None, 0x200B: None, 0x200C: None, 0x200D: None, 0x2060: None, 0xFEFF: None}
+
+
 def _clean_text(value, limit: int) -> str:
-    text = _CTRL.sub("", str(value or "")).strip()
+    text = _CTRL.sub("", str(value or "")).translate(_ODD_CHARS).strip()
     return text[:limit]
 
 
