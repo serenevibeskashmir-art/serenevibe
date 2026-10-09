@@ -518,7 +518,8 @@ class HotelPhotoStrip(Flowable):
 # Source: the website's own destination photos (admin > Website Photos, slots
 # dest-srinagar / dest-gulmarg / ...). A day uses the photo of the place it goes to.
 _DEST_KEYS = ("srinagar", "gulmarg", "pahalgam", "sonamarg", "doodhpathri")
-_BG_OPACITY = 0.32      # how much of the photo shows through (rest is white)
+_BG_OPACITY = 0.55      # how much of the photo shows (rest is white); text sits on white bands, so it can be fairly strong
+_VEIL_ALPHA = 0.74      # white band behind each activity: keeps text readable on any photo
 
 
 def _faded_reader(raw: bytes, opacity=_BG_OPACITY):
@@ -581,6 +582,13 @@ class BgBlock(Flowable):
         p = c.beginPath(); p.rect(0, 0, w, h); c.clipPath(p, stroke=0, fill=0)
         c.drawImage(self.reader, -(dw - w) / 2, -(dh - h) * 0.5, width=dw, height=dh)
         c.restoreState()
+        # white "frosted" band behind every activity row (thin gaps let the photo show between them)
+        rows = getattr(self.inner, "_rowHeights", None) or []
+        y, gap = h, 0.7 * mm
+        c.setFillColor(colors.Color(1, 1, 1, alpha=_VEIL_ALPHA))
+        for rh in rows:
+            c.rect(0, y - rh + gap / 2, w, rh - gap, fill=1, stroke=0)
+            y -= rh
         self.inner.drawOn(c, 0, 0)
         c.setStrokeColor(GRAY_200); c.setLineWidth(0.5); c.rect(0, 0, w, h, fill=0, stroke=1)
 
