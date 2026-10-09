@@ -95,12 +95,21 @@ def _register_fonts():
 _register_fonts()
 
 # ─── Text Sanitiser ──────────────────────────────────────────────────────────
+# Characters the embedded Lato font has no glyph for (they print as black boxes).
+# AI-written text in particular likes the non-breaking hyphen (U+2011).
+_GLYPH_FIXES = {
+    0x00A0: " ", 0x202F: " ", 0x2007: " ", 0x2009: " ", 0x200A: " ", 0x2002: " ", 0x2003: " ",
+    0x2010: "-", 0x2011: "-", 0x2012: "-", 0x2212: "-", 0x00AD: None,
+    0x200B: None, 0x200C: None, 0x200D: None, 0x2060: None, 0xFEFF: None,
+}
+
+
 def clean(text):
     """Escape ReportLab XML special characters. Typography (– — “ ” ₹ →) is
     kept as-is because the embedded Lato font supports it."""
     if not text:
         return ""
-    s = str(text).replace("\u00a0", " ")
+    s = str(text).translate(_GLYPH_FIXES)
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
