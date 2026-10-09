@@ -624,6 +624,71 @@ export default function QuotePreview({ quote }) {
   const changeStart = (v) => { setStartPoint(v); applyPoints(v, endPoint); };
   const changeEnd   = (v) => { setEndPoint(v);   applyPoints(startPoint, v); };
 
+  // ── AI description writer (admin-only endpoint, same key as the website chatbot) ──
+  const [aiHints, setAiHints] = useState("");
+  const [aiBusy,  setAiBusy]  = useState("");   // "" | "day" | "act-<index>"
+  const [aiError, setAiError] = useState("");
+
+  const describeCall = async (mode, extra = {}) => {
+    const day = timeline[activeDay] || {};
+    const res = await apiFetch("/api/admin/describe-itinerary", {
+      method: "POST",
+      body: JSON.stringify({
+        mode,
+        day_number: day.day || activeDay + 1,
+        total_days: timeline.length,
+        route: day.transit_route || day.title || "",
+        overnight: day.overnight_stay || "",
+        start_point: startPoint || DEFAULT_POINT,
+        end_point: endPoint || DEFAULT_POINT,
+        hints: aiHints,
+        ...extra,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "AI request failed");
+    return data.items || [];
+  };
+
+  const aiWriteActivity = async (actIdx) => {
+    const slot = timeline[activeDay]?.schedule?.[actIdx];
+    if (!slot) return;
+    setAiBusy("act-" + actIdx); setAiError("");
+    try {
+      const [item] = await describeCall("activity", {
+        activity_title: slot.activity_title || "",
+        time_slot: slot.time_slot || "",
+        current_text: slot.description || "",
+      });
+      if (item) {
+        setTimeline((prev) => prev.map((d, i) => i !== activeDay ? d : {
+          ...d,
+          schedule: d.schedule.map((x, j) => j !== actIdx ? x : {
+            ...x,
+            description: item.description,
+            ...(item.activity_title && !x.activity_title ? { activity_title: item.activity_title } : {}),
+          }),
+        }));
+      }
+    } catch (e) { setAiError(e.message); }
+    setAiBusy("");
+  };
+
+  const aiRewriteDay = async () => {
+    const day = timeline[activeDay];
+    if (!day) return;
+    if ((day.schedule || []).length && !window.confirm("Replace all activities for this day with AI-written ones?")) return;
+    setAiBusy("day"); setAiError("");
+    try {
+      const items = await describeCall("day", { existing: day.schedule || [] });
+      setTimeline((prev) => prev.map((d, i) => i !== activeDay ? d : {
+        ...d,
+        schedule: items.map((it) => ({ time_slot: "***", activity_title: it.activity_title || "", description: it.description })),
+      }));
+    } catch (e) { setAiError(e.message); }
+    setAiBusy("");
+  };
+
   useEffect(() => {
     if (quote?.financial_summary?.total_payable_inr) setEditableCost(quote.financial_summary.total_payable_inr);
   }, [quote]);
@@ -921,6 +986,30 @@ export default function QuotePreview({ quote }) {
               </select>
             </div>
 
+            {/* AI writer */}
+            <div style={{ background: "#faf5ff", border: "1px solid #e9d5ff", borderRadius: "8px", padding: "10px 12px", marginBottom: "4px" }}>
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                <input
+                  className="qp-route-select"
+                  style={{ flex: 1, minWidth: "200px", maxWidth: "none" }}
+                  placeholder="Optional hints, e.g. honeymoon couple, relaxed pace, mention Shikara"
+                  maxLength={300}
+                  value={aiHints}
+                  onChange={(e) => setAiHints(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={aiRewriteDay}
+                  disabled={!!aiBusy}
+                  style={{ padding: "8px 14px", borderRadius: "6px", border: "none", background: "#7c3aed", color: "#fff", fontWeight: "bold", cursor: aiBusy ? "wait" : "pointer", minHeight: "38px", opacity: aiBusy ? 0.7 : 1 }}
+                >
+                  {aiBusy === "day" ? "Writing…" : "✨ Rewrite day with AI"}
+                </button>
+              </div>
+              {aiError && <div style={{ color: "#b91c1c", fontSize: "0.8rem", marginTop: "6px" }}>{aiError}</div>}
+              <div style={{ color: "#7e6a9b", fontSize: "0.72rem", marginTop: "6px" }}>AI text only fills the boxes below. Review it before generating the PDF.</div>
+            </div>
+
             {/* Activity list */}
             <div style={{ display: "flex", flexDirection: "column", gap: "15px", marginTop: "15px" }}>
               {timeline[activeDay].schedule.map((slot, actIdx) => (
@@ -938,6 +1027,15 @@ export default function QuotePreview({ quote }) {
                       onChange={(e) => { const t = [...timeline]; t[activeDay].schedule[actIdx].activity_title = e.target.value; setTimeline(t); }}
                       className="qp-title-input"
                     />
+                    <button
+                      type="button"
+                      onClick={() => aiWriteActivity(actIdx)}
+                      disabled={!!aiBusy}
+                      title="Write this description with AI"
+                      style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #c4b5fd", background: "#f5f3ff", color: "#6d28d9", fontWeight: "bold", cursor: aiBusy ? "wait" : "pointer", minHeight: "36px", flexShrink: 0, opacity: aiBusy ? 0.7 : 1 }}
+                    >
+                      {aiBusy === "act-" + actIdx ? "Writing…" : "✨ Write"}
+                    </button>
                   </div>
                   <textarea
                     value={slot.description}
