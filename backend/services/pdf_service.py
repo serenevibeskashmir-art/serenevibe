@@ -430,85 +430,88 @@ class RouteBadge(Flowable):
 
 class HotelPhotoStrip(Flowable):
     """
-    Renders a hotel name/place header followed by a row of reference photos
-    (2+ images side by side). Images that fail to load are simply skipped;
-    if fewer than 2 images load successfully, a "photo unavailable" tile
-    fills the remaining slot so the layout never breaks.
+    Hotel name / place header followed by exactly TWO photos side by side.
+
+    Every photo tile in the PDF is the same size (half the page width, fixed
+    aspect ratio) no matter which hotel or what the original picture's shape is:
+    each photo is scaled to FILL its tile and centre-cropped, so there are no
+    white bars and no stretched or tiny pictures. A missing photo becomes a
+    neat "Photo unavailable" tile instead of breaking the layout.
     """
-    def __init__(self, width, hotel_name, hotel_place, image_sources, photo_h=42*mm):
+    TILE_RATIO = 0.62          # tile height = tile width * ratio (about 16:10)
+    FOCUS_Y    = 0.42          # crop slightly above centre (keeps rooflines / headboards)
+
+    def __init__(self, width, hotel_name, hotel_place, image_sources, photo_h=None):
         super().__init__()
         self.width       = width
         self.hotel_name  = hotel_name
         self.hotel_place = hotel_place
-        self.photo_h     = photo_h
         self.header_h    = 8 * mm
-        self.gap         = 3 * mm
+        self.gap         = 4 * mm
+        self.tile_w      = (width - self.gap) / 2
+        self.photo_h     = self.tile_w * self.TILE_RATIO
 
-        # Resolve images up front so we know the real height before drawing
         readers = []
         for src in (image_sources or []):
             r = fetch_image_reader(src)
             if r is not None:
                 readers.append(r)
+            if len(readers) == 2:
+                break
         self.readers = readers
-        # Show at least 2 slots (real photos + placeholder fallback tiles)
-        self.slot_count = max(2, len(readers))
-        self.height = self.header_h + self.photo_h + 4*mm
+        self.height = self.header_h + 1.5 * mm + self.photo_h + 3 * mm
 
     def draw(self):
         c = self.canv
         w = self.width
+        top = self.height
 
-        # Header bar: hotel name + place
+        # Header bar: accent edge + hotel name (left) + place (right)
         c.setFillColor(GRAY_100)
-        c.roundRect(0, self.height - self.header_h, w, self.header_h, 1.5*mm, fill=1, stroke=0)
+        c.roundRect(0, top - self.header_h, w, self.header_h, 1.5 * mm, fill=1, stroke=0)
         c.setFillColor(NAVY)
-        c.setFont("Lato-Bold", 8.5)
-        c.drawString(3*mm, self.height - self.header_h + 2.3*mm, clean(self.hotel_name))
+        c.roundRect(0, top - self.header_h, 1.4 * mm, self.header_h, 0.7 * mm, fill=1, stroke=0)
+        c.setFont("Lato-Bold", 9)
+        c.drawString(4 * mm, top - self.header_h + 2.5 * mm, clean(self.hotel_name))
         c.setFillColor(GRAY_600)
-        c.setFont("Lato", 7.5)
-        c.drawRightString(w - 3*mm, self.height - self.header_h + 2.3*mm, clean(self.hotel_place))
+        c.setFont("Lato", 7.8)
+        c.drawRightString(w - 3 * mm, top - self.header_h + 2.5 * mm, clean(self.hotel_place))
 
-        # Photo row
-        n = self.slot_count
-        slot_w = (w - (n - 1) * self.gap) / n
-        y = self.height - self.header_h - self.photo_h - 1*mm
-
-        for i in range(n):
-            x = i * (slot_w + self.gap)
+        y = top - self.header_h - 1.5 * mm - self.photo_h
+        for i in range(2):
+            x = i * (self.tile_w + self.gap)
             if i < len(self.readers):
-                reader = self.readers[i]
                 try:
-                    iw, ih = reader.getSize()
-                    scale = min(slot_w / iw, self.photo_h / ih)
-                    draw_w, draw_h = iw * scale, ih * scale
-                    ox = x + (slot_w - draw_w) / 2
-                    oy = y + (self.photo_h - draw_h) / 2
-                    c.saveState()
-                    # clip to the slot so the border looks clean
-                    p = c.beginPath()
-                    p.rect(x, y, slot_w, self.photo_h)
-                    c.clipPath(p, stroke=0)
-                    c.drawImage(reader, ox, oy, width=draw_w, height=draw_h,
-                                preserveAspectRatio=True, mask='auto')
-                    c.restoreState()
+                    self._draw_photo(c, self.readers[i], x, y)
                 except Exception:
-                    self._placeholder(c, x, y, slot_w)
+                    self._placeholder(c, x, y)
             else:
-                self._placeholder(c, x, y, slot_w)
+                self._placeholder(c, x, y)
 
-            # Frame
-            c.setStrokeColor(GRAY_200)
-            c.setLineWidth(0.6)
-            c.rect(x, y, slot_w, self.photo_h, fill=0, stroke=1)
+    def _draw_photo(self, c, reader, x, y):
+        iw, ih = reader.getSize()
+        scale = max(self.tile_w / iw, self.photo_h / ih)          # fill the tile
+        dw, dh = iw * scale, ih * scale
+        ox = x - (dw - self.tile_w) / 2                           # centred horizontally
+        oy = y - (dh - self.photo_h) * (1 - self.FOCUS_Y)         # biased crop vertically
+        c.saveState()
+        clip = c.beginPath()
+        clip.roundRect(x, y, self.tile_w, self.photo_h, 1.6 * mm)
+        c.clipPath(clip, stroke=0, fill=0)
+        c.drawImage(reader, ox, oy, width=dw, height=dh, mask="auto")
+        c.restoreState()
+        c.setStrokeColor(GRAY_200)
+        c.setLineWidth(0.6)
+        c.roundRect(x, y, self.tile_w, self.photo_h, 1.6 * mm, fill=0, stroke=1)
 
-    def _placeholder(self, c, x, y, slot_w):
+    def _placeholder(self, c, x, y):
         c.setFillColor(GRAY_100)
-        c.rect(x, y, slot_w, self.photo_h, fill=1, stroke=0)
+        c.setStrokeColor(GRAY_200)
+        c.setLineWidth(0.6)
+        c.roundRect(x, y, self.tile_w, self.photo_h, 1.6 * mm, fill=1, stroke=1)
         c.setFillColor(GRAY_400)
-        c.setFont("Lato-Italic", 7.5)
-        c.drawCentredString(x + slot_w/2, y + self.photo_h/2, "Photo unavailable")
-
+        c.setFont("Lato-Italic", 8)
+        c.drawCentredString(x + self.tile_w / 2, y + self.photo_h / 2 - 2, "Photo unavailable")
 
 
 class OfficialSeal(Flowable):
@@ -2127,32 +2130,21 @@ def generate_pdf(itinerary_data: dict) -> str:
 
     photo_flow = None
     if selected_hotel_ids:
-        # ── Rule 6: ALL hotels (up to 3) must fit on ONE page ─────────────
-        # A4 usable body height ≈ 257mm (297 - top margin 18 - bottom footer 22).
-        # Fixed overhead per page: SectionTitle≈14mm + spacer 4mm = 18mm.
-        # Per-hotel overhead: header bar 8mm + spacer 3mm = 11mm each.
-        # Remaining height split equally across hotels for photos.
-        # Hard floor 26mm (legible), hard ceiling 55mm.
-        _n = len(selected_hotel_ids)
-        _usable_body_h = 257   # mm
-        _overhead_total = 18 + _n * 11
-        _photo_h_mm = max(26, min(55, (_usable_body_h - _overhead_total) / _n))
-
-        # Build all strips into one KeepTogether block so they never split
-        photo_block = [
-            SectionTitle(usable_w, "HOTEL REFERENCE PHOTOS", icon=""),
-            Spacer(1, 4*mm),
-        ]
+        # Every photo tile is the same size (see HotelPhotoStrip). Up to 3 hotels
+        # fit on one page and are kept together; with more hotels each one is kept
+        # whole and the list flows onto the next page.
+        title_flow = [SectionTitle(usable_w, "HOTEL REFERENCE PHOTOS", icon=""), Spacer(1, 4*mm)]
+        strips = []
         for hid in selected_hotel_ids:
             info = HOTEL_LOOKUP[hid]
-            photo_block.append(HotelPhotoStrip(
-                usable_w, info["name"], info["place"], info.get("images", []),
-                photo_h=_photo_h_mm * mm
-            ))
-            photo_block.append(Spacer(1, 3*mm))
-        # KeepTogether forces the entire photos section onto one page.
-        # If it doesn't fit on the current page it triggers its own page break.
-        photo_flow = KeepTogether(photo_block)
+            strips.append(KeepTogether([
+                HotelPhotoStrip(usable_w, info["name"], info["place"], info.get("images", [])),
+                Spacer(1, 3*mm),
+            ]))
+        if len(strips) <= 3:
+            photo_flow = KeepTogether(title_flow + strips)
+        else:
+            photo_flow = [KeepTogether(title_flow + strips[:1])] + strips[1:]
 
     # ── 4–6. Hotel Assignments + Inclusions/Exclusions + Payment Schedule ───────
     # Rule 1: These three sections always live on ONE page together.
@@ -2248,7 +2240,10 @@ def generate_pdf(itinerary_data: dict) -> str:
     # follow them (on their own page if they don't fit), then Inclusions/Payment.
     story.append(KeepTogether(page_block_1))
     if photo_flow is not None:
-        story.append(photo_flow)
+        if isinstance(photo_flow, list):
+            story.extend(photo_flow)
+        else:
+            story.append(photo_flow)
         story.append(Spacer(1, 4*mm))
     page_block_1 = []
 
