@@ -723,6 +723,9 @@ class SectionTitle(Flowable):
 
 
 # ─── Kashmir Route Map (Layout 3: map top + legend table below) ──────────────
+DEFAULT_POINT = "Srinagar Airport"   # default tour start / end point
+
+
 class KashmirRouteMap(Flowable):
     """
     Full-width route map + day-by-day legend table.
@@ -809,12 +812,15 @@ class KashmirRouteMap(Flowable):
 
     MIN_ROW_H, MIN_MAP_H, MAX_MAP_H = 4.2 * mm, 58 * mm, 100 * mm
 
-    def __init__(self, width, timeline, max_height=None):
+    def __init__(self, width, timeline, max_height=None,
+                 start_point=DEFAULT_POINT, end_point=DEFAULT_POINT):
         """max_height: total height the whole block (map + legend table) may use.
         The legend rows shrink for long trips and the map takes the rest."""
         super().__init__()
         self.width    = width
         self.timeline = timeline
+        self.start_point = start_point or DEFAULT_POINT
+        self.end_point = end_point or DEFAULT_POINT
         self._build_rows()
         n = max(len(self._rows), 1)
         if max_height:
@@ -952,14 +958,15 @@ class KashmirRouteMap(Flowable):
 
             is_dep = key == "departure"
             hub_key = "srinagar" if is_dep else key
-            loc = "Srinagar Airport" if is_dep else self.DISPLAY.get(hub_key, hub_key.capitalize())
+            loc = self.end_point if is_dep else self.DISPLAY.get(hub_key, hub_key.capitalize())
 
             # Activity = the route/title without the trailing ": Overnight X"
             title = str(day.get("title") or day.get("date") or f"Day {idx}")
             activity = (route or title).split(":")[0].strip() or title
             self._rows.append({
                 "day": idx, "loc": loc, "key": hub_key, "is_dep": is_dep,
-                "gps": self.GPS_LABEL.get(hub_key, self.GPS_LABEL["srinagar"]),
+                "gps": ("-" if is_dep and not _is_srinagar_point(self.end_point)
+                        else self.GPS_LABEL.get(hub_key, self.GPS_LABEL["srinagar"])),
                 "activity": activity,
                 "night": "-" if (is_dep or overnight.lower() in ("", "departure")) else overnight,
             })
@@ -1333,8 +1340,10 @@ class KashmirRouteMap(Flowable):
             if k not in self.STOPS:
                 continue
             sub = None
-            if k == "srinagar" and any(r["is_dep"] for r in self._rows):
-                sub = "Arrival & departure"
+            if k == "srinagar":
+                arr = _is_srinagar_point(self.start_point)
+                dep = any(r["is_dep"] for r in self._rows) and _is_srinagar_point(self.end_point)
+                sub = "Arrival & departure" if (arr and dep) else "Arrival" if arr else "Departure" if dep else None
             self._pin(c, k, _fmt(days), sub)
 
         for k, days in used.items():
@@ -1646,6 +1655,42 @@ class NumberedCanvas(_rl_canvas.Canvas):
         self.restoreState()
 
 
+def _is_srinagar_point(p):
+    return "srinagar" in (p or "").lower()
+
+
+def _apply_points(timeline, start, end):
+    """Copy of the timeline with the tour start / end point written in.
+
+    Day 1 pickup text and the departure-day text say "Srinagar (International)
+    Airport" by default; swap in the chosen point.  Safe to run on text the admin
+    already localised (it only touches the default wording)."""
+    import copy, re
+    airport_re = re.compile(r"Srinagar International Airport|Srinagar Airport")
+    tl = copy.deepcopy(timeline or [])
+    for i, day in enumerate(tl):
+        sig = f"{day.get('title', '')} {day.get('transit_route', '')}".lower()
+        is_dep = "departure" in sig or "airport drop" in sig
+        point = end if is_dep else start
+        if is_dep or i == 0:
+            if point != DEFAULT_POINT:
+                for slot in day.get("schedule", []) or []:
+                    for k in ("description", "activity", "activity_title"):
+                        if isinstance(slot.get(k), str):
+                            slot[k] = airport_re.sub(point, slot[k])
+        # titles: "Airport Pickup ..." / "Airport Drop-Departure"
+        for k in ("title", "transit_route"):
+            v = day.get(k)
+            if not isinstance(v, str):
+                continue
+            if start != DEFAULT_POINT:
+                v = re.sub(r"^Airport Pickup", f"{start} Pickup", v)
+            if end != DEFAULT_POINT:
+                v = re.sub(r"^Airport Drop-Departure", f"{end} Drop-Departure", v)
+            day[k] = v
+    return tl
+
+
 def generate_pdf(itinerary_data: dict) -> str:
     import os as _os; _out = _os.environ.get("OUTPUT_DIR", "/tmp/output"); Path(_out).mkdir(exist_ok=True)
     client_name = str(itinerary_data.get("client_name", "Client"))
@@ -1674,6 +1719,10 @@ def generate_pdf(itinerary_data: dict) -> str:
     budget_tier  = itinerary_data.get("budget_tier", "Mid-Range")
     vehicle_type = itinerary_data.get("vehicle_type", "Sedan")
     client_email = itinerary_data.get("client_email", "N/A")
+    start_point  = str(itinerary_data.get("start_point") or "").strip() or DEFAULT_POINT
+    end_point    = str(itinerary_data.get("end_point") or "").strip() or DEFAULT_POINT
+    itinerary_data = dict(itinerary_data)
+    itinerary_data["timeline"] = _apply_points(itinerary_data.get("timeline", []), start_point, end_point)
     custom_cost  = itinerary_data.get("custom_cost") or \
                    itinerary_data.get("financial_summary", {}).get("total_payable_inr", "On Request")
 
@@ -1703,6 +1752,12 @@ def generate_pdf(itinerary_data: dict) -> str:
             Paragraph(f"{adults} Adults" + (f", {kids} Kids" if int(kids or 0) else ""), styles["summary_value"]),
             Paragraph("VEHICLE", styles["summary_label"]),
             Paragraph(clean(str(vehicle_type)), styles["summary_value"]),
+        ],
+        [
+            Paragraph("START POINT", styles["summary_label"]),
+            Paragraph(clean(start_point), styles["summary_value"]),
+            Paragraph("END POINT", styles["summary_label"]),
+            Paragraph(clean(end_point), styles["summary_value"]),
         ],
         [
             Paragraph("BUDGET TIER", styles["summary_label"]),
@@ -1747,7 +1802,8 @@ def generate_pdf(itinerary_data: dict) -> str:
     map_title = SectionTitle(usable_w, "TOUR ROUTE MAP", icon="")
     gap_h  = 3 * mm
     route_map = KashmirRouteMap(usable_w, timeline_for_map,
-                                max_height=avail - map_title.height - gap_h)
+                                max_height=avail - map_title.height - gap_h,
+                                start_point=start_point, end_point=end_point)
     spare = avail - (map_title.height + gap_h + route_map.height)
     if spare > 1 * mm:
         story.append(Spacer(1, spare))
