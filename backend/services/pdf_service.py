@@ -781,6 +781,44 @@ class KashmirRouteMap(Flowable):
         "doodhpathri": [(34.0837, 74.7973), (34.010, 74.720), (33.940, 74.660), (33.900, 74.560),
                         (33.8700, 74.3700)],
     }
+    # Known tour start / end points (lat, lon). Matched by keywords in the admin's text.
+    # Anything not listed here is still shown on the map, as a tag without a position.
+    POINT_COORDS = [
+        (("srinagar", "airport"),      (33.9871, 74.7742)),
+        (("srinagar", "railway"),      (34.0236, 74.8471)),
+        (("srinagar", "station"),      (34.0236, 74.8471)),
+        (("jammu", "airport"),         (32.6891, 74.8374)),
+        (("jammu", "tawi"),            (32.7057, 74.8714)),
+        (("jammu", "railway"),         (32.7057, 74.8714)),
+        (("jammu", "station"),         (32.7057, 74.8714)),
+        (("katra",),                   (32.9916, 74.9455)),
+        (("pathankot",),               (32.2733, 75.6522)),
+        (("udhampur",),                (32.9160, 75.1416)),
+        (("amritsar",),                (31.7096, 74.7973)),
+        (("chandigarh",),              (30.6735, 76.7885)),
+        (("delhi",),                   (28.5562, 77.1000)),
+        (("jammu",),                   (32.7266, 74.8570)),
+    ]
+    START_COL = colors.HexColor("#16a34a")
+    END_COL   = colors.HexColor("#dc2626")
+    BOTH_COL  = colors.HexColor("#0f766e")
+
+    def _resolve(self, name, info):
+        """(lat, lon) for a start/end point: admin-confirmed coordinates first, then the built-in list."""
+        if info and info.get("lat") is not None and info.get("lon") is not None:
+            return (info["lat"], info["lon"])
+        return self._point_latlon(name)
+
+    @classmethod
+    def _point_latlon(cls, text):
+        t = (text or "").lower()
+        if not t.strip():
+            return None
+        for kws, ll in cls.POINT_COORDS:
+            if all(k in t for k in kws):
+                return ll
+        return None
+
     _baked_routes = None
     # Where each pin label sits relative to its pin
     LABEL_SIDE = {"srinagar": "above-left", "gulmarg": "above", "pahalgam": "right",
@@ -822,7 +860,8 @@ class KashmirRouteMap(Flowable):
     MIN_ROW_H, MIN_MAP_H, MAX_MAP_H = 4.2 * mm, 58 * mm, 100 * mm
 
     def __init__(self, width, timeline, max_height=None,
-                 start_point=DEFAULT_POINT, end_point=DEFAULT_POINT):
+                 start_point=DEFAULT_POINT, end_point=DEFAULT_POINT,
+                 start_info=None, end_info=None):
         """max_height: total height the whole block (map + legend table) may use.
         The legend rows shrink for long trips and the map takes the rest."""
         super().__init__()
@@ -830,6 +869,8 @@ class KashmirRouteMap(Flowable):
         self.timeline = timeline
         self.start_point = start_point or DEFAULT_POINT
         self.end_point = end_point or DEFAULT_POINT
+        self.start_info = start_info or {}
+        self.end_info = end_info or {}
         self._build_rows()
         n = max(len(self._rows), 1)
         if max_height:
@@ -851,6 +892,11 @@ class KashmirRouteMap(Flowable):
         for k in keys:
             if k in self.ROADS:
                 pts += self._road_pts(k)
+        hub = self.STOPS["srinagar"]
+        for name, info in ((self.start_point, self.start_info), (self.end_point, self.end_info)):   # start/end close to Srinagar stay on the map
+            ll = self._resolve(name, info)
+            if ll and abs(ll[0] - hub[0]) < 0.3 and abs(ll[1] - hub[1]) < 0.3:
+                pts.append(ll)
         lat_lo, lat_hi = min(p[0] for p in pts), max(p[0] for p in pts)
         lon_lo, lon_hi = min(p[1] for p in pts), max(p[1] for p in pts)
         my_lo, my_hi = self._merc_y(lat_lo), self._merc_y(lat_hi)
@@ -1119,6 +1165,106 @@ class KashmirRouteMap(Flowable):
             c.drawString(bx + 2.9 * mm, ty, t)
             ty -= 3.3 * mm
 
+    def _draw_endpoints(self, c, foot):
+        """START / END tags. A point near Srinagar is pinned at its real position;
+        one far away (Jammu, Delhi...) is a tag on the map edge pointing its way."""
+        import math
+        w, mh, y0 = self.width, self.MAP_H, self._map_y0
+        hub_x, hub_y = self._proj(*self.STOPS["srinagar"])
+        same = (self.start_point or "").strip().lower() == (self.end_point or "").strip().lower()
+        items = [("START / END", self.start_point, self.BOTH_COL, self.start_info)] if same else \
+                [("START", self.start_point, self.START_COL, self.start_info), ("END", self.end_point, self.END_COL, self.end_info)]
+
+        # Areas the tags must avoid: placed labels, pins, key, scale bar, compass
+        base = y0 + foot
+        avoid = list(getattr(self, "_placed", []))
+        avoid += [(ox - r, oy - r, 2 * r, 2 * r) for ox, oy, r in getattr(self, "_pin_pts", [])]
+        avoid.append((3 * mm, y0 + mh - 3 * mm - 6.6 * mm, 36 * mm, 6.6 * mm))
+        bar_w = (50.0 / (111.32 * self._coslat)) / (self.LON_MAX - self.LON_MIN) * w
+        avoid.append((1.6 * mm, base + 1.5 * mm, bar_w + 12 * mm, 7.2 * mm))
+        avoid.append((w - 16 * mm, base + 2 * mm, 14 * mm, 14 * mm))
+
+        def free(bx, by, bw, bh):
+            if bx < 1.5 * mm or bx + bw > w - 1.5 * mm or by < base + 1 * mm or by + bh > y0 + mh - 1.5 * mm:
+                return False
+            return not any(bx < qx + qw and bx + bw > qx and by < qy + qh and by + bh > qy
+                           for qx, qy, qw, qh in avoid)
+
+        def tag(bx, by, bw, bh, head, name, col, sub=None):
+            c.setFillColor(colors.Color(0, 0, 0, alpha=0.12)); c.roundRect(bx + 0.5, by - 0.7, bw, bh, 1.4 * mm, fill=1, stroke=0)
+            c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.4)
+            c.roundRect(bx, by, bw, bh, 1.4 * mm, fill=1, stroke=1)
+            c.setFillColor(col); c.roundRect(bx, by, 1.3 * mm, bh, 0.6 * mm, fill=1, stroke=0)
+            c.setFillColor(col); c.setFont("Lato-Bold", 6.0); c.drawString(bx + 2.9 * mm, by + bh - 3.3 * mm, head)
+            c.setFillColor(BLACK); c.setFont("Lato-Bold", 7.0); c.drawString(bx + 2.9 * mm, by + bh - 6.6 * mm, name)
+            if sub:
+                c.setFillColor(GRAY_600); c.setFont("Lato", 5.8); c.drawString(bx + 2.9 * mm, by + 1.5 * mm, sub)
+            avoid.append((bx, by, bw, bh))
+
+        edge_i = 0
+        for head, name, col, info in items:
+            name_txt = _raw(name)
+            sub = None
+            if info and info.get("km"):
+                sub = f"approx. {int(round(info['km']))} km by road to Srinagar"
+            c.setFont("Lato-Bold", 7.0)
+            bw = max(c.stringWidth(name_txt, "Lato-Bold", 7.0), c.stringWidth(head, "Lato-Bold", 6.0),
+                     c.stringWidth(sub or "", "Lato", 5.8)) + 5.4 * mm
+            bh = 11.6 * mm if sub else 8.6 * mm
+            ll = self._resolve(name, info)
+            if ll is None:                                   # unknown place: tag only, top-right corner
+                bx, by = w - bw - 3 * mm, y0 + mh - 3 * mm - bh - edge_i * (bh + 1.5 * mm)
+                edge_i += 1
+                tag(bx, by, bw, bh, head, name_txt, col, sub)
+                continue
+            px, py = self._proj(*ll)
+            inside = 4 * mm < px < w - 4 * mm and base + 4 * mm < py < y0 + mh - 4 * mm
+            if inside:
+                if math.dist((px, py), (hub_x, hub_y)) > 2.5 * mm:
+                    c.setStrokeColor(WHITE); c.setLineWidth(2.6); c.line(px, py, hub_x, hub_y)
+                    c.setStrokeColor(col); c.setLineWidth(1.0); c.setDash(2.2, 1.8); c.line(px, py, hub_x, hub_y); c.setDash()
+                R = 1.9 * mm
+                c.setFillColor(WHITE); c.circle(px, py, R + 0.8, fill=1, stroke=0)
+                c.setFillColor(col); c.circle(px, py, R, fill=1, stroke=0)
+                c.setFillColor(WHITE); c.circle(px, py, R * 0.4, fill=1, stroke=0)
+                avoid.append((px - R - 1, py - R - 1, 2 * R + 2, 2 * R + 2))
+                for dx, dy in ((-bw - R - 1.2 * mm, -bh / 2), (R + 1.2 * mm, -bh / 2),
+                               (-bw / 2, -R - 1.2 * mm - bh), (-bw / 2, R + 1.2 * mm)):
+                    if free(px + dx, py + dy, bw, bh):
+                        tag(px + dx, py + dy, bw, bh, head, name_txt, col, sub)
+                        break
+                continue
+            # off the map: put the tag on the border, on the line from Srinagar toward the place
+            ang = math.atan2(py - hub_y, px - hub_x)
+            ux, uy = math.cos(ang), math.sin(ang)
+            lo_x, hi_x, lo_y, hi_y = 1.5 * mm + bw / 2, w - 1.5 * mm - bw / 2, base + 10.5 * mm + bh / 2, y0 + mh - 1.5 * mm - bh / 2
+            t = min(((hi_x if ux > 0 else lo_x) - hub_x) / ux if abs(ux) > 1e-9 else 1e9,
+                    ((hi_y if uy > 0 else lo_y) - hub_y) / uy if abs(uy) > 1e-9 else 1e9)
+            ex, ey = hub_x + ux * t, hub_y + uy * t
+            placed = False
+            for off in (0, 1, -1, 2, -2, 3, -3, 4, -4):      # slide along the border until clear
+                tx = ex + (-uy * off * (bw + 2 * mm) * 0.6 if abs(uy) < abs(ux) else off * (bw + 2 * mm) * 0.9)
+                ty = ey + (off * (bh + 2 * mm) if abs(uy) < abs(ux) else 0)
+                tx = max(lo_x, min(tx, hi_x)); ty = max(lo_y, min(ty, hi_y))
+                if free(tx - bw / 2, ty - bh / 2, bw, bh):
+                    placed = True
+                    break
+            if not placed:
+                tx, ty = max(lo_x, min(ex, hi_x)), max(lo_y, min(ey, hi_y))
+            # dashed guide from the hub to the tag, ending in an arrow that points at the tag
+            half = min((bw / 2) / abs(ux) if abs(ux) > 1e-9 else 1e9, (bh / 2) / abs(uy) if abs(uy) > 1e-9 else 1e9)
+            gx, gy = tx - ux * (half + 0.4 * mm), ty - uy * (half + 0.4 * mm)    # where the arrow tip touches the tag
+            c.setStrokeColor(col); c.setLineWidth(0.8); c.setDash(1.6, 1.8)
+            c.line(hub_x, hub_y, gx - ux * 2.6 * mm, gy - uy * 2.6 * mm); c.setDash()
+            nx, ny = -uy, ux
+            c.setFillColor(col)
+            hp = c.beginPath()
+            hp.moveTo(gx, gy)
+            hp.lineTo(gx - ux * 2.8 * mm + nx * 1.4 * mm, gy - uy * 2.8 * mm + ny * 1.4 * mm)
+            hp.lineTo(gx - ux * 2.8 * mm - nx * 1.4 * mm, gy - uy * 2.8 * mm - ny * 1.4 * mm)
+            hp.close(); c.drawPath(hp, fill=1, stroke=0)
+            tag(tx - bw / 2, ty - bh / 2, bw, bh, head, name_txt, col, sub)
+
     def _draw_stylised_terrain(self, c):
         """Fallback basemap (used only when satellite imagery is unavailable)."""
         w, mh, y0 = self.width, self.MAP_H, self._map_y0
@@ -1362,6 +1508,8 @@ class KashmirRouteMap(Flowable):
             self._chip(c, fx, fy, _fmt(sorted(set(days))), self.PIN_COLORS[k][0])
         for (fx, fy), txt, col in self._through_chips:
             self._chip(c, fx, fy, txt, col)
+
+        self._draw_endpoints(c, foot)
 
         if sat:
             self._draw_sat_captions(c)
@@ -1812,7 +1960,8 @@ def generate_pdf(itinerary_data: dict) -> str:
     gap_h  = 3 * mm
     route_map = KashmirRouteMap(usable_w, timeline_for_map,
                                 max_height=avail - map_title.height - gap_h,
-                                start_point=start_point, end_point=end_point)
+                                start_point=start_point, end_point=end_point,
+                                start_info=itinerary_data.get("start_info"), end_info=itinerary_data.get("end_info"))
     spare = avail - (map_title.height + gap_h + route_map.height)
     if spare > 1 * mm:
         story.append(Spacer(1, spare))
