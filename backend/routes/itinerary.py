@@ -99,6 +99,27 @@ DEFAULT_TIMELINE = [
 ]
 
 
+def _point_info(raw):
+    """Optional looked-up details for a start/end point: {lat, lon, km, hours}. Bad values are dropped."""
+    if not isinstance(raw, dict):
+        return None
+    def num(v, lo, hi):
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return None
+        return f if lo <= f <= hi else None
+    out = {
+        "lat": num(raw.get("lat"), -90, 90),
+        "lon": num(raw.get("lon"), -180, 180),
+        "km": num(raw.get("km"), 0, 5000),
+        "hours": num(raw.get("hours"), 0, 100),
+    }
+    if out["lat"] is None or out["lon"] is None:
+        out["lat"] = out["lon"] = None
+    return out if any(v is not None for v in out.values()) else None
+
+
 def _vehicle_type(adults):
     adults = int(adults or 2)
     if adults <= 3:
@@ -171,6 +192,8 @@ def generate_custom_itinerary():
         "trip_pace": trip_pace,
         "start_point": start_point,
         "end_point": end_point,
+        "start_info": _point_info(data.get("start_info")),
+        "end_info": _point_info(data.get("end_info")),
         "selected_hotels": selected_hotels,
         "custom_cost": custom_cost,
         "meta_summary": {
