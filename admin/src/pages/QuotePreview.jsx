@@ -113,6 +113,53 @@ const ROUTE_SCHEDULE_TEMPLATES = {
   ]
 };
 
+// ── Tour start / end points ────────────────────────────────────────────────
+// Where guests are met on Day 1 and dropped on the last day. Anything other
+// than the default is written into the day descriptions and the PDF.
+const DEFAULT_POINT = "Srinagar Airport";
+const POINT_PRESETS = [
+  "Srinagar Airport",
+  "Srinagar Railway Station",
+  "Jammu Airport",
+  "Jammu Tawi Railway Station",
+  "Katra Railway Station",
+  "Pathankot Railway Station",
+];
+const PICKUP_ROUTE = "Airport Pickup and Local Sightseeing: Overnight Srinagar";
+const DROP_ROUTE   = "Airport Drop-Departure";
+const isSrinagarPoint = (p) => /srinagar/i.test(p || "");
+const AIRPORT_RE = /Srinagar International Airport|Srinagar Airport/g;
+
+// Label shown in the route dropdown (the stored route value never changes).
+function routeLabel(route, start, end) {
+  if (route === PICKUP_ROUTE && start !== DEFAULT_POINT) return route.replace(/^Airport Pickup/, `${start} Pickup`);
+  if (route === DROP_ROUTE && end !== DEFAULT_POINT)     return route.replace(/^Airport Drop-Departure/, `${end} Drop-Departure`);
+  return route;
+}
+
+// Schedule for a route, with the start/end point filled in.
+function buildSchedule(route, start, end) {
+  const base = (ROUTE_SCHEDULE_TEMPLATES[route] || []).map((x) => ({ ...x }));
+  if (route === PICKUP_ROUTE) {
+    const out = base.map((x) => ({ ...x, description: x.description.replace(AIRPORT_RE, start) }));
+    if (!isSrinagarPoint(start)) {
+      out.splice(2, 0, { time_slot: "***", description: `From ${start}, travel to Srinagar by private cab with short breaks en route.` });
+    }
+    return out;
+  }
+  if (route === DROP_ROUTE) {
+    const kind = /railway/i.test(end) ? "departure train" : /airport/i.test(end) ? "departure flight" : "onward journey";
+    return base.map((x) => ({
+      ...x,
+      description: x.description
+        .replace("departure from Srinagar International Airport", `departure from ${end}`)
+        .replace(/Transfer to Srinagar International Airport for departure flight\./,
+                 isSrinagarPoint(end) ? `Transfer to ${end} for ${kind}.` : `Drive from Srinagar to ${end} for your ${kind}.`),
+    }));
+  }
+  return base;
+}
+
 const HOTEL_KB = {
   srinagar: [
     {id: "ngm",  name: "Hotel New Green Meadows",       place: "Srinagar", images: []},
@@ -564,6 +611,18 @@ export default function QuotePreview({ quote }) {
   const [activeDay,       setActiveDay]       = useState(0);
   const [editableCost,    setEditableCost]    = useState(quote?.financial_summary?.total_payable_inr || 38500);
   const [hotelSelections, setHotelSelections] = useState({});
+  const [startPoint,      setStartPoint]      = useState(quote?.meta_summary?.start_point || DEFAULT_POINT);
+  const [endPoint,        setEndPoint]        = useState(quote?.meta_summary?.end_point   || DEFAULT_POINT);
+
+  // Re-write the pickup / drop days whenever the start or end point changes.
+  const applyPoints = (start, end) => {
+    setTimeline((prev) => prev.map((d) =>
+      d.transit_route === PICKUP_ROUTE || d.transit_route === DROP_ROUTE
+        ? { ...d, schedule: buildSchedule(d.transit_route, start, end) }
+        : d));
+  };
+  const changeStart = (v) => { setStartPoint(v); applyPoints(v, endPoint); };
+  const changeEnd   = (v) => { setEndPoint(v);   applyPoints(startPoint, v); };
 
   useEffect(() => {
     if (quote?.financial_summary?.total_payable_inr) setEditableCost(quote.financial_summary.total_payable_inr);
@@ -742,6 +801,41 @@ export default function QuotePreview({ quote }) {
           <div style={{ fontSize: "0.9rem", color: UI_THEME.colors.textDark }}><strong style={{ color: UI_THEME.colors.textLight }}>Vehicle:</strong> {quote?.meta_summary?.vehicle_type || "N/A"}</div>
         </div>
 
+        {/* Tour start / end points */}
+        <div style={{ background: "#fff", border: "1px solid " + UI_THEME.colors.border, borderRadius: "12px", padding: "14px 18px", marginBottom: "20px", boxShadow: UI_THEME.shadows.sm }}>
+          <div style={{ fontWeight: "700", color: "#334155", fontSize: "0.9rem", marginBottom: "10px" }}>🧭 Tour Start &amp; End Point</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "14px" }}>
+            {[["Tour starts from (Day 1 pickup)", startPoint, changeStart, "start"], ["Tour ends at (last-day drop)", endPoint, changeEnd, "end"]].map(([label, val, setter, key]) => {
+              const isCustom = !POINT_PRESETS.includes(val);
+              return (
+                <div key={key}>
+                  <label style={{ display: "block", fontSize: "0.8rem", color: "#64748b", marginBottom: "4px" }}>{label}</label>
+                  <select
+                    className="qp-route-select"
+                    value={isCustom ? "__custom" : val}
+                    onChange={(e) => setter(e.target.value === "__custom" ? "" : e.target.value)}
+                  >
+                    {POINT_PRESETS.map((p) => <option key={p} value={p}>{p}</option>)}
+                    <option value="__custom">Other (type below)…</option>
+                  </select>
+                  {isCustom && (
+                    <input
+                      className="qp-route-select"
+                      style={{ marginTop: "6px" }}
+                      placeholder="e.g. Delhi Airport, Udhampur Railway Station"
+                      value={val}
+                      onChange={(e) => setter(e.target.value)}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <p style={{ margin: "8px 0 0", fontSize: "0.75rem", color: "#94a3b8" }}>
+            Updates the pickup / drop days and the PDF. Applies to the days using the “Airport Pickup…” and “Airport Drop-Departure” routes (their descriptions are regenerated).
+          </p>
+        </div>
+
         {/* 3. Day tabs */}
         <div style={{ display: "flex", gap: "8px", overflowX: "auto", WebkitOverflowScrolling: "touch", paddingBottom: "10px", marginBottom: "15px", scrollbarWidth: "none" }}>
           {timeline.map((dayData, idx) => (
@@ -766,7 +860,7 @@ export default function QuotePreview({ quote }) {
                 value={timeline[activeDay]?.transit_route || ""}
                 onChange={(e) => {
                   const updatedRoute = e.target.value;
-                  const automaticSchedule = ROUTE_SCHEDULE_TEMPLATES[updatedRoute] || [];
+                  const automaticSchedule = buildSchedule(updatedRoute, startPoint, endPoint);
                   const overnightMatch = updatedRoute.match(/Overnight\s+(\w+)/i);
                   const derivedCity = overnightMatch ? overnightMatch[1] : null;
                   if (derivedCity) {
@@ -786,7 +880,7 @@ export default function QuotePreview({ quote }) {
                 }}
               >
                 <option value="">-- Choose Route for Day {activeDay + 1} --</option>
-                {TRANSIT_OPTIONS.map((route, i) => <option key={i} value={route}>{route}</option>)}
+                {TRANSIT_OPTIONS.map((route, i) => <option key={i} value={route}>{routeLabel(route, startPoint, endPoint)}</option>)}
               </select>
             </div>
 
@@ -909,6 +1003,8 @@ export default function QuotePreview({ quote }) {
                     custom_cost: editableCost,
                     timeline,
                     hotelSelections,
+                    start_point: (startPoint || "").trim() || DEFAULT_POINT,
+                    end_point: (endPoint || "").trim() || DEFAULT_POINT,
                   }),
                 });
                 if (printRes.ok) {
