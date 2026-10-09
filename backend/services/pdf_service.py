@@ -184,13 +184,52 @@ def fetch_image_reader(src):
     return reader
 
 # ─── Custom Flowables ────────────────────────────────────────────────────────
+# ─── Website hero photo for the cover banner ─────────────────────────────────
+_HERO_SHADE = None
+
+
+def _hero_shade_reader():
+    """The website's .hero-shade overlay (rgb 7,28,38) as a small transparent PNG."""
+    global _HERO_SHADE
+    if _HERO_SHADE is None:
+        from PIL import Image
+        W, H = 360, 90
+        im = Image.new("RGBA", (W, H))
+        px = im.load()
+        for y in range(H):
+            v = y / (H - 1)                                        # 0 top .. 1 bottom
+            a_top = 0.72 * max(0.0, 1 - v / 0.24)
+            a_bot = 0.92 * max(0.0, 1 - (1 - v) / 0.46)
+            for x in range(W):
+                u = x / (W - 1)
+                a_left = 0.86 + (0.58 - 0.86) * (u / 0.48) if u < 0.48 else 0.58 + (0.12 - 0.58) * ((u - 0.48) / 0.52)
+                a = 1 - (1 - a_top) * (1 - a_left) * (1 - a_bot)
+                px[x, y] = (7, 28, 38, int(255 * min(1.0, a)))
+        buf = io.BytesIO(); im.save(buf, "PNG"); buf.seek(0)
+        _HERO_SHADE = ImageReader(buf)
+    return _HERO_SHADE
+
+
+def _load_hero_photo():
+    """ImageReader for the website's main banner photo (site photo slot 'hero'), or None."""
+    try:
+        from backend.models import SitePhoto
+        row = SitePhoto.query.filter_by(slot="hero").first()
+        if row is not None and row.data:
+            return ImageReader(_compress_image(bytes(row.data)))
+    except Exception as exc:
+        print(f"Warning: could not load hero photo: {exc}")
+    return None
+
+
 class HeroHeader(Flowable):
     """Full-width branded cover banner (compact layout)."""
     def __init__(self, width, client_name, days, start_date, adults, kids,
-                 budget_tier, vehicle_type, total_cost):
+                 budget_tier, vehicle_type, total_cost, bg_reader=None):
         super().__init__()
         self.width  = width
-        self.height = 52 * mm
+        self.bg_reader = bg_reader          # website "hero" photo, or None -> classic navy banner
+        self.height = 62 * mm if bg_reader is not None else 52 * mm
         self.client_name  = client_name
         self.days         = days
         self.start_date   = start_date
@@ -204,39 +243,52 @@ class HeroHeader(Flowable):
         c = self.canv
         w, h = self.width, self.height
 
-        # ── Base navy fill ───────────────────────────────────────────────────
-        c.setFillColor(NAVY)
-        c.rect(0, 0, w, h, fill=1, stroke=0)
+        photo = self.bg_reader is not None
+        if photo:
+            # Same look as the website banner: the hero photo with its dark shade
+            # (darker at top, left and bottom so the white text stays readable).
+            iw, ih = self.bg_reader.getSize()
+            sc = max(w / iw, h / ih)
+            dw, dh = iw * sc, ih * sc
+            c.saveState()
+            clip = c.beginPath(); clip.rect(0, 0, w, h); c.clipPath(clip, stroke=0, fill=0)
+            c.drawImage(self.bg_reader, -(dw - w) / 2, -(dh - h) * 0.45, width=dw, height=dh)
+            c.restoreState()
+            c.drawImage(_hero_shade_reader(), 0, 0, width=w, height=h, mask="auto")
+        else:
+            # ── Base navy fill ───────────────────────────────────────────────────
+            c.setFillColor(NAVY)
+            c.rect(0, 0, w, h, fill=1, stroke=0)
 
-        # ── Decorative mountain silhouette (right side, subtle) ─────────────
-        c.saveState()
-        c.setFillColor(NAVY_MID)
-        p = c.beginPath()
-        # mountain peaks overlapping right half
-        p.moveTo(w * 0.48, 0)
-        p.lineTo(w * 0.60, h * 0.70)
-        p.lineTo(w * 0.68, h * 0.45)
-        p.lineTo(w * 0.76, h * 0.78)
-        p.lineTo(w * 0.83, h * 0.38)
-        p.lineTo(w * 0.90, h * 0.62)
-        p.lineTo(w * 0.95, h * 0.52)
-        p.lineTo(w, h * 0.65)
-        p.lineTo(w, 0)
-        p.close()
-        c.drawPath(p, fill=1, stroke=0)
-        c.restoreState()
+            # ── Decorative mountain silhouette (right side, subtle) ─────────────
+            c.saveState()
+            c.setFillColor(NAVY_MID)
+            p = c.beginPath()
+            # mountain peaks overlapping right half
+            p.moveTo(w * 0.48, 0)
+            p.lineTo(w * 0.60, h * 0.70)
+            p.lineTo(w * 0.68, h * 0.45)
+            p.lineTo(w * 0.76, h * 0.78)
+            p.lineTo(w * 0.83, h * 0.38)
+            p.lineTo(w * 0.90, h * 0.62)
+            p.lineTo(w * 0.95, h * 0.52)
+            p.lineTo(w, h * 0.65)
+            p.lineTo(w, 0)
+            p.close()
+            c.drawPath(p, fill=1, stroke=0)
+            c.restoreState()
 
-        # ── Stronger diagonal right swatch ──────────────────────────────────
-        c.saveState()
-        c.setFillColor(colors.HexColor("#0a1628"))
-        p2 = c.beginPath()
-        p2.moveTo(w * 0.58, 0)
-        p2.lineTo(w, 0)
-        p2.lineTo(w, h)
-        p2.lineTo(w * 0.73, h)
-        p2.close()
-        c.drawPath(p2, fill=1, stroke=0)
-        c.restoreState()
+            # ── Stronger diagonal right swatch ──────────────────────────────────
+            c.saveState()
+            c.setFillColor(colors.HexColor("#0a1628"))
+            p2 = c.beginPath()
+            p2.moveTo(w * 0.58, 0)
+            p2.lineTo(w, 0)
+            p2.lineTo(w, h)
+            p2.lineTo(w * 0.73, h)
+            p2.close()
+            c.drawPath(p2, fill=1, stroke=0)
+            c.restoreState()
 
         # ── Top accent bar (SKY stripe) ──────────────────────────────────────
         c.setFillColor(SKY)
@@ -252,7 +304,7 @@ class HeroHeader(Flowable):
         c.drawString(6*mm, h - 13*mm, "SERENE VIBES KASHMIR")
 
         # Tagline with small decorative bars
-        c.setFillColor(SKY)
+        c.setFillColor(colors.HexColor("#7dd3fc") if photo else SKY)
         c.setFont("Lato-Italic", 8.5)
         tagline = "  A Poem In Motion  "
         c.drawString(6*mm, h - 18.5*mm, tagline)
@@ -266,7 +318,7 @@ class HeroHeader(Flowable):
         c.line(w * 0.38 + 1, h - 20.5*mm, w * 0.50, h - 20.5*mm)
 
         # ── Document label ──────────────────────────────────────────────────
-        c.setFillColor(GRAY_400)
+        c.setFillColor(colors.HexColor("#e2e8f0") if photo else GRAY_400)
         c.setFont("Lato", 7)
         c.drawString(6*mm, h - 24.5*mm, "CUSTOMISED TOUR ITINERARY")
 
@@ -319,7 +371,7 @@ class HeroHeader(Flowable):
         # ── Total cost (bottom-right) with emerald pill ───────────────────────
         cost_str = f"INR {int(self.total_cost):,}" if str(self.total_cost).replace(",","").isdigit() else clean(str(self.total_cost))
         # Cost label
-        c.setFillColor(GRAY_400)
+        c.setFillColor(colors.HexColor("#e2e8f0") if photo else GRAY_400)
         c.setFont("Lato", 7)
         c.drawRightString(w - 6*mm, h - 38*mm, "ESTIMATED TOTAL COST")
         # Cost value in emerald pill
@@ -1968,7 +2020,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     # ── 1. Hero header ────────────────────────────────────────────────────────
     story.append(HeroHeader(
         usable_w, client_name, days, start_date, adults, kids,
-        budget_tier, vehicle_type, custom_cost
+        budget_tier, vehicle_type, custom_cost, bg_reader=_load_hero_photo()
     ))
     story.append(Spacer(1, 6*mm))
 
@@ -2082,6 +2134,10 @@ def generate_pdf(itinerary_data: dict) -> str:
             # Build a 2-col activity table: [time | description]
             act_rows = []
             has_real_label = False
+            day_bg = dest_bgs.get(_day_photo_key(day_info))
+            # on photo days the text is pure black so it stands out against the picture
+            desc_style = (ParagraphStyle("AD_photo", parent=styles["activity_desc"], textColor=colors.black)
+                          if day_bg is not None else styles["activity_desc"])
             for slot in schedule:
                 time_val = slot.get("time_slot") or slot.get("time", "")
                 desc_val = slot.get("description") or slot.get("activity") or ""
@@ -2094,13 +2150,12 @@ def generate_pdf(itinerary_data: dict) -> str:
                     has_real_label = True
                     cell_time = Paragraph(clean(time_txt), styles["activity_time"])
                 desc_text = (f"<b>{clean(act_title)}</b><br/>" if act_title else "") + clean(str(desc_val))
-                cell_desc = Paragraph(desc_text, styles["activity_desc"])
+                cell_desc = Paragraph(desc_text, desc_style)
                 act_rows.append([cell_time, cell_desc])
 
             _lw = 0.17 if has_real_label else 0.055
             act_col_w = [usable_w * _lw, usable_w * (1 - _lw)]
             act_table = Table(act_rows, colWidths=act_col_w, hAlign="LEFT")
-            day_bg = dest_bgs.get(_day_photo_key(day_info))
             if day_bg is not None:
                 # photo shows through: transparent rows, softly tinted bullet column
                 main_bg, dot_bg = colors.Color(1, 1, 1, alpha=0.0), colors.Color(0.88, 0.95, 0.99, alpha=0.55)
