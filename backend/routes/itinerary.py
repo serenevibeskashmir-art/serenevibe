@@ -153,6 +153,9 @@ def generate_custom_itinerary():
     custom_cost = data.get("custom_cost")
     selected_hotels = data.get("hotelSelections") or data.get("selected_hotels", [])
 
+    start_point = (data.get("start_point") or "").strip() or "Srinagar Airport"
+    end_point = (data.get("end_point") or "").strip() or "Srinagar Airport"
+
     calculated_cost = int(custom_cost) if custom_cost else days * (4000 if budget_tier == "Budget" else 6500)
     vehicle = data.get("vehicle_type") or _vehicle_type(adults)
 
@@ -166,6 +169,8 @@ def generate_custom_itinerary():
         "budget_tier": budget_tier,
         "vehicle_type": vehicle,
         "trip_pace": trip_pace,
+        "start_point": start_point,
+        "end_point": end_point,
         "selected_hotels": selected_hotels,
         "custom_cost": custom_cost,
         "meta_summary": {
@@ -178,6 +183,8 @@ def generate_custom_itinerary():
             "adults": adults,
             "start_date": data.get("start_date", "Flexible"),
             "vehicle_type": vehicle,
+            "start_point": start_point,
+            "end_point": end_point,
         },
         "logistics": {"assigned_vehicle": vehicle},
         "financial_summary": {"total_payable_inr": calculated_cost},
