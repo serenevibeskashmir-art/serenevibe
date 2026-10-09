@@ -138,12 +138,18 @@ function routeLabel(route, start, end) {
 }
 
 // Schedule for a route, with the start/end point filled in.
-function buildSchedule(route, start, end) {
+function distText(info) {
+  if (!info || !info.km) return "";
+  const h = info.hours ? `, about ${info.hours} hrs` : "";
+  return ` (approx. ${Math.round(info.km)} km${h})`;
+}
+
+function buildSchedule(route, start, end, startInfo, endInfo) {
   const base = (ROUTE_SCHEDULE_TEMPLATES[route] || []).map((x) => ({ ...x }));
   if (route === PICKUP_ROUTE) {
     const out = base.map((x) => ({ ...x, description: x.description.replace(AIRPORT_RE, start) }));
     if (!isSrinagarPoint(start)) {
-      out.splice(2, 0, { time_slot: "***", description: `From ${start}, travel to Srinagar by private cab with short breaks en route.` });
+      out.splice(2, 0, { time_slot: "***", description: `From ${start}, travel to Srinagar by private cab${distText(startInfo)} with short breaks en route.` });
     }
     return out;
   }
@@ -154,7 +160,7 @@ function buildSchedule(route, start, end) {
       description: x.description
         .replace("departure from Srinagar International Airport", `departure from ${end}`)
         .replace(/Transfer to Srinagar International Airport for departure flight\./,
-                 isSrinagarPoint(end) ? `Transfer to ${end} for ${kind}.` : `Drive from Srinagar to ${end} for your ${kind}.`),
+                 isSrinagarPoint(end) ? `Transfer to ${end} for ${kind}.` : `Drive from Srinagar to ${end}${distText(endInfo)} for your ${kind}.`),
     }));
   }
   return base;
@@ -614,15 +620,46 @@ export default function QuotePreview({ quote }) {
   const [startPoint,      setStartPoint]      = useState(quote?.meta_summary?.start_point || DEFAULT_POINT);
   const [endPoint,        setEndPoint]        = useState(quote?.meta_summary?.end_point   || DEFAULT_POINT);
 
-  // Re-write the pickup / drop days whenever the start or end point changes.
-  const applyPoints = (start, end) => {
+  const [startInfo, setStartInfo] = useState(quote?.meta_summary?.start_info || null);
+  const [endInfo,   setEndInfo]   = useState(quote?.meta_summary?.end_info   || null);
+  const [locBusy,   setLocBusy]   = useState("");     // "" | "start" | "end"
+  const [locMsg,    setLocMsg]    = useState({});     // { start: "...", end: "..." }
+
+  // Re-write the pickup / drop days whenever the start or end point (or its distance) changes.
+  const applyPoints = (start, end, sInfo, eInfo) => {
     setTimeline((prev) => prev.map((d) =>
       d.transit_route === PICKUP_ROUTE || d.transit_route === DROP_ROUTE
-        ? { ...d, schedule: buildSchedule(d.transit_route, start, end) }
+        ? { ...d, schedule: buildSchedule(d.transit_route, start, end, sInfo, eInfo) }
         : d));
   };
-  const changeStart = (v) => { setStartPoint(v); applyPoints(v, endPoint); };
-  const changeEnd   = (v) => { setEndPoint(v);   applyPoints(startPoint, v); };
+  const changeStart = (v) => { setStartPoint(v); setStartInfo(null); setLocMsg((m) => ({ ...m, start: "" })); applyPoints(v, endPoint, null, endInfo); };
+  const changeEnd   = (v) => { setEndPoint(v);   setEndInfo(null);   setLocMsg((m) => ({ ...m, end: "" }));   applyPoints(startPoint, v, startInfo, null); };
+
+  // Ask the AI for coordinates + road distance (admin-only endpoint). The numbers stay editable.
+  const locatePoint = async (which) => {
+    const name = (which === "start" ? startPoint : endPoint) || "";
+    setLocBusy(which); setLocMsg((m) => ({ ...m, [which]: "" }));
+    try {
+      const res = await apiFetch("/api/admin/locate-place", { method: "POST", body: JSON.stringify({ name }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Lookup failed");
+      if (!data.found) { setLocMsg((m) => ({ ...m, [which]: data.message || "Not found." })); }
+      else {
+        const info = { lat: data.lat, lon: data.lon, km: data.road_km, hours: data.drive_hours };
+        if (which === "start") { setStartInfo(info); applyPoints(startPoint, endPoint, info, endInfo); }
+        else                   { setEndInfo(info);   applyPoints(startPoint, endPoint, startInfo, info); }
+        setLocMsg((m) => ({ ...m, [which]: "Estimated by AI. Please check the numbers." }));
+      }
+    } catch (e) { setLocMsg((m) => ({ ...m, [which]: e.message })); }
+    setLocBusy("");
+  };
+  const editInfo = (which, field, value) => {
+    const setter = which === "start" ? setStartInfo : setEndInfo;
+    const cur = (which === "start" ? startInfo : endInfo) || {};
+    const next = { ...cur, [field]: value === "" ? null : Number(value) };
+    setter(next);
+    applyPoints(startPoint, endPoint, which === "start" ? next : startInfo, which === "end" ? next : endInfo);
+  };
 
   // ── AI description writer (admin-only endpoint, same key as the website chatbot) ──
   const [aiHints, setAiHints] = useState("");
@@ -892,6 +929,27 @@ export default function QuotePreview({ quote }) {
                       onChange={(e) => setter(e.target.value)}
                     />
                   )}
+                  {!isSrinagarPoint(val) && val.trim().length >= 3 && (() => {
+                    const info = key === "start" ? startInfo : endInfo;
+                    const small = { width: "78px", padding: "4px 6px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "0.8rem", boxSizing: "border-box" };
+                    return (
+                      <div style={{ marginTop: "6px" }}>
+                        <button type="button" onClick={() => locatePoint(key)} disabled={!!locBusy}
+                          style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #c4b5fd", background: "#f5f3ff", color: "#6d28d9", fontWeight: "bold", cursor: locBusy ? "wait" : "pointer", fontSize: "0.8rem" }}>
+                          {locBusy === key ? "Looking up…" : "📍 Find location & distance (AI)"}
+                        </button>
+                        {info && (
+                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "6px", alignItems: "center", fontSize: "0.72rem", color: "#64748b" }}>
+                            <span>Lat</span><input style={small} type="number" step="0.0001" value={info.lat ?? ""} onChange={(e) => editInfo(key, "lat", e.target.value)} />
+                            <span>Lon</span><input style={small} type="number" step="0.0001" value={info.lon ?? ""} onChange={(e) => editInfo(key, "lon", e.target.value)} />
+                            <span>km by road</span><input style={small} type="number" value={info.km ?? ""} onChange={(e) => editInfo(key, "km", e.target.value)} />
+                            <span>hrs</span><input style={{ ...small, width: "60px" }} type="number" step="0.5" value={info.hours ?? ""} onChange={(e) => editInfo(key, "hours", e.target.value)} />
+                          </div>
+                        )}
+                        {locMsg[key] && <div style={{ fontSize: "0.72rem", color: info ? "#7e6a9b" : "#b91c1c", marginTop: "4px" }}>{locMsg[key]}</div>}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
@@ -925,7 +983,7 @@ export default function QuotePreview({ quote }) {
                 value={timeline[activeDay]?.transit_route || ""}
                 onChange={(e) => {
                   const updatedRoute = e.target.value;
-                  const automaticSchedule = buildSchedule(updatedRoute, startPoint, endPoint);
+                  const automaticSchedule = buildSchedule(updatedRoute, startPoint, endPoint, startInfo, endInfo);
                   const overnightMatch = updatedRoute.match(/Overnight\s+(\w+)/i);
                   const derivedCity = overnightMatch ? overnightMatch[1] : null;
                   if (derivedCity) {
@@ -1101,6 +1159,8 @@ export default function QuotePreview({ quote }) {
                     custom_cost: editableCost,
                     timeline,
                     hotelSelections,
+                    start_info: startInfo,
+                    end_info: endInfo,
                     start_point: (startPoint || "").trim() || DEFAULT_POINT,
                     end_point: (endPoint || "").trim() || DEFAULT_POINT,
                   }),
