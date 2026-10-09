@@ -514,6 +514,77 @@ class HotelPhotoStrip(Flowable):
         c.drawCentredString(x + self.tile_w / 2, y + self.photo_h / 2 - 2, "Photo unavailable")
 
 
+# ─── Destination background photos (soft, faded, behind each day's activities) ─
+# Source: the website's own destination photos (admin > Website Photos, slots
+# dest-srinagar / dest-gulmarg / ...). A day uses the photo of the place it goes to.
+_DEST_KEYS = ("srinagar", "gulmarg", "pahalgam", "sonamarg", "doodhpathri")
+_BG_OPACITY = 0.32      # how much of the photo shows through (rest is white)
+
+
+def _faded_reader(raw: bytes, opacity=_BG_OPACITY):
+    """Photo mixed with white so dark text on top stays easy to read; small JPEG."""
+    from PIL import Image
+    im = Image.open(io.BytesIO(raw))
+    im.load()
+    im = im.convert("RGB")
+    im.thumbnail((1400, 1400), Image.LANCZOS)
+    im = Image.blend(Image.new("RGB", im.size, (255, 255, 255)), im, opacity)
+    out = io.BytesIO()
+    im.save(out, "JPEG", quality=80, optimize=True)
+    out.seek(0)
+    return ImageReader(out)
+
+
+def _load_destination_backgrounds():
+    """{destination key: faded ImageReader} for every website destination photo that exists."""
+    found = {}
+    try:
+        from backend.models import SitePhoto
+        for key in _DEST_KEYS:
+            row = SitePhoto.query.filter_by(slot=f"dest-{key}").first()
+            if row is not None and row.data:
+                try:
+                    found[key] = _faded_reader(bytes(row.data))
+                except Exception as exc:
+                    print(f"Destination photo '{key}' unreadable: {exc}")
+    except Exception as exc:
+        print(f"Warning: could not load destination photos: {exc}")
+    return found
+
+
+def _day_photo_key(day_info):
+    """Which destination photo a day belongs to: where the day's route ends up."""
+    route = str(day_info.get("transit_route") or day_info.get("title") or "").strip()
+    overnight = str(day_info.get("overnight_stay") or "").lower()
+    key = KashmirRouteMap._destination(KashmirRouteMap, route) if route else None
+    if key in (None, "departure"):
+        key = next((k for k in _DEST_KEYS if k in overnight), "srinagar")
+    return key
+
+
+class BgBlock(Flowable):
+    """Draws a (cover-cropped) background picture, then the inner flowable on top."""
+    def __init__(self, width, inner, reader):
+        super().__init__()
+        self.width, self.inner, self.reader = width, inner, reader
+
+    def wrap(self, aw, ah):
+        _, self.height = self.inner.wrap(self.width, 10000)
+        return self.width, self.height
+
+    def draw(self):
+        c, w, h = self.canv, self.width, self.height
+        iw, ih = self.reader.getSize()
+        sc = max(w / iw, h / ih)
+        dw, dh = iw * sc, ih * sc
+        c.saveState()
+        p = c.beginPath(); p.rect(0, 0, w, h); c.clipPath(p, stroke=0, fill=0)
+        c.drawImage(self.reader, -(dw - w) / 2, -(dh - h) * 0.5, width=dw, height=dh)
+        c.restoreState()
+        self.inner.drawOn(c, 0, 0)
+        c.setStrokeColor(GRAY_200); c.setLineWidth(0.5); c.rect(0, 0, w, h, fill=0, stroke=1)
+
+
 class OfficialSeal(Flowable):
     """
     Professional circular seal for Serene Vibes Kashmir.
@@ -1976,6 +2047,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     story.append(Spacer(1, 4*mm))
 
     timeline = itinerary_data.get("timeline", [])
+    dest_bgs = _load_destination_backgrounds()
 
     for idx, day_info in enumerate(timeline, start=1):
         title     = day_info.get("title") or day_info.get("date") or f"Day {idx}"
@@ -2020,11 +2092,18 @@ def generate_pdf(itinerary_data: dict) -> str:
             _lw = 0.17 if has_real_label else 0.055
             act_col_w = [usable_w * _lw, usable_w * (1 - _lw)]
             act_table = Table(act_rows, colWidths=act_col_w, hAlign="LEFT")
+            day_bg = dest_bgs.get(_day_photo_key(day_info))
+            if day_bg is not None:
+                # photo shows through: transparent rows, softly tinted bullet column
+                main_bg, dot_bg = colors.Color(1, 1, 1, alpha=0.0), colors.Color(0.88, 0.95, 0.99, alpha=0.55)
+                line_col, box_w = colors.Color(0.5, 0.55, 0.62, alpha=0.35), 0
+            else:
+                main_bg, dot_bg, line_col, box_w = WHITE, SKY_LIGHT, GRAY_200, 0.5
             act_table.setStyle(TableStyle([
-                ("BACKGROUND",    (0, 0), (-1, -1), WHITE),
-                ("BACKGROUND",    (0, 0), (0, -1), SKY_LIGHT),
-                ("BOX",           (0, 0), (-1, -1), 0.5, GRAY_200),
-                ("LINEBELOW",     (0, 0), (-1, -2), 0.3, GRAY_200),
+                ("BACKGROUND",    (0, 0), (-1, -1), main_bg),
+                ("BACKGROUND",    (0, 0), (0, -1), dot_bg),
+                ("BOX",           (0, 0), (-1, -1), box_w, GRAY_200),
+                ("LINEBELOW",     (0, 0), (-1, -2), 0.3, line_col),
                 ("LINEBEFORE",    (0, 0), (0, -1), 2.5, SKY),
                 ("LEFTPADDING",   (0, 0), (-1, -1), 6),
                 ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
@@ -2032,7 +2111,7 @@ def generate_pdf(itinerary_data: dict) -> str:
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
                 ("VALIGN",        (0, 0), (-1, -1), "TOP"),
             ]))
-            block.append(act_table)
+            block.append(BgBlock(usable_w, act_table, day_bg) if day_bg is not None else act_table)
         else:
             block.append(Paragraph(
                 "<i>Details to be confirmed with your travel coordinator.</i>",
