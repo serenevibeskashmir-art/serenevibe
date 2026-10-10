@@ -10,7 +10,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    HRFlowable, KeepTogether, PageBreak
+    HRFlowable, KeepTogether, PageBreak, CondPageBreak
 )
 from reportlab.platypus.flowables import Flowable
 from reportlab.pdfbase import pdfmetrics
@@ -656,6 +656,108 @@ class BgBlock(Flowable):
             y -= rh
         self.inner.drawOn(c, 0, 0)
         c.setStrokeColor(GRAY_200); c.setLineWidth(0.5); c.rect(0, 0, w, h, fill=0, stroke=1)
+
+
+class StayRouteStrip(Flowable):
+    """'Your stays at a glance': Start -> each stay (nights + hotel) -> End, drawn as a route line."""
+    def __init__(self, width, start_point, end_point, segments):
+        super().__init__()
+        self.width, self.start_point, self.end_point, self.segs = width, start_point, end_point, segments
+        self.height = (40 if len(segments) <= 4 else 48) * mm
+
+    @staticmethod
+    def _wrap(c, text, font, size, max_w, max_lines=2):
+        words, lines, cur = str(text).split(), [], ""
+        for wd in words:
+            t = (cur + " " + wd).strip()
+            if c.stringWidth(t, font, size) <= max_w or not cur:
+                cur = t
+            else:
+                lines.append(cur); cur = wd
+        if cur:
+            lines.append(cur)
+        if len(lines) > max_lines:
+            lines = lines[:max_lines]
+            while c.stringWidth(lines[-1] + "...", font, size) > max_w and len(lines[-1]) > 3:
+                lines[-1] = lines[-1][:-1]
+            lines[-1] += "..."
+        return lines
+
+    def draw(self):
+        c, w, h = self.canv, self.width, self.height
+        c.setFillColor(GRAY_50); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+        c.roundRect(0, 0, w, h, 2 * mm, fill=1, stroke=1)
+        c.setFillColor(SKY); c.roundRect(0, 0, 1.4 * mm, h, 0.7 * mm, fill=1, stroke=0)
+        total = sum(sg["nights"] for sg in self.segs)
+        c.setFillColor(NAVY); c.setFont("Lato-Bold", 8)
+        c.drawString(5 * mm, h - 6.2 * mm, "YOUR STAYS AT A GLANCE")
+        c.setFillColor(GRAY_600); c.setFont("Lato", 7.5)
+        c.drawRightString(w - 5 * mm, h - 6.2 * mm, f"{total} night{'s' if total != 1 else ''} in total")
+
+        nodes = [("START", self.start_point, None, KashmirRouteMap.START_COL)] + \
+                [(None, sg["city"], sg, KashmirRouteMap.PIN_COLORS.get(sg["city"].lower(), KashmirRouteMap.PIN_COLORS["srinagar"])[1])
+                 for sg in self.segs] + \
+                [("END", self.end_point, None, KashmirRouteMap.END_COL)]
+        n = len(nodes)
+        pad = 17 * mm
+        xs = [pad + i * (w - 2 * pad) / max(n - 1, 1) for i in range(n)]
+        cell = min(34 * mm, (w - 2 * pad) / max(n - 1, 1) - 2 * mm)
+        ly = h - 15 * mm
+
+        c.setStrokeColor(SKY_MID); c.setLineWidth(1.3); c.setDash(3.2, 2.4)
+        c.line(xs[0], ly, xs[-1], ly); c.setDash()
+        for i in range(n - 1):                                    # direction arrows mid-way
+            mx = (xs[i] + xs[i + 1]) / 2
+            c.setFillColor(SKY_MID)
+            ap = c.beginPath(); ap.moveTo(mx + 1.6 * mm, ly); ap.lineTo(mx - 1.0 * mm, ly + 1.3 * mm); ap.lineTo(mx - 1.0 * mm, ly - 1.3 * mm); ap.close()
+            c.drawPath(ap, fill=1, stroke=0)
+
+        for x, (tag, name, seg, col) in zip(xs, nodes):
+            c.setFillColor(WHITE); c.circle(x, ly, 3.9 * mm, fill=1, stroke=0)
+            c.setFillColor(col);   c.circle(x, ly, 3.1 * mm, fill=1, stroke=0)
+            c.setFillColor(WHITE); c.circle(x, ly, 1.1 * mm, fill=1, stroke=0)
+            y = ly - 7.4 * mm
+            if seg is None:                                       # start / end
+                c.setFillColor(col); c.setFont("Lato-Bold", 6.6); c.drawCentredString(x, y, tag)
+                y -= 3.6 * mm
+                c.setFillColor(BLACK)
+                for ln in self._wrap(c, name, "Lato-Bold", 7.2, cell, max_lines=3):
+                    c.setFont("Lato-Bold", 7.2); c.drawCentredString(x, y, ln); y -= 3.3 * mm
+            else:
+                c.setFillColor(BLACK); c.setFont("Lato-Bold", 8.4); c.drawCentredString(x, y, seg["city"])
+                y -= 3.0 * mm
+                lab = f"{seg['nights']} night{'s' if seg['nights'] != 1 else ''}"
+                pw = c.stringWidth(lab, "Lato-Bold", 6.6) + 4 * mm
+                c.setFillColor(WHITE); c.setStrokeColor(col); c.setLineWidth(0.6)
+                c.roundRect(x - pw / 2, y - 3.8 * mm, pw, 4.2 * mm, 2.1 * mm, fill=1, stroke=1)
+                c.setFillColor(col); c.setFont("Lato-Bold", 6.6); c.drawCentredString(x, y - 2.4 * mm, lab)
+                y -= 7.4 * mm
+                c.setFillColor(GRAY_600)
+                for hn in seg["hotels"][:2]:
+                    for ln in self._wrap(c, hn, "Lato", 6.5, cell, max_lines=2):
+                        c.setFont("Lato", 6.5); c.drawCentredString(x, y, ln); y -= 3.0 * mm
+
+
+def _stay_segments(timeline, hotel_selections, lookup):
+    """Consecutive nights in the same place become one stop: [{city, nights, hotels}]."""
+    segs = []
+    for idx, day in enumerate(timeline, start=1):
+        night = str(day.get("overnight_stay") or "").strip()
+        sig = f"{day.get('title', '')} {day.get('transit_route', '')}".lower()
+        if not night or night.lower() == "departure" or "departure" in sig or "airport drop" in sig:
+            continue
+        hid = hotel_selections.get(str(idx - 1)) or hotel_selections.get(str(idx)) or hotel_selections.get(idx)
+        if isinstance(hid, dict):
+            hid = hid.get("id")
+        hname = lookup.get(str(hid), {}).get("name") if hid else None
+        city = night.split(":")[0].strip().title()
+        if segs and segs[-1]["city"].lower() == city.lower():
+            segs[-1]["nights"] += 1
+            if hname and hname not in segs[-1]["hotels"]:
+                segs[-1]["hotels"].append(hname)
+        else:
+            segs.append({"city": city, "nights": 1, "hotels": [hname] if hname else []})
+    return segs
 
 
 class OfficialSeal(Flowable):
@@ -2401,8 +2503,15 @@ def generate_pdf(itinerary_data: dict) -> str:
     ]))
     page_block_1.append(hotel_table)
     page_block_1.append(Spacer(1, 5*mm))
+    _segs = _stay_segments(timeline, hotel_selections, HOTEL_LOOKUP)
+    if _segs:
+        page_block_1.append(StayRouteStrip(usable_w, start_point, end_point, _segs))
+        page_block_1.append(Spacer(1, 5*mm))
     # Hotel Assignments sit right after the itinerary; the reference photos
     # follow them (on their own page if they don't fit), then Inclusions/Payment.
+    # Hotel Assignments ALWAYS start on a fresh page (no-op when already at the top of one)
+    # and are kept together so the table is never split.
+    story.append(CondPageBreak(doc.height - 24))
     story.append(KeepTogether(page_block_1))
     if photo_flow is not None:
         if isinstance(photo_flow, list):
