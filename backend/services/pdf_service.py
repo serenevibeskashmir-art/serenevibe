@@ -570,20 +570,32 @@ class HotelPhotoStrip(Flowable):
 # Source: the website's own destination photos (admin > Website Photos, slots
 # dest-srinagar / dest-gulmarg / ...). A day uses the photo of the place it goes to.
 _DEST_KEYS = ("srinagar", "gulmarg", "pahalgam", "sonamarg", "doodhpathri")
-_BG_OPACITY = 0.55      # how much of the photo shows (rest is white); text sits on white bands, so it can be fairly strong
-_VEIL_ALPHA = 0.74      # white band behind each activity: keeps text readable on any photo
+# Two looks (change _BG_STYLE):
+#   "dark"  - photo stays vivid under a navy tint, activity text is WHITE on dark bands
+#   "light" - photo stays bright with a light veil, activity text is BLACK on pale bands
+_BG_STYLE = "dark"
+_BG_LOOK = {
+    #          photo tint colour, tint strength, band colour (rgb), band alpha
+    "dark":  {"tint": (7, 28, 38),    "tint_a": 0.34, "band": (7, 28, 38),    "band_a": 0.50},
+    "light": {"tint": (255, 255, 255), "tint_a": 0.12, "band": (255, 255, 255), "band_a": 0.46},
+}
 
 
-def _faded_reader(raw: bytes, opacity=_BG_OPACITY):
-    """Photo mixed with white so dark text on top stays easy to read; small JPEG."""
+def _bg_look():
+    return _BG_LOOK.get(_BG_STYLE, _BG_LOOK["dark"])
+
+
+def _faded_reader(raw: bytes):
+    """Destination photo prepared for use behind text (tinted per _BG_STYLE); small JPEG."""
     from PIL import Image
+    look = _bg_look()
     im = Image.open(io.BytesIO(raw))
     im.load()
     im = im.convert("RGB")
     im.thumbnail((1400, 1400), Image.LANCZOS)
-    im = Image.blend(Image.new("RGB", im.size, (255, 255, 255)), im, opacity)
+    im = Image.blend(im, Image.new("RGB", im.size, look["tint"]), look["tint_a"])
     out = io.BytesIO()
-    im.save(out, "JPEG", quality=80, optimize=True)
+    im.save(out, "JPEG", quality=82, optimize=True)
     out.seek(0)
     return ImageReader(out)
 
@@ -637,7 +649,8 @@ class BgBlock(Flowable):
         # white "frosted" band behind every activity row (thin gaps let the photo show between them)
         rows = getattr(self.inner, "_rowHeights", None) or []
         y, gap = h, 0.7 * mm
-        c.setFillColor(colors.Color(1, 1, 1, alpha=_VEIL_ALPHA))
+        _lk = _bg_look()
+        c.setFillColor(colors.Color(_lk["band"][0] / 255, _lk["band"][1] / 255, _lk["band"][2] / 255, alpha=_lk["band_a"]))
         for rh in rows:
             c.rect(0, y - rh + gap / 2, w, rh - gap, fill=1, stroke=0)
             y -= rh
@@ -2135,9 +2148,16 @@ def generate_pdf(itinerary_data: dict) -> str:
             act_rows = []
             has_real_label = False
             day_bg = dest_bgs.get(_day_photo_key(day_info))
-            # on photo days the text is pure black so it stands out against the picture
-            desc_style = (ParagraphStyle("AD_photo", parent=styles["activity_desc"], textColor=colors.black)
-                          if day_bg is not None else styles["activity_desc"])
+            # on photo days the text colour is matched to the photo look (white on dark bands, black on pale ones)
+            dark_look = day_bg is not None and _BG_STYLE == "dark"
+            if day_bg is None:
+                desc_style, dot_style, time_style = styles["activity_desc"], styles["activity_dot"], styles["activity_time"]
+            else:
+                txt = colors.white if dark_look else colors.black
+                acc = colors.HexColor("#7dd3fc") if dark_look else SKY
+                desc_style = ParagraphStyle("AD_photo", parent=styles["activity_desc"], textColor=txt)
+                dot_style  = ParagraphStyle("ADT_photo", parent=styles["activity_dot"], textColor=acc)
+                time_style = ParagraphStyle("AT_photo", parent=styles["activity_time"], textColor=acc)
             for slot in schedule:
                 time_val = slot.get("time_slot") or slot.get("time", "")
                 desc_val = slot.get("description") or slot.get("activity") or ""
@@ -2145,10 +2165,10 @@ def generate_pdf(itinerary_data: dict) -> str:
                 time_txt = str(time_val or "").strip()
                 if time_txt in ("", "***", "*", "—", "–", "-"):
                     # placeholder label from the admin form -> neat bullet
-                    cell_time = Paragraph("&#9679;", styles["activity_dot"])
+                    cell_time = Paragraph("&#9679;", dot_style)
                 else:
                     has_real_label = True
-                    cell_time = Paragraph(clean(time_txt), styles["activity_time"])
+                    cell_time = Paragraph(clean(time_txt), time_style)
                 desc_text = (f"<b>{clean(act_title)}</b><br/>" if act_title else "") + clean(str(desc_val))
                 cell_desc = Paragraph(desc_text, desc_style)
                 act_rows.append([cell_time, cell_desc])
@@ -2158,8 +2178,11 @@ def generate_pdf(itinerary_data: dict) -> str:
             act_table = Table(act_rows, colWidths=act_col_w, hAlign="LEFT")
             if day_bg is not None:
                 # photo shows through: transparent rows, softly tinted bullet column
-                main_bg, dot_bg = colors.Color(1, 1, 1, alpha=0.0), colors.Color(0.88, 0.95, 0.99, alpha=0.55)
-                line_col, box_w = colors.Color(0.5, 0.55, 0.62, alpha=0.35), 0
+                main_bg = colors.Color(1, 1, 1, alpha=0.0)
+                if dark_look:
+                    dot_bg, line_col, box_w = colors.Color(0.03, 0.11, 0.15, alpha=0.30), colors.Color(1, 1, 1, alpha=0.30), 0
+                else:
+                    dot_bg, line_col, box_w = colors.Color(0.88, 0.95, 0.99, alpha=0.55), colors.Color(0.5, 0.55, 0.62, alpha=0.35), 0
             else:
                 main_bg, dot_bg, line_col, box_w = WHITE, SKY_LIGHT, GRAY_200, 0.5
             act_table.setStyle(TableStyle([
