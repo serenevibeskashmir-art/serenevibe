@@ -738,6 +738,93 @@ class StayRouteStrip(Flowable):
                         c.setFont("Lato", 6.5); c.drawCentredString(x, y, ln); y -= 3.0 * mm
 
 
+# One highlight per destination: (title, one-liner, tag, icon). Cities not listed are skipped.
+SIGNATURE_EXPERIENCES = {
+    "srinagar":    ("Shikara ride on Dal Lake", "Glide past floating gardens and painted houseboats as the light turns golden.", "1 hour complimentary", "boat"),
+    "gulmarg":     ("Gulmarg Gondola", "Ride one of the world's highest cable cars up to Apharwat's snowy ridge.", "Optional, pay locally", "peak"),
+    "pahalgam":    ("Betaab Valley walk", "Stroll open meadows and pine forest beside the Lidder River.", "Union cab, extra", "tree"),
+    "sonamarg":    ("Thajiwas Glacier", "Meadow of Gold: ponies or a short trek to a glacier under the peaks.", "Pony ride, extra", "peak"),
+    "doodhpathri": ("Valley of Milk", "Rolling green meadows and a cold stream, away from the crowds.", "Union cab, extra", "tree"),
+}
+
+
+class SignatureExperiences(Flowable):
+    """'Signature experiences': one highlight card per distinct destination, colour-matched to the stay strip."""
+    def __init__(self, width, segments):
+        super().__init__()
+        self.width = width
+        seen, self.items = set(), []
+        for sg in segments:
+            key = sg["city"].lower()
+            if key in SIGNATURE_EXPERIENCES and key not in seen:
+                seen.add(key)
+                self.items.append((sg["city"], key) + SIGNATURE_EXPERIENCES[key])
+        self.items = self.items[:4]
+        self.height = 46 * mm if self.items else 0
+
+    @staticmethod
+    def _icon(c, kind, cx, cy):
+        c.setFillColor(WHITE); c.setStrokeColor(WHITE); c.setLineWidth(0.9)
+        if kind == "boat":
+            hull = c.beginPath(); hull.moveTo(cx - 3.0*mm, cy - 0.6*mm); hull.lineTo(cx + 3.0*mm, cy - 0.6*mm)
+            hull.lineTo(cx + 1.8*mm, cy - 2.0*mm); hull.lineTo(cx - 1.8*mm, cy - 2.0*mm); hull.close()
+            c.drawPath(hull, fill=1, stroke=0)
+            sail = c.beginPath(); sail.moveTo(cx, cy + 2.8*mm); sail.lineTo(cx + 2.2*mm, cy); sail.lineTo(cx, cy); sail.close()
+            c.drawPath(sail, fill=1, stroke=0)
+            c.line(cx - 0.1*mm, cy + 2.8*mm, cx - 0.1*mm, cy - 0.6*mm)
+        elif kind == "tree":
+            for dy, hw in ((0.2*mm, 2.2*mm), (1.4*mm, 1.6*mm)):
+                t = c.beginPath(); t.moveTo(cx - hw, cy + dy - 0.8*mm); t.lineTo(cx + hw, cy + dy - 0.8*mm); t.lineTo(cx, cy + dy + 1.6*mm); t.close()
+                c.drawPath(t, fill=1, stroke=0)
+            c.rect(cx - 0.35*mm, cy - 2.4*mm, 0.7*mm, 1.6*mm, fill=1, stroke=0)
+        else:  # peak
+            m = c.beginPath(); m.moveTo(cx - 3.2*mm, cy - 2.0*mm); m.lineTo(cx - 0.6*mm, cy + 2.4*mm); m.lineTo(cx + 0.6*mm, cy + 0.4*mm)
+            m.lineTo(cx + 1.6*mm, cy + 1.4*mm); m.lineTo(cx + 3.4*mm, cy - 2.0*mm); m.close()
+            c.drawPath(m, fill=1, stroke=0)
+
+    def wrap(self, aw, ah):
+        return self.width, self.height
+
+    def draw(self):
+        if not self.items:
+            return
+        c, w, h = self.canv, self.width, self.height
+        # Section header bar (same look as SectionTitle)
+        bar_h = 8 * mm
+        c.setFillColor(NAVY_DEEP); c.roundRect(0, h - bar_h, w, bar_h, 2 * mm, fill=1, stroke=0)
+        c.setFillColor(SKY);       c.roundRect(0, h - bar_h, 3 * mm, bar_h, 1.2 * mm, fill=1, stroke=0)
+        c.setFillColor(WHITE);     c.setFont("Lato-Bold", 9.5)
+        c.drawString(7 * mm, h - bar_h + 2.7 * mm, "SIGNATURE EXPERIENCES")
+
+        n, gap = len(self.items), 3.5 * mm
+        cw = (w - gap * (n - 1)) / n
+        ch = h - bar_h - 4 * mm
+        for i, (city, key, title, desc, tag, icon) in enumerate(self.items):
+            x = i * (cw + gap)
+            col = KashmirRouteMap.PIN_COLORS[key][1]
+            c.setFillColor(GRAY_50); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+            c.roundRect(x, 0, cw, ch, 2 * mm, fill=1, stroke=1)
+            c.setFillColor(col); c.roundRect(x, ch - 1.0 * mm, cw, 1.0 * mm, 0.5 * mm, fill=1, stroke=0)
+            cy = ch - 8.5 * mm
+            c.setFillColor(col); c.circle(x + 7 * mm, cy, 4.2 * mm, fill=1, stroke=0)
+            self._icon(c, icon, x + 7 * mm, cy)
+            c.setFillColor(NAVY); c.setFont("Lato-Bold", 7.6)
+            c.drawString(x + 13 * mm, cy - 1.2 * mm, city.upper())
+            ty = cy - 8 * mm
+            c.setFillColor(BLACK)
+            for ln in StayRouteStrip._wrap(c, title, "Lato-Bold", 8.6, cw - 6 * mm, max_lines=2):
+                c.setFont("Lato-Bold", 8.6); c.drawString(x + 3 * mm, ty, ln); ty -= 3.7 * mm
+            ty -= 0.6 * mm
+            c.setFillColor(GRAY_600)
+            for ln in StayRouteStrip._wrap(c, desc, "Lato", 7.2, cw - 6 * mm, max_lines=3):
+                c.setFont("Lato", 7.2); c.drawString(x + 3 * mm, ty, ln); ty -= 3.2 * mm
+            tw = c.stringWidth(tag, "Lato-Bold", 6.6) + 4 * mm
+            c.setFillColor(WHITE); c.setStrokeColor(col); c.setLineWidth(0.6)
+            c.roundRect(x + 3 * mm, 2.6 * mm, tw, 4.2 * mm, 2.1 * mm, fill=1, stroke=1)
+            c.setFillColor(KashmirRouteMap.PIN_COLORS[key][0]); c.setFont("Lato-Bold", 6.6)
+            c.drawString(x + 5 * mm, 4.0 * mm, tag)
+
+
 def _stay_segments(timeline, hotel_selections, lookup):
     """Consecutive nights in the same place become one stop: [{city, nights, hotels}]."""
     segs = []
@@ -2507,6 +2594,11 @@ def generate_pdf(itinerary_data: dict) -> str:
     if _segs:
         page_block_1.append(StayRouteStrip(usable_w, start_point, end_point, _segs))
         page_block_1.append(Spacer(1, 5*mm))
+        # Only for compact itineraries, so the Hotel Assignments page never overflows.
+        _exp = SignatureExperiences(usable_w, _segs)
+        if _exp.items and len(timeline) <= 6 and len(_segs) <= 4:
+            page_block_1.append(_exp)
+            page_block_1.append(Spacer(1, 4*mm))
     # Hotel Assignments sit right after the itinerary; the reference photos
     # follow them (on their own page if they don't fit), then Inclusions/Payment.
     # Hotel Assignments ALWAYS start on a fresh page (no-op when already at the top of one)
