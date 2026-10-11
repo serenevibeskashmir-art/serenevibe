@@ -3354,23 +3354,40 @@ def generate_pdf(itinerary_data: dict) -> str:
         ]))
         return inner
 
-    # ── Authorised Signatory box — seal centred above the line ──────────
-    seal_sz = 36 * mm
+    # ── Authorised Signatory box — company stamp above a clear signing space ──
+    from reportlab.platypus import Image as RLImage
+    _stamp_w = 46 * mm
+    _stamp_path = next((pp for pp in (
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "auth_stamp.png"),
+        os.path.join(os.getcwd(), "backend", "services", "auth_stamp.png"),
+        os.path.join(os.getcwd(), "auth_stamp.png"),
+    ) if os.path.exists(pp)), None)
+    try:
+        _sw, _sh = ImageReader(_stamp_path).getSize()
+        stamp_flow = RLImage(_stamp_path, width=_stamp_w, height=_stamp_w * _sh / _sw)
+    except Exception:                       # never let a missing image break the PDF
+        stamp_flow = Paragraph("<b>FOR SERENE VIBES KASHMIR</b>",
+                               ParagraphStyle("stmp", fontName="Lato-Bold", fontSize=10,
+                                              textColor=colors.HexColor("#163078"), alignment=TA_CENTER))
+    _stamp_cell = Table([[stamp_flow], [Spacer(1, 15 * mm)]], colWidths=[sig_col_w])   # stamp + signing space
+    _stamp_cell.setStyle(TableStyle([
+        ("ALIGN", (0,0),(-1,-1), "CENTER"),
+        ("TOPPADDING", (0,0),(-1,-1), 0), ("BOTTOMPADDING", (0,0),(-1,-1), 0),
+    ]))
     auth_box = Table(
         [
-            [OfficialSeal(size=seal_sz)],                                     # seal graphic
-            [Paragraph("&nbsp;", sig_line_st)],                               # spacer row / sign here
-            [Paragraph("Authorised Signatory &ndash; Serene Vibes Kashmir",   # label
-                       sig_label_st)],
+            [_stamp_cell],                                                    # "For Serene Vibes Kashmir" + sign here
+            [Paragraph("&nbsp;", sig_line_st)],                               # same row layout as the other two boxes
+            [Paragraph("Authorised Signatory", sig_label_st)],                # label under the line
         ],
         colWidths=[sig_col_w]
     )
     auth_box.setStyle(TableStyle([
         ("ALIGN",        (0,0),(-1,-1), "CENTER"),
-        ("VALIGN",       (0,0),(0,0),   "MIDDLE"),
+        ("VALIGN",       (0,0),(-1,-1), "BOTTOM"),
         ("LINEABOVE",    (0,1),(0,1), 0.6, NAVY),
-        ("TOPPADDING",   (0,0),(-1,-1), 3),
-        ("BOTTOMPADDING",(0,0),(-1,-1), 3),
+        ("TOPPADDING",   (0,0),(-1,-1), 4),
+        ("BOTTOMPADDING",(0,0),(-1,-1), 4),
     ]))
 
     sig_row = Table([[
