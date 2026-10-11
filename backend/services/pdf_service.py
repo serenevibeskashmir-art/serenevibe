@@ -825,6 +825,65 @@ class SignatureExperiences(Flowable):
             c.drawString(x + 5 * mm, 4.0 * mm, tag)
 
 
+class TravelEssentials(Flowable):
+    """'Before you travel': Good to know + Pack smart. Fills leftover page space only; draws nothing if it won't fit."""
+    GOOD = [
+        "Carry a valid photo ID for every guest. Hotels and checkpoints ask for it.",
+        "Only postpaid SIMs work in J&K. Prepaid SIMs from other states do not.",
+        "Keep some cash handy. ATMs and card machines can be limited in Gulmarg and Pahalgam.",
+        "Road closures or weather may change the plan. Sightseeing is then rearranged for safety.",
+    ]
+    PACK = [
+        "Woollens and thermals. Gulmarg and Pahalgam are much cooler than Srinagar.",
+        "Comfortable walking shoes with good grip for meadows and snow.",
+        "Rain jacket or umbrella. Mountain weather can turn quickly.",
+        "Sunglasses, sunscreen and lip balm for the high-altitude sun.",
+        "Power bank, camera and any personal medicines.",
+    ]
+
+    def __init__(self, width):
+        super().__init__()
+        self.width = width
+        self.height = 60 * mm
+        self._skip = False
+
+    def wrap(self, aw, ah):
+        self._skip = ah < self.height
+        return (self.width, 0) if self._skip else (self.width, self.height)
+
+    def _card(self, c, x, y0, cw, ch, title, items, col, col_lite):
+        c.setFillColor(GRAY_50); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+        c.roundRect(x, y0, cw, ch, 2 * mm, fill=1, stroke=1)
+        c.setFillColor(col); c.roundRect(x, y0, 1.4 * mm, ch, 0.7 * mm, fill=1, stroke=0)
+        tw = c.stringWidth(title, "Lato-Bold", 7.6) + 6 * mm
+        c.setFillColor(col_lite); c.roundRect(x + 4 * mm, y0 + ch - 7.6 * mm, tw, 5 * mm, 2.5 * mm, fill=1, stroke=0)
+        c.setFillColor(col); c.setFont("Lato-Bold", 7.6)
+        c.drawString(x + 7 * mm, y0 + ch - 6.1 * mm, title)
+        ty = y0 + ch - 12.8 * mm
+        for it in items:
+            lines = StayRouteStrip._wrap(c, it, "Lato", 7.2, cw - 12 * mm, max_lines=2)
+            c.setFillColor(col); c.circle(x + 5.6 * mm, ty + 0.9 * mm, 0.8 * mm, fill=1, stroke=0)
+            c.setFillColor(GRAY_600)
+            for ln in lines:
+                c.setFont("Lato", 7.2); c.drawString(x + 8 * mm, ty, ln); ty -= 3.2 * mm
+            ty -= 1.5 * mm
+
+    def draw(self):
+        if self._skip:
+            return
+        c, w, h = self.canv, self.width, self.height
+        bar_h = 8 * mm
+        c.setFillColor(NAVY_DEEP); c.roundRect(0, h - bar_h, w, bar_h, 2 * mm, fill=1, stroke=0)
+        c.setFillColor(SKY);       c.roundRect(0, h - bar_h, 3 * mm, bar_h, 1.2 * mm, fill=1, stroke=0)
+        c.setFillColor(WHITE);     c.setFont("Lato-Bold", 9.5)
+        c.drawString(7 * mm, h - bar_h + 2.7 * mm, "BEFORE YOU TRAVEL")
+        gap = 4 * mm
+        cw = (w - gap) / 2
+        ch = h - bar_h - 4 * mm
+        self._card(c, 0, 0, cw, ch, "GOOD TO KNOW", self.GOOD, SKY, SKY_LIGHT)
+        self._card(c, cw + gap, 0, cw, ch, "PACK SMART", self.PACK, TEAL, TEAL_LITE)
+
+
 def _stay_segments(timeline, hotel_selections, lookup):
     """Consecutive nights in the same place become one stop: [{city, nights, hotels}]."""
     segs = []
@@ -2605,6 +2664,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     # and are kept together so the table is never split.
     story.append(CondPageBreak(doc.height - 24))
     story.append(KeepTogether(page_block_1))
+    story.append(TravelEssentials(usable_w))   # only drawn when it fits in the leftover space
     if photo_flow is not None:
         if isinstance(photo_flow, list):
             story.extend(photo_flow)
