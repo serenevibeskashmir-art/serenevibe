@@ -884,6 +884,126 @@ class TravelEssentials(Flowable):
         self._card(c, cw + gap, 0, cw, ch, "PACK SMART", self.PACK, TEAL, TEAL_LITE)
 
 
+# Nearest hospitals per destination: (hospital, phone). Phone is optional: fill in once verified.
+# Please verify names/numbers before relying on them. Cities not listed here are skipped.
+DESTINATION_HOSPITALS = {
+    "srinagar":    ("SKIMS, Soura", ""),
+    "gulmarg":     ("Sub-District Hospital, Tangmarg", ""),
+    "pahalgam":    ("Sub-District Hospital, Pahalgam", ""),
+    "sonamarg":    ("Sub-District Hospital, Kangan (nearest)", ""),
+    "doodhpathri": ("District Hospital, Budgam (nearest)", ""),
+}
+
+KASHMIRI_WORDS = [
+    ("Aadaab",      "ah-DAHB",         "Hello"),
+    ("Shukriya",    "shook-REE-ya",    "Thank you"),
+    ("Khuda hafiz", "khoo-DAH ha-FIZ", "Goodbye"),
+    ("Kahwa",       "KAH-wah",         "Saffron and almond tea"),
+    ("Noon chai",   "noon-CHAI",       "Salty pink tea"),
+    ("Wazwan",      "WAH-zwahn",       "Grand multi-course feast"),
+]
+
+
+class HandyEssentials(Flowable):
+    """'Handy numbers & local words': emergency numbers + hospitals for the trip's destinations + a few Kashmiri words.
+    Fills leftover page space only; draws nothing if it won't fit."""
+    NUMBERS = [
+        ("Police / all emergencies", "112"),
+        ("Ambulance", "108"),
+        ("Fire", "101"),
+        ("Tourist helpline (24x7)", "1363"),
+        ("Serene Vibes support", "+91-9419766510"),
+    ]
+    PITCH = 4.8 * mm
+
+    def __init__(self, width, segments):
+        super().__init__()
+        self.width = width
+        seen, self.hospitals = set(), []
+        for sg in segments:
+            key = sg["city"].lower()
+            if key in DESTINATION_HOSPITALS and key not in seen:
+                seen.add(key)
+                self.hospitals.append((sg["city"],) + DESTINATION_HOSPITALS[key])
+        self.hospitals = self.hospitals[:4]
+        hosp_h = (3 + 4.5) * mm + len(self.hospitals) * 4.2 * mm if self.hospitals else 0
+        self.card_h = 10 * mm + len(self.NUMBERS) * self.PITCH + hosp_h + 4 * mm
+        self.height = 8 * mm + 4 * mm + self.card_h
+        self._skip = False
+
+    def wrap(self, aw, ah):
+        self._skip = ah < self.height
+        return (self.width, 0) if self._skip else (self.width, self.height)
+
+    @staticmethod
+    def _pill(c, x, y, text, col, lite):
+        tw = c.stringWidth(text, "Lato-Bold", 7.6) + 6 * mm
+        c.setFillColor(lite); c.roundRect(x, y, tw, 5 * mm, 2.5 * mm, fill=1, stroke=0)
+        c.setFillColor(col); c.setFont("Lato-Bold", 7.6); c.drawString(x + 3 * mm, y + 1.5 * mm, text)
+
+    def draw(self):
+        if self._skip:
+            return
+        c, w, h, ch = self.canv, self.width, self.height, self.card_h
+        bar_h = 8 * mm
+        c.setFillColor(NAVY_DEEP); c.roundRect(0, h - bar_h, w, bar_h, 2 * mm, fill=1, stroke=0)
+        c.setFillColor(SKY);       c.roundRect(0, h - bar_h, 3 * mm, bar_h, 1.2 * mm, fill=1, stroke=0)
+        c.setFillColor(WHITE);     c.setFont("Lato-Bold", 9.5)
+        c.drawString(7 * mm, h - bar_h + 2.7 * mm, "HANDY NUMBERS & LOCAL WORDS")
+
+        gap = 4 * mm
+        cw = (w - gap) / 2
+        for x, col in ((0, SKY), (cw + gap, TEAL)):
+            c.setFillColor(GRAY_50); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+            c.roundRect(x, 0, cw, ch, 2 * mm, fill=1, stroke=1)
+            c.setFillColor(col); c.roundRect(x, 0, 1.4 * mm, ch, 0.7 * mm, fill=1, stroke=0)
+
+        # ── Left: numbers + hospitals ──
+        x0 = 5 * mm
+        self._pill(c, x0, ch - 7.6 * mm, "USEFUL NUMBERS", SKY, SKY_LIGHT)
+        y = ch - 12.6 * mm
+        for i, (lab, val) in enumerate(self.NUMBERS):
+            c.setFillColor(GRAY_600); c.setFont("Lato", 7.4); c.drawString(x0, y, lab)
+            c.setFillColor(TEAL if i == len(self.NUMBERS) - 1 else BLACK); c.setFont("Lato-Bold", 7.6)
+            c.drawRightString(cw - 4 * mm, y, val)
+            if i < len(self.NUMBERS) - 1:
+                c.setStrokeColor(GRAY_200); c.setLineWidth(0.4); c.line(x0, y - 1.7 * mm, cw - 4 * mm, y - 1.7 * mm)
+            y -= self.PITCH
+        if self.hospitals:
+            y += 1.0 * mm
+            c.setStrokeColor(GRAY_400); c.setLineWidth(0.4); c.setDash(1.5, 1.5)
+            c.line(x0, y, cw - 4 * mm, y); c.setDash()
+            y -= 4.2 * mm
+            c.setFillColor(NAVY); c.setFont("Lato-Bold", 6.8); c.drawString(x0, y, "NEAREST HOSPITALS")
+            y -= 4.2 * mm
+            for city, hosp, phone in self.hospitals:
+                c.setFillColor(BLACK); c.setFont("Lato-Bold", 7.2); c.drawString(x0, y, city + ":")
+                lw = c.stringWidth(city + ":", "Lato-Bold", 7.2) + 1.5 * mm
+                c.setFillColor(GRAY_600); c.setFont("Lato", 7.2); c.drawString(x0 + lw, y, hosp)
+                if phone:
+                    c.setFillColor(BLACK); c.setFont("Lato-Bold", 7.2); c.drawRightString(cw - 4 * mm, y, phone)
+                y -= 4.2 * mm
+
+        # ── Right: Kashmiri words ──
+        rx = cw + gap + 5 * mm
+        self._pill(c, rx, ch - 7.6 * mm, "SAY IT THE KASHMIRI WAY", TEAL, TEAL_LITE)
+        top, bottom = ch - 12.6 * mm, 8 * mm
+        pitch = (top - bottom) / (len(KASHMIRI_WORDS) - 1) if len(KASHMIRI_WORDS) > 1 else 0
+        pitch = min(pitch, 6.5 * mm)
+        y = top
+        for i, (word, pron, meaning) in enumerate(KASHMIRI_WORDS):
+            c.setFillColor(BLACK); c.setFont("Lato-Bold", 7.6); c.drawString(rx, y, word)
+            ww = c.stringWidth(word, "Lato-Bold", 7.6) + 1.8 * mm
+            c.setFillColor(GRAY_400); c.setFont("Lato-Italic", 6.4); c.drawString(rx + ww, y, pron)
+            c.setFillColor(GRAY_600); c.setFont("Lato", 7.4); c.drawRightString(cw + gap + cw - 4 * mm, y, meaning)
+            if i < len(KASHMIRI_WORDS) - 1:
+                c.setStrokeColor(GRAY_200); c.setLineWidth(0.4)
+                c.line(rx, y - 1.9 * mm, cw + gap + cw - 4 * mm, y - 1.9 * mm)
+            y -= pitch
+        c.setFillColor(GRAY_600); c.setFont("Lato-Italic", 7)
+        c.drawString(rx, 3.2 * mm, "A smile and a \"Shukriya\" go a long way.")
+
+
 def _stay_segments(timeline, hotel_selections, lookup):
     """Consecutive nights in the same place become one stop: [{city, nights, hotels}]."""
     segs = []
@@ -2835,6 +2955,8 @@ def generate_pdf(itinerary_data: dict) -> str:
     ))
     # Flush page_block_1 (Hotel Assignments + Inc/Exc + Payment) to story
     story.append(KeepTogether(page_block_1))
+    story.append(Spacer(1, 4*mm))
+    story.append(HandyEssentials(usable_w, _segs))   # only drawn when it fits in the leftover space
 
     # ── 7–9. Cancellation Policy + Travel Notes + Contact Card ────────────────
     # Rule 2: These three sections always live on ONE page together.
