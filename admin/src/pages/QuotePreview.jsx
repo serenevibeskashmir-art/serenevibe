@@ -180,6 +180,7 @@ const HOTEL_KB = {
     {id: "sghb", name: "Srinagar Group of House-Boats", place: "Srinagar", images: []},
     {id: "hicl", name: "Hotel Iceland",                 place: "Srinagar", images: []},
     {id: "hpp",  name: "Hotel Pocket Paradise",         place: "Srinagar", images: []},
+    {id: "hlwi", name: "Hotel Lime Wood Inn",           place: "Srinagar", images: []},
   ],
   pahalgam: [
     {id: "hri",  name: "Hotel Riverside Inn",           place: "Pahalgam", images: []},
