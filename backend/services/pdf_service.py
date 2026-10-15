@@ -1,4 +1,5 @@
 import io
+import re
 import os
 import requests
 from pathlib import Path
@@ -225,8 +226,9 @@ def _load_hero_photo():
 class HeroHeader(Flowable):
     """Full-width branded cover banner (compact layout)."""
     def __init__(self, width, client_name, days, start_date, adults, kids,
-                 budget_tier, vehicle_type, total_cost, bg_reader=None):
+                 budget_tier, vehicle_type, total_cost, bg_reader=None, ref=""):
         super().__init__()
+        self.ref = ref
         self.width  = width
         self.bg_reader = bg_reader          # website "hero" photo, or None -> classic navy banner
         self.height = 62 * mm if bg_reader is not None else 52 * mm
@@ -298,6 +300,12 @@ class HeroHeader(Flowable):
         c.setFillColor(SKY)
         c.rect(0, 0, w, 1.2*mm, fill=1, stroke=0)
 
+        # ── Quote reference (top-right, understated) ─────────────────────────
+        if self.ref:
+            c.setFillColor(colors.HexColor("#cbd5e1"))
+            c.setFont("Lato", 7)
+            c.drawRightString(w - 6*mm, h - 8.5*mm, "QUOTE NO.  " + _raw(self.ref))
+
         # ── Brand name ──────────────────────────────────────────────────────
         c.setFillColor(WHITE)
         c.setFont("Lato-Bold", 16.5)
@@ -325,11 +333,11 @@ class HeroHeader(Flowable):
         # ── Client name ─────────────────────────────────────────────────────
         c.setFillColor(WHITE)
         c.setFont("Lato-Bold", 14)
-        c.drawString(6*mm, h - 32*mm, clean(self.client_name))
+        c.drawString(6*mm, h - 32*mm, _raw(self.client_name))
 
         # ── Stat pills (Days / Pax / Date / Vehicle) ────────────────────────
         pills = [
-            (f"{self.days} Days", SKY),
+            (f"{self.days} Days / {max(int(self.days) - 1, 1)} Nights", SKY),
             (f"{self.adults} Adults" + (f" + {self.kids} Kids" if int(self.kids or 0) else ""), TEAL),
             (clean(str(self.start_date)), GOLD_MID),
             (clean(str(self.vehicle_type)), colors.HexColor("#7c3aed")),
@@ -387,13 +395,14 @@ class HeroHeader(Flowable):
 
 class DayBanner(Flowable):
     """Styled banner for each day heading."""
-    def __init__(self, width, day_num, title, overnight=""):
+    def __init__(self, width, day_num, title, overnight="", hotel=""):
         super().__init__()
         self.width    = width
         self.height   = 11 * mm
         self.day_num  = day_num
         self.title    = title
         self.overnight = overnight
+        self.hotel     = hotel      # hotel name for this night (callable or str); shown in the Stay pill
 
     def draw(self):
         c = self.canv
@@ -427,16 +436,23 @@ class DayBanner(Flowable):
         # Title
         c.setFillColor(WHITE)
         c.setFont("Lato-Bold", 9.5)
-        title = clean(self.title)
-        max_w = w - 18*mm - 34*mm
+        title = _raw(self.title)
+
+        # Overnight badge with moon symbol
+        show_badge = bool(self.overnight and self.overnight.lower() not in ("departure", ""))
+        ov_label = ""
+        if show_badge:
+            hotel = self.hotel() if callable(self.hotel) else self.hotel
+            ov_label = f"Stay: {_raw(hotel or self.overnight)}"
+            while c.stringWidth(ov_label, "Lato-Bold", 7.5) > 62*mm and len(ov_label) > 12:
+                ov_label = ov_label[:-2].rstrip() + "…"
+        badge_w = (c.stringWidth(ov_label, "Lato-Bold", 7.5) + 9.5*mm + 4*mm) if show_badge else 4*mm
+        max_w = w - 18*mm - badge_w - 2*mm
         while c.stringWidth(title, "Lato-Bold", 9.5) > max_w and len(title) > 10:
             title = title[:-2].rstrip() + "…"
         c.drawString(17*mm, h/2 - 3, title)
 
-        # Overnight badge with moon symbol
-        if self.overnight and self.overnight.lower() not in ("departure", ""):
-            moon = "\u25D0"  # half circle as moon approximation
-            ov_label = f"Stay: {clean(self.overnight)}"
+        if show_badge:
             ov_w = c.stringWidth(ov_label, "Lato-Bold", 7.5) + 9.5 * mm
             ox = w - ov_w - 4*mm
             oy = 2*mm
@@ -511,7 +527,10 @@ class HotelPhotoStrip(Flowable):
             if len(readers) == 2:
                 break
         self.readers = readers
-        self.height = self.header_h + 1.5 * mm + self.photo_h + 3 * mm
+        if readers:
+            self.height = self.header_h + 1.5 * mm + self.photo_h + 3 * mm
+        else:                       # no photos yet: slim name card instead of two empty grey tiles
+            self.height = self.header_h + 1 * mm
 
     def draw(self):
         c = self.canv
@@ -524,10 +543,16 @@ class HotelPhotoStrip(Flowable):
         c.setFillColor(NAVY)
         c.roundRect(0, top - self.header_h, 1.4 * mm, self.header_h, 0.7 * mm, fill=1, stroke=0)
         c.setFont("Lato-Bold", 9)
-        c.drawString(4 * mm, top - self.header_h + 2.5 * mm, clean(self.hotel_name))
+        c.drawString(4 * mm, top - self.header_h + 2.5 * mm, _raw(self.hotel_name))
         c.setFillColor(GRAY_600)
         c.setFont("Lato", 7.8)
-        c.drawRightString(w - 3 * mm, top - self.header_h + 2.5 * mm, clean(self.hotel_place))
+        c.drawRightString(w - 3 * mm, top - self.header_h + 2.5 * mm, _raw(self.hotel_place))
+        if not self.readers:
+            c.setFillColor(GRAY_400)
+            c.setFont("Lato-Italic", 7.5)
+            c.drawString(4 * mm + c.stringWidth(_raw(self.hotel_name), "Lato-Bold", 9) + 4 * mm,
+                         top - self.header_h + 2.5 * mm, "Photos shared on request")
+            return
 
         y = top - self.header_h - 1.5 * mm - self.photo_h
         for i in range(2):
@@ -2363,6 +2388,12 @@ def _apply_points(timeline, start, end):
     return tl
 
 
+def _quote_ref(client_name) -> str:
+    """Short quote number, e.g. SVK-251015-SG (date + client initials) - printed on the cover."""
+    initials = "".join(w[0] for w in re.findall(r"[A-Za-z]+", str(client_name or ""))[:3]).upper() or "GU"
+    return f"SVK-{datetime.datetime.now(IST).strftime('%y%m%d')}-{initials}"
+
+
 def generate_pdf(itinerary_data: dict) -> str:
     import os as _os; _out = _os.environ.get("OUTPUT_DIR", "/tmp/output"); Path(_out).mkdir(exist_ok=True)
     client_name = str(itinerary_data.get("client_name", "Client"))
@@ -2401,7 +2432,8 @@ def generate_pdf(itinerary_data: dict) -> str:
     # ── 1. Hero header ────────────────────────────────────────────────────────
     story.append(HeroHeader(
         usable_w, client_name, days, start_date, adults, kids,
-        budget_tier, vehicle_type, custom_cost, bg_reader=_load_hero_photo()
+        budget_tier, vehicle_type, custom_cost, bg_reader=_load_hero_photo(),
+        ref=_quote_ref(client_name)
     ))
     story.append(Spacer(1, 6*mm))
 
@@ -2503,7 +2535,15 @@ def generate_pdf(itinerary_data: dict) -> str:
             banner_title = title.split(":", 1)[0].strip()
 
         block = []
-        block.append(DayBanner(usable_w, idx, banner_title, overnight))
+        _hsel = itinerary_data.get("selected_hotels") or itinerary_data.get("hotelSelections") or {}
+        def _banner_hotel(_i=idx, _sel=_hsel):
+            if not isinstance(_sel, dict):
+                return ""
+            hid = _sel.get(str(_i - 1)) or _sel.get(str(_i)) or _sel.get(_i - 1) or _sel.get(_i)
+            if isinstance(hid, dict):
+                hid = hid.get("id")
+            return HOTEL_LOOKUP.get(str(hid), {}).get("name", "") if hid else ""
+        block.append(DayBanner(usable_w, idx, banner_title, overnight, _banner_hotel))
         block.append(Spacer(1, 2*mm))
 
         # Only show the ROUTE strip when it adds something the banner doesn't say
@@ -3120,7 +3160,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         ],
         [
             Paragraph("Phone / WhatsApp", contact_label_st),
-            Paragraph("+91-9419766510,+91-9858355260", contact_val_st),
+            Paragraph("+91-9419766510,  +91-9858355260", contact_val_st),
             Paragraph("Operating Hours", contact_label_st),
             Paragraph("Mon–Sat, 9:00 AM – 7:00 PM IST", contact_val_st),
         ],
@@ -3158,11 +3198,11 @@ def generate_pdf(itinerary_data: dict) -> str:
 
     # Compact style definitions for T&C
     tc_heading = ParagraphStyle("tch",
-        fontName="Lato-Bold", fontSize=8, textColor=NAVY,
-        spaceBefore=6, spaceAfter=2)
+        fontName="Lato-Bold", fontSize=8.5, textColor=SKY,
+        spaceBefore=8, spaceAfter=2.5)
     tc_body = ParagraphStyle("tcb",
-        fontName="Lato", fontSize=7.5, textColor=GRAY_600,
-        leading=11.5, spaceAfter=1)
+        fontName="Lato", fontSize=7.6, textColor=GRAY_600,
+        leading=12.6, spaceAfter=1)
 
     # T&C data: (heading, body_text)
     tc_sections = [
@@ -3257,6 +3297,7 @@ def generate_pdf(itinerary_data: dict) -> str:
 
     left_items  = make_tc_items(left_sections)
     right_items = make_tc_items(right_sections)
+    inner_col_w = col_w - 9*mm          # keeps text clear of the divider line
 
 
     # Wrap each column in a single-cell Table to control width
@@ -3272,7 +3313,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         return t
 
     two_col = Table(
-        [[wrap_col(left_items, col_w), wrap_col(right_items, col_w)]],
+        [[wrap_col(left_items, inner_col_w), wrap_col(right_items, inner_col_w)]],
         colWidths=[col_w, col_w],
         hAlign="LEFT"
     )
@@ -3283,8 +3324,8 @@ def generate_pdf(itinerary_data: dict) -> str:
         ("TOPPADDING",    (0,0),(-1,-1), 0),
         ("BOTTOMPADDING", (0,0),(-1,-1), 0),
         ("LINEAFTER",     (0,0),(0,-1), 0.4, GRAY_200),
-        ("RIGHTPADDING",  (0,0),(0,-1), 6),
-        ("LEFTPADDING",   (1,0),(1,-1), 6),
+        ("RIGHTPADDING",  (0,0),(0,-1), 9*mm),
+        ("LEFTPADDING",   (1,0),(1,-1), 5*mm),
     ]))
     story.append(two_col)
     story.append(Spacer(1, 6*mm))
@@ -3414,7 +3455,33 @@ def generate_pdf(itinerary_data: dict) -> str:
         "due to hotel availability and seasonal pricing. Please confirm your booking to lock in the quoted price.",
         validity_st
     ))
-    story.append(Spacer(1, 4*mm))
+    story.append(Spacer(1, 7*mm))
+
+    # What happens next (uses only terms already stated in this document)
+    story.append(Paragraph("<b>WHAT HAPPENS NEXT</b>",
+                 ParagraphStyle("nxh", fontName="Lato-Bold", fontSize=8.5, textColor=NAVY, spaceAfter=4)))
+    step_h = ParagraphStyle("nsh", fontName="Lato-Bold", fontSize=8.5, textColor=NAVY, leading=11)
+    step_b = ParagraphStyle("nsb", fontName="Lato", fontSize=7.8, textColor=GRAY_600, leading=11.5)
+    step_n = ParagraphStyle("nsn", fontName="Lato-Bold", fontSize=15, textColor=SKY, leading=16)
+    steps = [
+        ("1", "Review &amp; sign", "Check the itinerary, hotels and terms, then sign and date this page."),
+        ("2", "Pay the first instalment", "Confirm the booking with the 1st instalment (25%) by NEFT / UPI / Cheque."),
+        ("3", "Receive your vouchers", "We share confirmed hotel and transfer details ahead of your travel date."),
+    ]
+    sw = usable_w / 3
+    step_cells = [[Table([[Paragraph(n, step_n)], [Paragraph(h, step_h)], [Paragraph(b, step_b)]],
+                         colWidths=[sw - 10]) for n, h, b in steps]]
+    step_tbl = Table(step_cells, colWidths=[sw, sw, sw], hAlign="LEFT")
+    step_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0,0),(-1,-1), GRAY_50),
+        ("BOX",        (0,0),(0,0), 0.5, GRAY_200), ("BOX", (1,0),(1,0), 0.5, GRAY_200), ("BOX", (2,0),(2,0), 0.5, GRAY_200),
+        ("LINEABOVE",  (0,0),(-1,0), 2, SKY),
+        ("VALIGN",     (0,0),(-1,-1), "TOP"),
+        ("LEFTPADDING",(0,0),(-1,-1), 6), ("RIGHTPADDING",(0,0),(-1,-1), 6),
+        ("TOPPADDING", (0,0),(-1,-1), 6), ("BOTTOMPADDING",(0,0),(-1,-1), 8),
+    ]))
+    story.append(step_tbl)
+    story.append(Spacer(1, 6*mm))
 
     # Timestamp
     ts = ts_gen.strftime("%d %b %Y, %I:%M %p") + " IST"
