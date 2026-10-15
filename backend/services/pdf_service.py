@@ -395,13 +395,14 @@ class HeroHeader(Flowable):
 
 class DayBanner(Flowable):
     """Styled banner for each day heading."""
-    def __init__(self, width, day_num, title, overnight="", hotel=""):
+    def __init__(self, width, day_num, title, overnight="", hotel="", date_label=""):
         super().__init__()
         self.width    = width
         self.height   = 11 * mm
         self.day_num  = day_num
         self.title    = title
         self.overnight = overnight
+        self.date_label = date_label
         self.hotel     = hotel      # hotel name for this night (callable or str); shown in the Stay pill
 
     def draw(self):
@@ -444,13 +445,20 @@ class DayBanner(Flowable):
         if show_badge:
             hotel = self.hotel() if callable(self.hotel) else self.hotel
             ov_label = f"Stay: {_raw(hotel or self.overnight)}"
-            while c.stringWidth(ov_label, "Lato-Bold", 7.5) > 62*mm and len(ov_label) > 12:
+            while c.stringWidth(ov_label, "Lato-Bold", 7.5) > 78*mm and len(ov_label) > 12:
                 ov_label = ov_label[:-2].rstrip() + "…"
         badge_w = (c.stringWidth(ov_label, "Lato-Bold", 7.5) + 9.5*mm + 4*mm) if show_badge else 4*mm
         max_w = w - 18*mm - badge_w - 2*mm
         while c.stringWidth(title, "Lato-Bold", 9.5) > max_w and len(title) > 10:
             title = title[:-2].rstrip() + "…"
-        c.drawString(17*mm, h/2 - 3, title)
+        if self.date_label:                                  # two lines: title + travel date
+            c.drawString(17*mm, h - 4.7*mm, title)
+            c.setFillColor(colors.HexColor("#93c5fd"))
+            c.setFont("Lato", 6.8)
+            c.drawString(17*mm, 2.2*mm, self.date_label.upper())
+            c.setFillColor(WHITE)
+        else:
+            c.drawString(17*mm, h/2 - 3, title)
 
         if show_badge:
             ov_w = c.stringWidth(ov_label, "Lato-Bold", 7.5) + 9.5 * mm
@@ -2307,6 +2315,12 @@ def _page_frame(canvas, doc):
     if doc.page > 1:
         _draw_watermark(canvas, w, h)
     _draw_page_border(canvas, w, h)
+    run = getattr(doc, "_svk_running", None)
+    if run and doc.page > 1:                       # quiet running header on inner pages
+        canvas.setFillColor(GRAY_400)
+        canvas.setFont("Lato", 6.8)
+        canvas.drawString(MARGIN + 5 * mm, h - 14.6 * mm, run[0])
+        canvas.drawRightString(w - MARGIN - 5 * mm, h - 14.6 * mm, run[1])
     canvas.setFillColor(WHITE)
     canvas.setFont("Lato-Bold", 7.4)
     canvas.drawString(6 * mm, 3.7 * mm, "SERENE VIBES KASHMIR")
@@ -2386,6 +2400,18 @@ def _apply_points(timeline, start, end):
                 v = re.sub(r"^Airport Drop-Departure", f"{end} Drop-Departure", v)
             day[k] = v
     return tl
+
+
+def _day_date(start_date, day_no) -> str:
+    """'Tue, 10 Nov 2026' for day N of the trip, or '' when the start date is flexible / unreadable."""
+    raw = str(start_date or "").strip()
+    for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%d %b %Y", "%d %B %Y", "%b %d, %Y", "%B %d, %Y"):
+        try:
+            d = datetime.datetime.strptime(raw, fmt) + datetime.timedelta(days=int(day_no) - 1)
+            return d.strftime("%a, %d %b %Y")
+        except ValueError:
+            continue
+    return ""
 
 
 def _quote_ref(client_name) -> str:
@@ -2542,8 +2568,11 @@ def generate_pdf(itinerary_data: dict) -> str:
             hid = _sel.get(str(_i - 1)) or _sel.get(str(_i)) or _sel.get(_i - 1) or _sel.get(_i)
             if isinstance(hid, dict):
                 hid = hid.get("id")
-            return HOTEL_LOOKUP.get(str(hid), {}).get("name", "") if hid else ""
-        block.append(DayBanner(usable_w, idx, banner_title, overnight, _banner_hotel))
+            info = HOTEL_LOOKUP.get(str(hid), {}) if hid else {}
+            if not info.get("name"):
+                return ""
+            return f"{info['name']}, {info['place']}" if info.get("place") else info["name"]
+        block.append(DayBanner(usable_w, idx, banner_title, overnight, _banner_hotel, _day_date(start_date, idx)))
         block.append(Spacer(1, 2*mm))
 
         # Only show the ROUTE strip when it adds something the banner doesn't say
@@ -3493,6 +3522,8 @@ def generate_pdf(itinerary_data: dict) -> str:
     ))
 
     # ── Build PDF ─────────────────────────────────────────────────────────────
+    doc._svk_running = (_raw(f"Kashmir Tour Itinerary  |  Prepared for {client_name}"),
+                        "Quote No. " + _quote_ref(client_name))
     doc.build(story, onFirstPage=_page_frame, onLaterPages=_page_frame,
               canvasmaker=NumberedCanvas)
     return f"output/{filename}"
