@@ -223,15 +223,148 @@ def _load_hero_photo():
     return None
 
 
+WHATSAPP_NUMBER = "919419766510"
+INSTAGRAM_URL   = "https://instagram.com/serenevibeskashmir"
+INSTAGRAM_HANDLE = "@serenevibeskashmir"
+# Your Facebook page link, e.g. "https://facebook.com/yourpage". Leave empty to hide the Facebook button.
+FACEBOOK_URL = os.environ.get("FACEBOOK_URL", "https://www.facebook.com/Serenevibeskashmir")
+
+
+def _whatsapp_url(client_name="", ref=""):
+    from urllib.parse import quote
+    who = f"I'm {_raw(client_name)}. " if client_name else ""
+    about = f"I have a question about my quote {ref}." if ref else "I have a question about my itinerary."
+    return f"https://wa.me/{WHATSAPP_NUMBER}?text=" + quote(f"Hello Serene Vibes Kashmir! {who}{about}")
+
+
+def _draw_whatsapp_button(c, x, y, w, h, url, label="WhatsApp"):
+    """Green pill with a vector chat-bubble icon; the whole pill is a clickable link."""
+    green = colors.HexColor("#25D366")
+    c.setFillColor(colors.Color(0, 0, 0, alpha=0.18))
+    c.roundRect(x + 0.4, y - 0.5, w, h, h / 2, fill=1, stroke=0)
+    c.setFillColor(green)
+    c.roundRect(x, y, w, h, h / 2, fill=1, stroke=0)
+    # icon: white ring + tail, green handset arc inside
+    r = h * 0.30
+    cx, cy = x + h * 0.52, y + h / 2
+    c.setStrokeColor(WHITE); c.setLineWidth(1.2)
+    c.circle(cx, cy, r, fill=0, stroke=1)
+    t = c.beginPath()
+    t.moveTo(cx - r * 0.95, cy - r * 0.55); t.lineTo(cx - r * 1.35, cy - r * 1.25); t.lineTo(cx - r * 0.35, cy - r * 0.9); t.close()
+    c.setFillColor(WHITE); c.drawPath(t, fill=1, stroke=0)
+    c.setLineWidth(1.3)
+    c.arc(cx - r * 0.45, cy - r * 0.45, cx + r * 0.45, cy + r * 0.45, 200, 120)
+    c.setFillColor(WHITE)
+    c.setFont("Lato-Bold", 8)
+    c.drawString(x + h * 1.05, y + h / 2 - 2.7, label)
+    c.linkURL(url, (x, y, x + w, y + h), relative=0)
+
+
+def _draw_call_button(c, x, y, w, h, url="tel:+" + WHATSAPP_NUMBER, label="Call Us"):
+    """Blue pill with a vector phone-handset icon; tapping it starts a call on a phone."""
+    import math
+    c.setFillColor(colors.Color(0, 0, 0, alpha=0.18))
+    c.roundRect(x + 0.4, y - 0.5, w, h, h / 2, fill=1, stroke=0)
+    c.setFillColor(colors.HexColor("#0284c7"))
+    c.roundRect(x, y, w, h, h / 2, fill=1, stroke=0)
+    cx, cy, r = x + h * 0.62, y + h * 0.58, h * 0.30
+    c.saveState()
+    c.setStrokeColor(WHITE); c.setFillColor(WHITE)
+    c.setLineWidth(1.9); c.setLineCap(1)
+    c.arc(cx - r, cy - r, cx + r, cy + r, 160, 125)       # handset body (curved bar, opening to the upper right)
+    for a in (160, 285):                                  # earpiece / mouthpiece
+        ex, ey = cx + r * math.cos(math.radians(a)), cy + r * math.sin(math.radians(a))
+        c.circle(ex, ey, h * 0.075, fill=1, stroke=0)
+    c.restoreState()
+    c.setFillColor(WHITE)
+    c.setFont("Lato-Bold", 8)
+    c.drawString(x + h * 1.05, y + h / 2 - 2.7, label)
+    c.linkURL(url, (x, y, x + w, y + h), relative=0)
+
+
+def _draw_facebook_button(c, x, y, w, h, url, label="Facebook"):
+    """Facebook-blue pill with a vector 'f' badge; the whole pill is a clickable link."""
+    c.setFillColor(colors.Color(0, 0, 0, alpha=0.18))
+    c.roundRect(x + 0.4, y - 0.5, w, h, h / 2, fill=1, stroke=0)
+    c.setFillColor(colors.HexColor("#1877F2"))
+    c.roundRect(x, y, w, h, h / 2, fill=1, stroke=0)
+    r = h * 0.33
+    cx, cy = x + h * 0.55, y + h / 2
+    c.setFillColor(WHITE)
+    c.circle(cx, cy, r, fill=1, stroke=0)
+    c.setFillColor(colors.HexColor("#1877F2"))
+    c.setFont("Lato-Bold", h * 0.62 / 0.75 * 0.72)
+    c.drawCentredString(cx + r * 0.12, cy - r * 0.42, "f")
+    c.setFillColor(WHITE)
+    c.setFont("Lato-Bold", 8)
+    c.drawString(x + h * 1.05, y + h / 2 - 2.7, label)
+    c.linkURL(url, (x, y, x + w, y + h), relative=0)
+
+
+def _draw_instagram_button(c, x, y, w, h, url=INSTAGRAM_URL, label=INSTAGRAM_HANDLE):
+    """Instagram-coloured pill with a vector camera icon; the whole pill is a clickable link."""
+    c.setFillColor(colors.Color(0, 0, 0, alpha=0.18))
+    c.roundRect(x + 0.4, y - 0.5, w, h, h / 2, fill=1, stroke=0)
+    c.setFillColor(colors.HexColor("#E1306C"))           # solid base, then a smooth purple -> orange gradient on top
+    c.roundRect(x, y, w, h, h / 2, fill=1, stroke=0)
+    c.saveState()
+    clip = c.beginPath(); clip.roundRect(x, y, w, h, h / 2); c.clipPath(clip, stroke=0, fill=0)
+    c.linearGradient(x, y, x + w, y,
+                     (colors.HexColor("#833AB4"), colors.HexColor("#E1306C"), colors.HexColor("#F77737")),
+                     (0.0, 0.5, 1.0), extend=False)
+    c.restoreState()
+    s_ = h * 0.56
+    ix, iy = x + h * 0.26, y + (h - s_) / 2
+    c.setStrokeColor(WHITE); c.setLineWidth(1.2)
+    c.roundRect(ix, iy, s_, s_, s_ * 0.3, fill=0, stroke=1)
+    c.circle(ix + s_ / 2, iy + s_ / 2, s_ * 0.22, fill=0, stroke=1)
+    c.setFillColor(WHITE)
+    c.circle(ix + s_ * 0.80, iy + s_ * 0.80, s_ * 0.06, fill=1, stroke=0)
+    c.setFont("Lato-Bold", 8)
+    c.drawString(x + h * 1.05, y + h / 2 - 2.7, label)
+    c.linkURL(url, (x, y, x + w, y + h), relative=0)
+
+
+class SocialButtons(Flowable):
+    """Row: 'Questions? Talk to us' + clickable WhatsApp and Instagram buttons."""
+    def __init__(self, width, client_name="", ref=""):
+        super().__init__()
+        self.width, self.height = width, 11 * mm
+        self.client_name, self.ref = client_name, ref
+
+    def draw(self):
+        c, w, h = self.canv, self.width, self.height
+        bh = 8 * mm
+        c.setFillColor(NAVY)
+        c.setFont("Lato-Bold", 8.5)
+        c.drawString(0, h / 2 + 0.5, "QUESTIONS? TALK TO US")
+        c.setFillColor(GRAY_600)
+        c.setFont("Lato", 7.2)
+        c.drawString(0, h / 2 - 8, "Call or message us directly.")
+        gap = 3 * mm
+        btns = [
+            (24 * mm, lambda x, y, bw: _draw_call_button(c, x, y, bw, bh)),
+            (31 * mm, lambda x, y, bw: _draw_whatsapp_button(c, x, y, bw, bh, _whatsapp_url(self.client_name, self.ref), label="WhatsApp")),
+            (31 * mm, lambda x, y, bw: _draw_instagram_button(c, x, y, bw, bh, label="Instagram")),
+        ]
+        if FACEBOOK_URL:
+            btns.append((31 * mm, lambda x, y, bw: _draw_facebook_button(c, x, y, bw, bh, FACEBOOK_URL)))
+        x = w - sum(b[0] for b in btns) - gap * (len(btns) - 1)
+        for bw, draw in btns:
+            draw(x, (h - bh) / 2, bw)
+            x += bw + gap
+
+
 class HeroHeader(Flowable):
     """Full-width branded cover banner (compact layout)."""
     def __init__(self, width, client_name, days, start_date, adults, kids,
-                 budget_tier, vehicle_type, total_cost, bg_reader=None, ref=""):
+                 budget_tier, vehicle_type, total_cost, bg_reader=None, ref="", route=""):
         super().__init__()
         self.ref = ref
+        self.route = route
         self.width  = width
         self.bg_reader = bg_reader          # website "hero" photo, or None -> classic navy banner
-        self.height = 62 * mm if bg_reader is not None else 52 * mm
+        self.height = 78 * mm if bg_reader is not None else 68 * mm
         self.client_name  = client_name
         self.days         = days
         self.start_date   = start_date
@@ -299,6 +432,29 @@ class HeroHeader(Flowable):
         # ── Bottom accent bar ────────────────────────────────────────────────
         c.setFillColor(SKY)
         c.rect(0, 0, w, 1.2*mm, fill=1, stroke=0)
+
+        # ── Route strip along the bottom of the cover ────────────────────────
+        if self.route:
+            c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.30))
+            c.setLineWidth(0.4)
+            c.line(6*mm, 14.5*mm, w - 6*mm, 14.5*mm)
+            c.setFillColor(colors.HexColor("#93c5fd"))
+            c.setFont("Lato-Bold", 6.8)
+            c.drawString(6*mm, 8.2*mm, "YOUR JOURNEY")
+            c.setFillColor(WHITE)
+            c.setFont("Lato-Bold", 10)
+            route = _raw(self.route)
+            max_rw = w - 12*mm - 24*mm
+            while c.stringWidth(route, "Lato-Bold", 10) > max_rw and len(route) > 8:
+                route = route[:-2].rstrip(" \u2192") + "\u2026"
+            c.drawString(6*mm + 24*mm, 8*mm, route)
+
+        # ── Clickable WhatsApp + Instagram buttons (bottom-right of the cover) ─
+        if self.route:
+            bh = 7.2*mm
+            _draw_instagram_button(c, w - 6*mm - 46*mm, 18.2*mm, 46*mm, bh)
+            _draw_whatsapp_button(c, w - 6*mm - 46*mm - 3*mm - 28*mm, 18.2*mm, 28*mm, bh,
+                                  _whatsapp_url(self.client_name, self.ref))
 
         # ── Quote reference (top-right, understated) ─────────────────────────
         if self.ref:
@@ -1277,6 +1433,10 @@ class SectionTitle(Flowable):
         c.setFont("Lato-Bold", 11)
         label = (self.icon + "  " if self.icon else "") + self.title
         c.drawString(10*mm, self.height - 5*mm, label)
+        # PDF sidebar bookmark for this section
+        key = "sec_" + re.sub(r"[^a-z0-9]+", "_", self.title.lower())
+        c.bookmarkPage(key)
+        c.addOutlineEntry(self.title.title().replace("&", "&"), key, level=0, closed=False)
 
 
 # ─── Kashmir Route Map (Layout 3: map top + legend table below) ──────────────
@@ -2325,7 +2485,18 @@ def _page_frame(canvas, doc):
     canvas.setFont("Lato-Bold", 7.4)
     canvas.drawString(6 * mm, 3.7 * mm, "SERENE VIBES KASHMIR")
     canvas.setFont("Lato", 7)
-    canvas.drawString(53 * mm, 3.7 * mm, "serenevibeskashmir@gmail.com   |   +91-9419766510   |   www.serenevibeskashmir.com")
+    _x = 53 * mm
+    for _i, (_txt, _url) in enumerate((("serenevibeskashmir@gmail.com", "mailto:serenevibeskashmir@gmail.com"),
+                                      ("+91-9419766510", "tel:+919419766510"),
+                                      ("www.serenevibeskashmir.com", "https://www.serenevibeskashmir.com"))):
+        canvas.drawString(_x, 3.7 * mm, _txt)
+        _tw = canvas.stringWidth(_txt, "Lato", 7)
+        canvas.linkURL(_url, (_x, 2.6 * mm, _x + _tw, 5.6 * mm), relative=0)
+        _x += _tw
+        if _i < 2:
+            _sep = "   |   "
+            canvas.drawString(_x, 3.7 * mm, _sep)
+            _x += canvas.stringWidth(_sep, "Lato", 7)
     canvas.restoreState()
 
 
@@ -2402,6 +2573,16 @@ def _apply_points(timeline, start, end):
     return tl
 
 
+def _start_dt(start_date):
+    raw = str(start_date or "").strip()
+    for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%d %b %Y", "%d %B %Y", "%b %d, %Y", "%B %d, %Y"):
+        try:
+            return datetime.datetime.strptime(raw, fmt)
+        except ValueError:
+            continue
+    return None
+
+
 def _day_date(start_date, day_no) -> str:
     """'Tue, 10 Nov 2026' for day N of the trip, or '' when the start date is flexible / unreadable."""
     raw = str(start_date or "").strip()
@@ -2412,6 +2593,16 @@ def _day_date(start_date, day_no) -> str:
         except ValueError:
             continue
     return ""
+
+
+def _route_text(timeline) -> str:
+    """'Srinagar  >  Pahalgam  >  Srinagar' from the nights stayed (consecutive duplicates merged)."""
+    out = []
+    for d in timeline or []:
+        place = str(d.get("overnight_stay") or "").strip()
+        if place and place.lower() not in ("departure", "-") and (not out or out[-1] != place):
+            out.append(place)
+    return "  \u2192  ".join(out[:5])
 
 
 def _quote_ref(client_name) -> str:
@@ -2459,7 +2650,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     story.append(HeroHeader(
         usable_w, client_name, days, start_date, adults, kids,
         budget_tier, vehicle_type, custom_cost, bg_reader=_load_hero_photo(),
-        ref=_quote_ref(client_name)
+        ref=_quote_ref(client_name), route=_route_text(itinerary_data.get("timeline", []))
     ))
     story.append(Spacer(1, 6*mm))
 
@@ -2502,7 +2693,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         ],
     ]
 
-    summary_col_w = [usable_w * 0.18, usable_w * 0.32, usable_w * 0.18, usable_w * 0.32]
+    summary_col_w = [usable_w * 0.19, usable_w * 0.31, usable_w * 0.21, usable_w * 0.29]
     summary_table = Table(summary_rows, colWidths=summary_col_w, hAlign="LEFT")
     summary_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), GRAY_50),
@@ -2965,20 +3156,24 @@ def generate_pdf(itinerary_data: dict) -> str:
         Paragraph("<b>Status</b>",       pay_header_style),
     ]]
 
+    _sd = _start_dt(start_date)
+    _d1 = (datetime.datetime.now(IST) + datetime.timedelta(days=7)).strftime("%d %b %Y")
+    _d2 = (_sd - datetime.timedelta(days=30)).strftime("%d %b %Y") if _sd else ""
+    _d3 = _sd.strftime("%d %b %Y") if _sd else ""
     pay_data = [
         ("1st Instalment (25%)",
          f"INR {inst1_amt:,}" if total_amt else "As Quoted",
-         "On Confirmation",
+         f"On Confirmation<br/><font size='7' color='#64748b'>hold quote by {_d1}</font>",
          "NEFT / UPI / Cheque",
          "Pending"),
         ("2nd Instalment (25%)",
          f"INR {inst2_amt:,}" if total_amt else "As Quoted",
-         "A month before travel date",
+         "A month before travel date" + (f"<br/><font size='7' color='#64748b'>by {_d2}</font>" if _d2 else ""),
          "NEFT / UPI / Cheque",
          "Pending"),
         ("3rd Instalment (50%)",
          f"INR {inst3_amt:,}" if total_amt else "As Quoted",
-         "On Arrival",
+         "On Arrival" + (f"<br/><font size='7' color='#64748b'>{_d3}</font>" if _d3 else ""),
          "NEFT / UPI / Cheque",
          "Pending"),
     ]
@@ -2988,7 +3183,7 @@ def generate_pdf(itinerary_data: dict) -> str:
             Paragraph(clean(label), ParagraphStyle("pl", fontName="Lato",
                       fontSize=8.5, textColor=BLACK)),
             Paragraph(f"<b>{clean(amt)}</b>", pay_amt_style),
-            Paragraph(clean(due),  pay_body_style),
+            Paragraph(due,  pay_body_style),
             Paragraph(clean(mode), pay_body_style),
             Paragraph(f"<font color='#b45309'>{clean(status)}</font>",
                       ParagraphStyle("ps", fontName="Lato-Bold",
@@ -3183,13 +3378,13 @@ def generate_pdf(itinerary_data: dict) -> str:
         ],
         [
             Paragraph("Email", contact_label_st),
-            Paragraph("serenevibeskashmir@gmail.com", contact_link_st),
+            Paragraph('<link href="mailto:serenevibeskashmir@gmail.com">serenevibeskashmir@gmail.com</link>', contact_link_st),
             Paragraph("Website", contact_label_st),
-            Paragraph("www.serenevibeskashmir.com", contact_link_st),
+            Paragraph('<link href="https://www.serenevibeskashmir.com">www.serenevibeskashmir.com</link>', contact_link_st),
         ],
         [
             Paragraph("Phone / WhatsApp", contact_label_st),
-            Paragraph("+91-9419766510,  +91-9858355260", contact_val_st),
+            Paragraph('<link href="tel:+919419766510">+91-9419766510</link>,  <link href="tel:+919858355260">+91-9858355260</link>', contact_val_st),
             Paragraph("Operating Hours", contact_label_st),
             Paragraph("Mon–Sat, 9:00 AM – 7:00 PM IST", contact_val_st),
         ],
@@ -3510,6 +3705,8 @@ def generate_pdf(itinerary_data: dict) -> str:
         ("TOPPADDING", (0,0),(-1,-1), 6), ("BOTTOMPADDING",(0,0),(-1,-1), 8),
     ]))
     story.append(step_tbl)
+    story.append(Spacer(1, 7*mm))
+    story.append(SocialButtons(usable_w, client_name, _quote_ref(client_name)))
     story.append(Spacer(1, 6*mm))
 
     # Timestamp
