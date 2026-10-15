@@ -445,13 +445,17 @@ class HeroHeader(Flowable):
             c.setFont("Lato-Bold", 10)
             route = _raw(self.route)
             max_rw = w - 12*mm - 24*mm
+            # show EVERY stop: shrink the font (and arrow spacing) until the whole journey fits
+            _stops = route.split("  \u2192  ")
+            _fs = 10.0
             _sep = "  \u2192  "
-            _stops = route.split(_sep)
-            # too long: drop middle stops, but always keep the pickup and the departure point
-            while c.stringWidth(route, "Lato-Bold", 10) > max_rw and len(_stops) > 2:
-                _stops.pop(1)
-                route = _sep.join([_stops[0], "\u2026"] + _stops[1:]) if len(_stops) > 2 else _sep.join(_stops)
-            c.drawString(6*mm + 24*mm, 8*mm, route)
+            while c.stringWidth(_sep.join(_stops), "Lato-Bold", _fs) > max_rw and _fs > 5.6:
+                _fs -= 0.2
+                if _fs < 8.6:
+                    _sep = " \u2192 "
+            route = _sep.join(_stops)
+            c.setFont("Lato-Bold", _fs)
+            c.drawString(6*mm + 24*mm, 8*mm + (10 - _fs) * 0.15, route)
 
         # ── Clickable WhatsApp + Instagram buttons (bottom-right of the cover) ─
         if self.route:
