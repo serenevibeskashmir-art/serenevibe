@@ -257,7 +257,7 @@ def _draw_whatsapp_button(c, x, y, w, h, url, label="WhatsApp"):
     c.setFillColor(WHITE)
     c.setFont("Lato-Bold", 8)
     c.drawString(x + h * 1.05, y + h / 2 - 2.7, label)
-    c.linkURL(url, (x, y, x + w, y + h), relative=0)
+    c.linkURL(url, (x, y, x + w, y + h), relative=1)
 
 
 def _draw_call_button(c, x, y, w, h, url="tel:+" + WHATSAPP_NUMBER, label="Call Us"):
@@ -279,7 +279,7 @@ def _draw_call_button(c, x, y, w, h, url="tel:+" + WHATSAPP_NUMBER, label="Call 
     c.setFillColor(WHITE)
     c.setFont("Lato-Bold", 8)
     c.drawString(x + h * 1.05, y + h / 2 - 2.7, label)
-    c.linkURL(url, (x, y, x + w, y + h), relative=0)
+    c.linkURL(url, (x, y, x + w, y + h), relative=1)
 
 
 def _draw_facebook_button(c, x, y, w, h, url, label="Facebook"):
@@ -298,7 +298,7 @@ def _draw_facebook_button(c, x, y, w, h, url, label="Facebook"):
     c.setFillColor(WHITE)
     c.setFont("Lato-Bold", 8)
     c.drawString(x + h * 1.05, y + h / 2 - 2.7, label)
-    c.linkURL(url, (x, y, x + w, y + h), relative=0)
+    c.linkURL(url, (x, y, x + w, y + h), relative=1)
 
 
 def _draw_instagram_button(c, x, y, w, h, url=INSTAGRAM_URL, label=INSTAGRAM_HANDLE):
@@ -322,7 +322,7 @@ def _draw_instagram_button(c, x, y, w, h, url=INSTAGRAM_URL, label=INSTAGRAM_HAN
     c.circle(ix + s_ * 0.80, iy + s_ * 0.80, s_ * 0.06, fill=1, stroke=0)
     c.setFont("Lato-Bold", 8)
     c.drawString(x + h * 1.05, y + h / 2 - 2.7, label)
-    c.linkURL(url, (x, y, x + w, y + h), relative=0)
+    c.linkURL(url, (x, y, x + w, y + h), relative=1)
 
 
 class SocialButtons(Flowable):
@@ -445,8 +445,12 @@ class HeroHeader(Flowable):
             c.setFont("Lato-Bold", 10)
             route = _raw(self.route)
             max_rw = w - 12*mm - 24*mm
-            while c.stringWidth(route, "Lato-Bold", 10) > max_rw and len(route) > 8:
-                route = route[:-2].rstrip(" \u2192") + "\u2026"
+            _sep = "  \u2192  "
+            _stops = route.split(_sep)
+            # too long: drop middle stops, but always keep the pickup and the departure point
+            while c.stringWidth(route, "Lato-Bold", 10) > max_rw and len(_stops) > 2:
+                _stops.pop(1)
+                route = _sep.join([_stops[0], "\u2026"] + _stops[1:]) if len(_stops) > 2 else _sep.join(_stops)
             c.drawString(6*mm + 24*mm, 8*mm, route)
 
         # ── Clickable WhatsApp + Instagram buttons (bottom-right of the cover) ─
@@ -2595,14 +2599,16 @@ def _day_date(start_date, day_no) -> str:
     return ""
 
 
-def _route_text(timeline) -> str:
-    """'Srinagar  >  Pahalgam  >  Srinagar' from the nights stayed (consecutive duplicates merged)."""
-    out = []
+def _route_text(timeline, start=DEFAULT_POINT, end=DEFAULT_POINT) -> str:
+    """'Srinagar Airport  >  Pahalgam  >  Srinagar Airport': starts at the pickup point, ends at the departure point."""
+    out = [start]
     for d in timeline or []:
         place = str(d.get("overnight_stay") or "").strip()
-        if place and place.lower() not in ("departure", "-") and (not out or out[-1] != place):
+        if place and place.lower() not in ("departure", "-") and out[-1].lower() != place.lower():
             out.append(place)
-    return "  \u2192  ".join(out[:5])
+    if out[-1].lower() != end.lower():
+        out.append(end)
+    return "  \u2192  ".join(out)
 
 
 def _quote_ref(client_name) -> str:
@@ -2650,7 +2656,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     story.append(HeroHeader(
         usable_w, client_name, days, start_date, adults, kids,
         budget_tier, vehicle_type, custom_cost, bg_reader=_load_hero_photo(),
-        ref=_quote_ref(client_name), route=_route_text(itinerary_data.get("timeline", []))
+        ref=_quote_ref(client_name), route=_route_text(itinerary_data.get("timeline", []), start_point, end_point)
     ))
     story.append(Spacer(1, 6*mm))
 
