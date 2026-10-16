@@ -2877,6 +2877,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         "hicl": {"name": "Hotel Iceland",                  "place": "Srinagar", "images": []},
         "hpp":  {"name": "Hotel Pocket Paradise",          "place": "Srinagar", "images": []},
         "hlwi": {"name": "Hotel Lime Wood Inn",            "place": "Srinagar", "images": []},
+        "tsr":  {"name": "The Shamas Residency",           "place": "Srinagar", "images": []},
         "hri":  {"name": "Hotel Riverside Inn",            "place": "Pahalgam", "images": []},
         "hsr":  {"name": "Hotel Supreme Resorts",          "place": "Pahalgam", "images": [
 			"https://www.supremeresortspahalgam.com/img/villa.jpg",
