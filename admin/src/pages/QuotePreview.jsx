@@ -166,7 +166,7 @@ function buildSchedule(route, start, end, startInfo, endInfo) {
   return base;
 }
 
-const HOTEL_KB = {
+export const HOTEL_KB = {
   srinagar: [
     {id: "ngm",  name: "Hotel New Green Meadows",       place: "Srinagar", images: []},
     {id: "nclr", name: "New Classic Luxury Resorts",    place: "Srinagar", images: []},
