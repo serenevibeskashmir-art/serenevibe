@@ -9,3 +9,5 @@ gunicorn
 psycopg2-binary
 SQLAlchemy>=2.0.33
 Pillow
+
+openpyxl
