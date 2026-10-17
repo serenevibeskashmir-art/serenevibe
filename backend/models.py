@@ -138,3 +138,32 @@ class SitePackage(db.Model):
     photo_size   = db.Column(db.Integer, nullable=False, default=0)
     photo_alt    = db.Column(db.String(200), nullable=False, default="")
     updated_at   = db.Column(db.DateTime, nullable=False, default=_utc_now, onupdate=_utc_now)
+
+
+class WhatsappLead(db.Model):
+    """One row per customer phone number that has messaged the business WhatsApp."""
+    __tablename__ = "whatsapp_leads"
+
+    id = db.Column(db.Integer, primary_key=True)
+    phone = db.Column(db.String(32), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(120), default="")
+    destination = db.Column(db.String(200), default="")
+    travel_dates = db.Column(db.String(120), default="")
+    people = db.Column(db.String(60), default="")
+    budget = db.Column(db.String(60), default="")
+    status = db.Column(db.String(20), default="new")   # new / quoted / follow-up / booked / lost
+    notes = db.Column(db.Text, default="")
+    last_message = db.Column(db.Text, default="")
+    msg_count = db.Column(db.Integer, default=0)
+    first_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    last_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class WhatsappMessage(db.Model):
+    __tablename__ = "whatsapp_messages"
+
+    id = db.Column(db.Integer, primary_key=True)
+    wamid = db.Column(db.String(128), unique=True, index=True)   # WhatsApp message id; blocks duplicates
+    lead_id = db.Column(db.Integer, db.ForeignKey("whatsapp_leads.id"), nullable=False, index=True)
+    text = db.Column(db.Text, default="")
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
