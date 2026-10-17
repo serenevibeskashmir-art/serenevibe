@@ -34,3 +34,7 @@ class Config:
     ASSISTANT_HOURLY_LIMIT = int(os.getenv("ASSISTANT_HOURLY_LIMIT", "25"))  # messages per visitor per hour
     ASSISTANT_DAILY_LIMIT = int(os.getenv("ASSISTANT_DAILY_LIMIT", "80"))    # messages per visitor per day
     ASSISTANT_SITE_DAILY_CAP = int(os.getenv("ASSISTANT_SITE_DAILY_CAP", "1500"))  # all visitors, per day (cost guard)
+
+    # --- WhatsApp lead capture (optional; webhook rejects everything until these are set) ---
+    WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "")   # any secret word you choose; paste the same one in Meta
+    WHATSAPP_APP_SECRET = os.getenv("WHATSAPP_APP_SECRET", "")       # Meta app secret, used to check messages really come from Meta
