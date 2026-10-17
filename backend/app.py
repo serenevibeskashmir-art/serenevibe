@@ -77,6 +77,10 @@ def create_app():
         response.headers["Cache-Control"] = "no-cache"
         return response
 
+    @app.get("/privacy-policy")
+    def serve_privacy_policy():
+        return send_from_directory(PUBLIC_DIR, "privacy-policy.html")
+
     @app.get("/css/<path:filename>")
     def serve_public_css(filename):
         return send_from_directory(os.path.join(PUBLIC_DIR, "css"), filename)
