@@ -16,6 +16,7 @@ from backend.routes.leads import leads_bp
 from backend.routes.packages import packages_bp
 from backend.routes.site_packages import public_packages_manifest, site_packages_bp
 from backend.routes.site_photos import public_manifest, site_photos_bp
+from backend.routes.whatsapp import whatsapp_bp
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PUBLIC_DIR = ROOT_DIR
@@ -39,6 +40,7 @@ def create_app():
     app.register_blueprint(hotels_bp, url_prefix="/api")
     app.register_blueprint(site_packages_bp, url_prefix="/api")
     app.register_blueprint(assistant_bp, url_prefix="/api")
+    app.register_blueprint(whatsapp_bp, url_prefix="/api")
 
     with app.app_context():
         try:
