@@ -20,6 +20,9 @@ const UI_THEME = {
 
 const TRANSIT_OPTIONS = [
   "Airport Pickup and Local Sightseeing: Overnight Srinagar",
+  "Airport Pickup: Overnight Pahalgam",
+  "Airport Pickup: Overnight Gulmarg",
+  "Airport Pickup: Overnight Sonamarg",
   "Srinagar Local Sightseeing: Overnight Srinagar",
   "Srinagar to Gulmarg: Overnight Srinagar",
   "Srinagar to Gulmarg: Overnight Gulmarg",
@@ -127,12 +130,30 @@ const POINT_PRESETS = [
 ];
 const PICKUP_ROUTE = "Airport Pickup and Local Sightseeing: Overnight Srinagar";
 const DROP_ROUTE   = "Airport Drop-Departure";
+// Day 1 can end in any base: "Airport Pickup ...: Overnight <City>".
+const isPickupRoute = (r) => /^Airport Pickup/i.test(r || "");
+const pickupCity = (r) => ((r || "").match(/Overnight\s+(\w+)/i) || [])[1] || "Srinagar";
+const pickupRouteFor = (city) =>
+  /^srinagar$/i.test(city) ? PICKUP_ROUTE : `Airport Pickup: Overnight ${city}`;
+const PICKUP_CITY_BLURB = {
+  Pahalgam: "Pahalgam, the Valley of Shepherds, sits beside the Lidder River amid pine forests and snow-capped peaks.",
+  Gulmarg:  "Gulmarg, the Meadow of Flowers, is known for its Himalayan views, lush meadows and the famous Gondola.",
+  Sonamarg: "Sonamarg, the Meadow of Gold, is a high-altitude valley surrounded by glaciers and the Sindh River.",
+};
+function pickupTemplate(city) {
+  return [
+    { time_slot: "Arrival", description: PICKUP_CITY_BLURB[city] || `Your Kashmir journey begins with a transfer to ${city}.` },
+    { time_slot: "***", description: `Welcome to Kashmir, Paradise on Earth! Our representative will meet you at the Srinagar International Airport and begin your transfer to ${city}.` },
+    { time_slot: "***", description: `Enjoy the scenic drive to ${city} with short stops along the way for photos and refreshments.` },
+    { time_slot: "***", description: `Check in to your ${city} hotel, relax and enjoy the evening before your overnight stay.` },
+  ];
+}
 const isSrinagarPoint = (p) => /srinagar/i.test(p || "");
 const AIRPORT_RE = /Srinagar International Airport|Srinagar Airport/g;
 
 // Label shown in the route dropdown (the stored route value never changes).
 function routeLabel(route, start, end) {
-  if (route === PICKUP_ROUTE && start !== DEFAULT_POINT) return route.replace(/^Airport Pickup/, `${start} Pickup`);
+  if (isPickupRoute(route) && start !== DEFAULT_POINT) return route.replace(/^Airport Pickup/, `${start} Pickup`);
   if (route === DROP_ROUTE && end !== DEFAULT_POINT)     return route.replace(/^Airport Drop-Departure/, `${end} Drop-Departure`);
   return route;
 }
@@ -145,11 +166,14 @@ function distText(info) {
 }
 
 function buildSchedule(route, start, end, startInfo, endInfo) {
-  const base = (ROUTE_SCHEDULE_TEMPLATES[route] || []).map((x) => ({ ...x }));
-  if (route === PICKUP_ROUTE) {
+  const city = pickupCity(route);
+  const base = (isPickupRoute(route) && city !== "Srinagar"
+    ? pickupTemplate(city)
+    : (ROUTE_SCHEDULE_TEMPLATES[route] || [])).map((x) => ({ ...x }));
+  if (isPickupRoute(route)) {
     const out = base.map((x) => ({ ...x, description: x.description.replace(AIRPORT_RE, start) }));
     if (!isSrinagarPoint(start)) {
-      out.splice(2, 0, { time_slot: "***", description: `From ${start}, travel to Srinagar by private cab${distText(startInfo)} with short breaks en route.` });
+      out.splice(2, 0, { time_slot: "***", description: `From ${start}, travel to ${city === "Srinagar" ? "Srinagar" : "Srinagar and onward to " + city} by private cab${distText(startInfo)} with short breaks en route.` });
     }
     return out;
   }
@@ -632,7 +656,7 @@ export default function QuotePreview({ quote }) {
   // Re-write the pickup / drop days whenever the start or end point (or its distance) changes.
   const applyPoints = (start, end, sInfo, eInfo) => {
     setTimeline((prev) => prev.map((d) =>
-      d.transit_route === PICKUP_ROUTE || d.transit_route === DROP_ROUTE
+      isPickupRoute(d.transit_route) || d.transit_route === DROP_ROUTE
         ? { ...d, schedule: buildSchedule(d.transit_route, start, end, sInfo, eInfo) }
         : d));
   };
@@ -959,7 +983,7 @@ export default function QuotePreview({ quote }) {
             })}
           </div>
           <p style={{ margin: "8px 0 0", fontSize: "0.75rem", color: "#94a3b8" }}>
-            Updates the pickup / drop days and the PDF. Applies to the days using the “Airport Pickup…” and “Airport Drop-Departure” routes (their descriptions are regenerated).
+            Updates the pickup / drop days and the PDF. Applies to the days using the “Airport Pickup…” (any overnight city) and “Airport Drop-Departure” routes (their descriptions are regenerated).
           </p>
         </div>
 
@@ -1023,7 +1047,16 @@ export default function QuotePreview({ quote }) {
                       type="button"
                       onClick={() => {
                         const updated = [...timeline];
-                        if (updated[activeDay]) { updated[activeDay].overnight_stay = city; setTimeline(updated); setHotelSelections(prev => ({ ...prev, [activeDay]: null })); }
+                        if (updated[activeDay]) {
+                          updated[activeDay].overnight_stay = city;
+                          // Airport-pickup day: title + description follow the chosen overnight city.
+                          if (isPickupRoute(updated[activeDay].transit_route)) {
+                            const route = pickupRouteFor(city);
+                            updated[activeDay] = { ...updated[activeDay], transit_route: route, title: route, overnight_stay: city,
+                              schedule: buildSchedule(route, startPoint, endPoint, startInfo, endInfo) };
+                          }
+                          setTimeline(updated); setHotelSelections(prev => ({ ...prev, [activeDay]: null }));
+                        }
                       }}
                       style={{ padding: "8px 16px", borderRadius: "20px", border: isActive ? "2px solid #2563eb" : "1px solid #cbd5e1", backgroundColor: isActive ? "#2563eb" : "#fff", fontSize: "0.85rem", fontWeight: "bold", color: isActive ? "#fff" : "#1e293b", cursor: "pointer", transition: "all 0.15s", minHeight: "40px" }}
                     >
