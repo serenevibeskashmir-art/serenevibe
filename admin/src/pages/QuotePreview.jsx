@@ -30,7 +30,10 @@ const TRANSIT_OPTIONS = [
   "Pahalgam to Srinagar: Overnight Srinagar",
   "Srinagar to Sonamarg: Overnight Srinagar",
   "Srinagar to Sonamarg: Overnight Sonamarg",
+  "Pahalgam to Gulmarg: Overnight Pahalgam",
+  "Pahalgam to Gulmarg: Overnight Gulmarg",
   "Gulmarg to Pahalgam: Overnight Pahalgam",
+  "Gulmarg to Sonamarg: Overnight Srinagar",
   "Gulmarg to Srinagar: Overnight Srinagar",
   "Sonamarg to Gulmarg: Overnight Gulmarg",
   "Pahalgam: Local Sightseeing For 2nd Day",
@@ -80,6 +83,21 @@ const ROUTE_SCHEDULE_TEMPLATES = {
     { time_slot: "***", description: "Day excursion to Sonamarg (Meadow of Gold) along the Sindh River." },
     { time_slot: "***", description: "Visit Thajiwas Glacier via pony or local union vehicle." },
     { time_slot: "***", description: "Return drive back to Srinagar for overnight stay." }
+  ],
+  "Pahalgam to Gulmarg: Overnight Pahalgam": [
+    { time_slot: "***", description: "This route connects the Valley of Shepherds to Gulmarg, the Meadow of Flowers, through scenic Kashmir countryside." },
+    { time_slot: "***", description: "Drive from Pahalgam to Gulmarg and enjoy the meadows, mountain views and the famous Gondola ride." },
+    { time_slot: "***", description: "Return to your Pahalgam hotel for overnight stay." }
+  ],
+  "Pahalgam to Gulmarg: Overnight Gulmarg": [
+    { time_slot: "***", description: "This route connects the Valley of Shepherds to Gulmarg, the Meadow of Flowers, through scenic Kashmir countryside." },
+    { time_slot: "***", description: "Drive from Pahalgam to Gulmarg with short stops along the way." },
+    { time_slot: "***", description: "Check in to your Gulmarg hotel and relax for an overnight stay." }
+  ],
+  "Gulmarg to Sonamarg: Overnight Srinagar": [
+    { time_slot: "***", description: "Sonamarg, the Meadow of Gold, is a high-altitude valley surrounded by glaciers and the Sindh River." },
+    { time_slot: "***", description: "Drive from Gulmarg to Sonamarg and enjoy the Himalayan scenery, the Sindh River and Thajiwas Glacier." },
+    { time_slot: "***", description: "Return to Srinagar in the evening for overnight stay." }
   ],
   "Gulmarg to Srinagar: Overnight Srinagar": [
     { time_slot: "***", description: "Another day to explore Srinagar's beautiful lakes, gardens, heritage sites, and famous attractions at your own pace." },
