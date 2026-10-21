@@ -169,6 +169,60 @@ function pickupTemplate(city) {
 const isSrinagarPoint = (p) => /srinagar/i.test(p || "");
 const AIRPORT_RE = /Srinagar International Airport|Srinagar Airport/g;
 
+// ── Route picker: "Starting from / Going to / Overnight" ───────────────────
+// The day title is generated from three picks, so new combinations never need a new list entry.
+const PICK_FROM  = ["Airport", "Srinagar", "Pahalgam", "Gulmarg", "Sonamarg"];
+const PICK_TO    = ["Local sightseeing", "Srinagar", "Pahalgam", "Gulmarg", "Sonamarg", "Doodhpathri", "Departure"];
+const PICK_NIGHT = ["Srinagar", "Pahalgam", "Gulmarg", "Sonamarg"];
+
+function defaultNightFor(to, from) {
+  if (PICK_NIGHT.includes(to)) return to;                       // going to a base: sleep there
+  if (from === "Airport") return "Srinagar";
+  return PICK_NIGHT.includes(from) ? from : "Srinagar";         // sightseeing / day trip: back where you started
+}
+
+function routeTitle(from, to, night) {
+  if (to === "Departure") return DROP_ROUTE;
+  if (!to) return "";
+  const n = night || defaultNightFor(to, from);
+  if (from === "Airport") {
+    return n === "Srinagar" && (to === "Local sightseeing" || to === "Srinagar" || to === "Doodhpathri")
+      ? PICKUP_ROUTE
+      : `Airport Pickup: Overnight ${n}`;
+  }
+  if (to === "Local sightseeing") return `${from} Local Sightseeing: Overnight ${n}`;
+  return `${from} to ${to}: Overnight ${n}`;
+}
+
+// Reverse of routeTitle (null when a stored route isn't one of the generated shapes).
+function parseRoute(route) {
+  const r = (route || "").trim();
+  let m;
+  if (r === DROP_ROUTE) return { from: null, to: "Departure", night: "" };
+  if ((m = r.match(/^Airport Pickup and Local Sightseeing: Overnight (\w+)$/i))) return { from: "Airport", to: "Local sightseeing", night: m[1] };
+  if ((m = r.match(/^Airport Pickup: Overnight (\w+)$/i)))                       return { from: "Airport", to: m[1], night: m[1] };
+  if ((m = r.match(/^(\w+) Local Sightseeing: Overnight (\w+)$/i)))              return { from: m[1], to: "Local sightseeing", night: m[2] };
+  if ((m = r.match(/^(\w+) to (\w+): Overnight (\w+)$/i)))                       return { from: m[1], to: m[2], night: m[3] };
+  return null;
+}
+
+// Fallback day text for a generated route that has no hand-written template.
+function genericSchedule(route) {
+  const p = parseRoute(route);
+  if (!p || !p.from || p.to === "Departure") return [];
+  if (p.to === "Local sightseeing") {
+    return [
+      { time_slot: "***", description: `Enjoy a day of local sightseeing around ${p.from}.` },
+      { time_slot: "***", description: `Return to your hotel in ${p.night} for overnight stay.` },
+    ];
+  }
+  return [
+    { time_slot: "***", description: `Depart from ${p.from} and drive to ${p.to}, enjoying the scenic views along the way.` },
+    { time_slot: "***", description: `Explore ${p.to} at leisure.` },
+    { time_slot: "***", description: p.night === p.to ? `Check in to your ${p.night} hotel and relax for an overnight stay.` : `Drive to ${p.night} for overnight stay.` },
+  ];
+}
+
 // Label shown in the route dropdown (the stored route value never changes).
 function routeLabel(route, start, end) {
   if (isPickupRoute(route) && start !== DEFAULT_POINT) return route.replace(/^Airport Pickup/, `${start} Pickup`);
@@ -187,7 +241,7 @@ function buildSchedule(route, start, end, startInfo, endInfo) {
   const city = pickupCity(route);
   const base = (isPickupRoute(route) && city !== "Srinagar"
     ? pickupTemplate(city)
-    : (ROUTE_SCHEDULE_TEMPLATES[route] || [])).map((x) => ({ ...x }));
+    : (ROUTE_SCHEDULE_TEMPLATES[route] || genericSchedule(route))).map((x) => ({ ...x }));
   if (isPickupRoute(route)) {
     const out = base.map((x) => ({ ...x, description: x.description.replace(AIRPORT_RE, start) }));
     if (!isSrinagarPoint(start)) {
@@ -678,6 +732,27 @@ export default function QuotePreview({ quote }) {
         ? { ...d, schedule: buildSchedule(d.transit_route, start, end, sInfo, eInfo) }
         : d));
   };
+  // Route picker: one apply path shared by presets and the From / To / Overnight chips.
+  const [pickDraft, setPickDraft] = useState({});     // unfinished picks per day index
+  const applyRoute = (route) => {
+    const automaticSchedule = buildSchedule(route, startPoint, endPoint, startInfo, endInfo);
+    const overnightMatch = route.match(/Overnight\s+(\w+)/i);
+    const derivedCity = overnightMatch ? overnightMatch[1] : null;
+    if (derivedCity) {
+      const hotelGroup = HOTEL_KB[derivedCity.toLowerCase()] || HOTEL_KB["srinagar"];
+      setHotelSelections(prev => ({ ...prev, [activeDay]: hotelGroup[0].id }));
+    } else {
+      setHotelSelections(prev => ({ ...prev, [activeDay]: null }));
+    }
+    setTimeline(prev => {
+      const next = [...prev];
+      if (next[activeDay]) {
+        next[activeDay] = { ...next[activeDay], transit_route: route, title: route, schedule: automaticSchedule, ...(derivedCity && { overnight_stay: derivedCity }) };
+      }
+      return next;
+    });
+    setPickDraft(prev => { const n = { ...prev }; delete n[activeDay]; return n; });
+  };
   const changeStart = (v) => { setStartPoint(v); setStartInfo(null); setLocMsg((m) => ({ ...m, start: "" })); applyPoints(v, endPoint, null, endInfo); };
   const changeEnd   = (v) => { setEndPoint(v);   setEndInfo(null);   setLocMsg((m) => ({ ...m, end: "" }));   applyPoints(startPoint, v, startInfo, null); };
 
@@ -1021,69 +1096,79 @@ export default function QuotePreview({ quote }) {
               📍 Day {timeline[activeDay].day}: {timeline[activeDay].title || timeline[activeDay].date}
             </h3>
 
-            {/* Route selector */}
-            <div id="day-route-select" style={{ marginBottom: "15px" }}>
-              <label style={{ fontWeight: "bold", color: "#334155", display: "block", marginBottom: "5px", fontSize: "0.9rem" }}>🚗 Select Day Route / Travel Option:</label>
-              <select
-                className="qp-route-select"
-                value={timeline[activeDay]?.transit_route || ""}
-                onChange={(e) => {
-                  const updatedRoute = e.target.value;
-                  const automaticSchedule = buildSchedule(updatedRoute, startPoint, endPoint, startInfo, endInfo);
-                  const overnightMatch = updatedRoute.match(/Overnight\s+(\w+)/i);
-                  const derivedCity = overnightMatch ? overnightMatch[1] : null;
-                  if (derivedCity) {
-                    const groupKey = derivedCity.toLowerCase();
-                    const hotelGroup = HOTEL_KB[groupKey] || HOTEL_KB["srinagar"];
-                    setHotelSelections(prev => ({ ...prev, [activeDay]: hotelGroup[0].id }));
-                  } else {
-                    setHotelSelections(prev => ({ ...prev, [activeDay]: null }));
-                  }
-                  setTimeline(prev => {
-                    const next = [...prev];
-                    if (next[activeDay]) {
-                      next[activeDay] = { ...next[activeDay], transit_route: updatedRoute, title: updatedRoute, schedule: automaticSchedule, ...(derivedCity && { overnight_stay: derivedCity }) };
-                    }
-                    return next;
-                  });
-                }}
-              >
-                <option value="">-- Choose Route for Day {activeDay + 1} --</option>
-                {TRANSIT_OPTIONS.map((route, i) => <option key={i} value={route}>{routeLabel(route, startPoint, endPoint)}</option>)}
-              </select>
-            </div>
+            {/* Route picker: Starting from -> Going to -> Overnight */}
+            {(() => {
+              const day = timeline[activeDay];
+              const parsed = parseRoute(day.transit_route);
+              const draft = pickDraft[activeDay] || {};
+              const prevNight = activeDay > 0 ? (timeline[activeDay - 1]?.overnight_stay || "") : "";
+              const autoFrom = activeDay === 0 ? "Airport" : (PICK_FROM.includes(prevNight) ? prevNight : "Srinagar");
+              const from  = draft.from  ?? parsed?.from  ?? autoFrom;
+              const to    = draft.to    ?? parsed?.to    ?? "";
+              const isDep = to === "Departure";
+              const night = isDep ? "" : (draft.night ?? parsed?.night ?? "");
+              const customRoute = !parsed && !!day.transit_route;
 
-            {/* Hotel city picker */}
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ fontWeight: "bold", color: "#334155", display: "block", marginBottom: "6px", fontSize: "0.9rem" }}>🏠 Assign Hotel/Stay:</label>
-              <div className="qp-city-btns">
-                {["Srinagar", "Pahalgam", "Gulmarg", "Sonamarg"].map((city) => {
-                  const isActive = (timeline[activeDay]?.overnight_stay || "Srinagar") === city;
-                  return (
-                    <button
-                      key={city}
-                      type="button"
-                      onClick={() => {
-                        const updated = [...timeline];
-                        if (updated[activeDay]) {
-                          updated[activeDay].overnight_stay = city;
-                          // Airport-pickup day: title + description follow the chosen overnight city.
-                          if (isPickupRoute(updated[activeDay].transit_route)) {
-                            const route = pickupRouteFor(city);
-                            updated[activeDay] = { ...updated[activeDay], transit_route: route, title: route, overnight_stay: city,
-                              schedule: buildSchedule(route, startPoint, endPoint, startInfo, endInfo) };
-                          }
-                          setTimeline(updated); setHotelSelections(prev => ({ ...prev, [activeDay]: null }));
-                        }
+              const pick = (patch) => {
+                const next = { from, to, night, ...patch };
+                if (patch.to !== undefined && patch.night === undefined) next.night = patch.to === "Departure" ? "" : defaultNightFor(patch.to, next.from);
+                if (next.to === "Departure" || (next.to && next.night)) {
+                  applyRoute(routeTitle(next.from, next.to, next.night));
+                } else {
+                  setPickDraft(prev => ({ ...prev, [activeDay]: next }));
+                }
+              };
+              const pickNight = (city) => {
+                if (customRoute || (!to && day.transit_route)) {
+                  // Hand-picked preset (e.g. "Pahalgam: Local Sightseeing"): only change where they sleep.
+                  setTimeline(prev => prev.map((d, i) => i === activeDay ? { ...d, overnight_stay: city } : d));
+                  setHotelSelections(prev => ({ ...prev, [activeDay]: null }));
+                } else pick({ night: city });
+              };
+
+              const chipStyle = (on, disabled) => ({
+                padding: "8px 16px", borderRadius: "20px", minHeight: "40px", fontSize: "0.85rem", fontWeight: "bold",
+                border: on ? "2px solid #2563eb" : "1px solid #cbd5e1", backgroundColor: on ? "#2563eb" : "#fff",
+                color: on ? "#fff" : "#1e293b", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.45 : 1, transition: "all 0.15s",
+              });
+              const row = (step, label, hint, options, value, onPick, disabled) => (
+                <div style={{ marginBottom: "14px" }}>
+                  <label style={{ fontWeight: "bold", color: "#334155", display: "block", marginBottom: "6px", fontSize: "0.9rem" }}>
+                    {step}. {label} {hint && <span style={{ fontWeight: 500, color: "#64748b", fontSize: "0.8rem" }}>{hint}</span>}
+                  </label>
+                  <div className="qp-city-btns" style={{ marginTop: 0 }}>
+                    {options.map((o) => (
+                      <button key={o} type="button" disabled={disabled} onClick={() => onPick(o)} style={chipStyle(value === o, disabled)}>{o}</button>
+                    ))}
+                  </div>
+                </div>
+              );
+
+              return (
+                <div id="day-route-select">
+                  <div style={{ marginBottom: "14px" }}>
+                    <label style={{ fontWeight: "bold", color: "#334155", display: "block", marginBottom: "5px", fontSize: "0.9rem" }}>⚡ Quick preset (optional):</label>
+                    <select
+                      className="qp-route-select"
+                      value=""
+                      onChange={(e) => {
+                        const route = e.target.value;
+                        if (!route) return;
+                        applyRoute(route);
                       }}
-                      style={{ padding: "8px 16px", borderRadius: "20px", border: isActive ? "2px solid #2563eb" : "1px solid #cbd5e1", backgroundColor: isActive ? "#2563eb" : "#fff", fontSize: "0.85rem", fontWeight: "bold", color: isActive ? "#fff" : "#1e293b", cursor: "pointer", transition: "all 0.15s", minHeight: "40px" }}
                     >
-                      {city}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+                      <option value="">-- Pick a ready-made route for Day {activeDay + 1}, or use the steps below --</option>
+                      {TRANSIT_OPTIONS.map((route, i) => <option key={i} value={route}>{routeLabel(route, startPoint, endPoint)}</option>)}
+                    </select>
+                  </div>
+
+                  {row(1, "Starting from", activeDay > 0 && !draft.from && !parsed && prevNight ? `(Day ${activeDay} overnight)` : (parsed && activeDay > 0 && from !== autoFrom ? `(Day ${activeDay} ended in ${prevNight || "?"})` : ""), PICK_FROM, from, (o) => pick({ from: o }))}
+                  {row(2, "Going to", "", PICK_TO, to, (o) => pick({ to: o }))}
+                  {row(3, "Overnight stay", isDep ? "(not needed on departure day)" : "", PICK_NIGHT, night || (customRoute ? (day.overnight_stay || "") : ""), pickNight, isDep)}
+                  {customRoute && <div style={{ fontSize: "0.78rem", color: "#64748b", marginBottom: "10px" }}>Using preset “{day.transit_route}”. Pick From / To above to replace it.</div>}
+                </div>
+              );
+            })()}
 
             {/* Hotel dropdown */}
             <div style={{ marginBottom: "15px" }}>
