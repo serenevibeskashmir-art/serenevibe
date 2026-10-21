@@ -182,6 +182,7 @@ export const HOTEL_KB = {
     {id: "hpp",  name: "Hotel Pocket Paradise",         place: "Srinagar", images: []},
     {id: "hlwi", name: "Hotel Lime Wood Inn",           place: "Srinagar", images: []},
     {id: "tsr",  name: "The Shamas Residency",          place: "Srinagar", images: []},
+    {id: "wvr",  name: "West View Resorts",             place: "Srinagar", images: []},
   ],
   pahalgam: [
     {id: "hri",  name: "Hotel Riverside Inn",           place: "Pahalgam", images: []},
@@ -191,6 +192,7 @@ export const HOTEL_KB = {
     {id: "hlr",  name: "Hotel Lavish Residency",        place: "Pahalgam", images: []},
     {id: "hil",  name: "Hotel Ice Land",                place: "Pahalgam", images: []},
     {id: "her",  name: "Hotel Eden Resorts and Spa",    place: "Pahalgam", images: []},
+    {id: "asr",  name: "Asal Resorts",                  place: "Pahalgam", images: []},
   ],
   gulmarg: [
     {id: "hatr", name: "Hotel Apple Tree Resorts",      place: "Gulmarg", images: []},
