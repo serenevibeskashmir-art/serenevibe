@@ -549,6 +549,19 @@ def _describe_user_prompt(body: dict) -> str:
         f"Tour starts from: {g('start_point') or 'Srinagar Airport'}",
         f"Tour ends at: {g('end_point') or 'Srinagar Airport'}",
     ]
+    kind, frm, to, night = g("day_kind", 20), g("from_place", 80), g("to_place", 80), g("overnight")
+    if kind == "arrival":
+        lines.append(f"THIS DAY: guests arrive and are picked up at {frm}, then travel by road to {to}. They sleep in {night or to} tonight. "
+                     f"Write the pickup, the road journey (use the road distance from FACTS only if it is between Srinagar and a listed destination; otherwise do not state a distance) and hotel check-in. Do not add sightseeing outside {night or to}.")
+    elif kind == "departure":
+        lines.append(f"THIS DAY: departure. Guests leave {frm} after breakfast and check-out and are dropped at {to}. No overnight stay. Keep it to 2-3 short activities with no new sightseeing.")
+    elif kind == "transfer":
+        lines.append(f"THIS DAY: travel from {frm} to {to} by road, with sightseeing in or near {to} only. They sleep in {night or to} tonight"
+                     + (f" (the drive ends in {night}, not {to})" if night and night.lower() != to.lower() else "") + ". The last activity is hotel check-in and overnight in " + (night or to) + ".")
+    elif kind == "local":
+        lines.append(f"THIS DAY: local sightseeing around {frm}, returning to the hotel in {night or frm} for the night. Only {frm} attractions from FACTS.")
+    if kind:
+        lines.append("Every activity must fit the travel above. Do not include places, activities or towns that are not on this route.")
     hints = _clean_text(body.get("hints"), DESCRIBE_MAX_HINT)
     if hints:
         lines.append(f"Staff hints: {hints}")
@@ -568,7 +581,7 @@ def _describe_user_prompt(body: dict) -> str:
             ]
             snippets = [s for s in snippets if s]
             if snippets:
-                lines.append("Current activities (rewrite these, keep the same places): " + " | ".join(snippets))
+                lines.append("Current activities (reference only; the route above takes priority if they disagree): " + " | ".join(snippets))
         lines.append("Task: write this whole day as 3-5 activities in chronological order.")
     return "\n".join(lines)
 
