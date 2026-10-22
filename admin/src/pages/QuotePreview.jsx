@@ -1150,14 +1150,14 @@ export default function QuotePreview({ quote }) {
                     <label style={{ fontWeight: "bold", color: "#334155", display: "block", marginBottom: "5px", fontSize: "0.9rem" }}>⚡ Quick preset (optional):</label>
                     <select
                       className="qp-route-select"
-                      value=""
+                      value={TRANSIT_OPTIONS.includes(day.transit_route) ? day.transit_route : ""}
                       onChange={(e) => {
                         const route = e.target.value;
                         if (!route) return;
                         applyRoute(route);
                       }}
                     >
-                      <option value="">-- Pick a ready-made route for Day {activeDay + 1}, or use the steps below --</option>
+                      <option value="">{day.transit_route && !TRANSIT_OPTIONS.includes(day.transit_route) ? `Current: ${routeLabel(day.transit_route, startPoint, endPoint)} (built from steps below)` : `-- Pick a ready-made route for Day ${activeDay + 1}, or use the steps below --`}</option>
                       {TRANSIT_OPTIONS.map((route, i) => <option key={i} value={route}>{routeLabel(route, startPoint, endPoint)}</option>)}
                     </select>
                   </div>
@@ -1297,6 +1297,7 @@ export default function QuotePreview({ quote }) {
                     budget_tier: quote?.meta_summary?.budget_tier || "Mid-Range",
                     trip_pace: quote?.meta_summary?.trip_pace || "Moderate",
                     custom_cost: editableCost,
+                    return_pdf: true,
                     timeline,
                     hotelSelections,
                     start_info: startInfo,
@@ -1305,22 +1306,23 @@ export default function QuotePreview({ quote }) {
                     end_point: (endPoint || "").trim() || DEFAULT_POINT,
                   }),
                 });
-                if (printRes.ok) {
-                  alert("🎉 Custom modifications applied! Initiating file download...");
-                  const safeName     = currentClientName.replace(/ /g, "_");
-                  const fileName     = "Kashmir_Tour_" + safeName + ".pdf";
-                  const fileResponse = await apiFetch("/output/" + fileName);
-                  const fileBlob     = await fileResponse.blob();
-                  const blobUrl      = window.URL.createObjectURL(fileBlob);
-                  const link         = document.createElement("a");
-                  link.href          = blobUrl;
+                const isPdf = (printRes.headers.get("content-type") || "").includes("application/pdf");
+                if (printRes.ok && isPdf) {
+                  const safeName = currentClientName.replace(/ /g, "_");
+                  const fileName = "Kashmir_Tour_" + safeName + ".pdf";
+                  const fileBlob = await printRes.blob();
+                  const blobUrl  = window.URL.createObjectURL(fileBlob);
+                  const link     = document.createElement("a");
+                  link.href      = blobUrl;
                   link.setAttribute("download", fileName);
                   document.body.appendChild(link);
                   link.click();
                   document.body.removeChild(link);
                   window.URL.revokeObjectURL(blobUrl);
                 } else {
-                  alert("Compilation failed on Flask server.");
+                  let msg = "";
+                  try { msg = (await printRes.json()).error || ""; } catch (e) { /* not JSON */ }
+                  alert("PDF could not be generated" + (msg ? ": " + msg : ".") + " Please try again.");
                 }
               } catch (err) {
                 console.error(err);
