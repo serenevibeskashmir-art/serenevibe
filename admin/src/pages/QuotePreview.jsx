@@ -237,7 +237,44 @@ function distText(info) {
   return ` (approx. ${Math.round(info.km)} km${h})`;
 }
 
+// Where this day's travel really starts and ends (Day 1 starts at the tour start point, the last day ends at the end point).
+function dayTravel(day, idx, timeline, startPoint, endPoint) {
+  const p = parseRoute(day.transit_route);
+  const prevNight = idx > 0 ? (timeline[idx - 1]?.overnight_stay || "") : "";
+  let from = p?.from || "", to = p?.to || "", kind = "";
+  if (!p) {                                            // hand-picked preset: read it from the text
+    const m = (day.transit_route || "").match(/^(\w+) to (\w+)/i);
+    if (m) { from = m[1]; to = m[2]; }
+  }
+  if (to === "Departure") { kind = "departure"; from = prevNight || from || "Srinagar"; to = endPoint || DEFAULT_POINT; }
+  else if (from === "Airport" || isPickupRoute(day.transit_route)) { kind = "arrival"; from = startPoint || DEFAULT_POINT; to = p?.to === "Local sightseeing" ? (day.overnight_stay || "Srinagar") : (to || day.overnight_stay || "Srinagar"); }
+  else if (to === "Local sightseeing") { kind = "local"; to = from; }
+  else if (from && to) kind = "transfer";
+  return { day_kind: kind, from_place: from, to_place: to };
+}
+
+// Short activity title for a generated slot (editable in the box; replaces stale titles from the previous route).
+function guessTitle(desc, i) {
+  const d = desc || "";
+  if (/meet you at|representative will meet/i.test(d))      return "Arrival & Pickup";
+  if (/by private cab|road transfer/i.test(d))              return "Road Transfer";
+  if (/check in to your|check-in|for overnight stay/i.test(d))                 return "Hotel Check-in & Overnight";
+  if (/check-out|breakfast at hotel/i.test(d))              return "Breakfast & Check-out";
+  if (/transfer to .*(departure|airport|station)|departure from/i.test(d)) return "Departure Transfer";
+  if (/shikara/i.test(d))                                   return "Shikara Ride";
+  if (/mughal|nishat|shalimar/i.test(d))                    return "Mughal Gardens";
+  if (/^return|return to|drive back/i.test(d))              return "Return to Hotel";
+  if (/drive|depart from|travel/i.test(d))                  return "Scenic Drive";
+  if (/explore|market|riverside|leisure/i.test(d))          return "Local Exploration";
+  return i === 0 ? "Destination Overview" : "Sightseeing";
+}
+
 function buildSchedule(route, start, end, startInfo, endInfo) {
+  return buildScheduleRaw(route, start, end, startInfo, endInfo)
+    .map((x, i) => ({ ...x, activity_title: x.activity_title || guessTitle(x.description, i) }));
+}
+
+function buildScheduleRaw(route, start, end, startInfo, endInfo) {
   const city = pickupCity(route);
   const base = (isPickupRoute(route) && city !== "Srinagar"
     ? pickupTemplate(city)
@@ -796,6 +833,7 @@ export default function QuotePreview({ quote }) {
         day_number: day.day || activeDay + 1,
         total_days: timeline.length,
         route: day.transit_route || day.title || "",
+        ...dayTravel(day, activeDay, timeline, startPoint, endPoint),
         overnight: day.overnight_stay || "",
         start_point: startPoint || DEFAULT_POINT,
         end_point: endPoint || DEFAULT_POINT,
@@ -838,7 +876,7 @@ export default function QuotePreview({ quote }) {
     if ((day.schedule || []).length && !window.confirm("Replace all activities for this day with AI-written ones?")) return;
     setAiBusy("day"); setAiError("");
     try {
-      const items = await describeCall("day", { existing: day.schedule || [] });
+      const items = await describeCall("day");
       setTimeline((prev) => prev.map((d, i) => i !== activeDay ? d : {
         ...d,
         schedule: items.map((it) => ({ time_slot: "***", activity_title: it.activity_title || "", description: it.description })),
