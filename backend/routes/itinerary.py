@@ -1,6 +1,6 @@
 import os
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 
 from backend.auth import admin_required
 from backend.services.pdf_service import generate_pdf
@@ -224,5 +224,15 @@ def generate_custom_itinerary():
     except Exception as pdf_error:
         print(f"PDF Generation Failed: {pdf_error}")
         return jsonify({"error": f"Failed to build file structure: {pdf_error}"}), 500
+
+    # On serverless hosting a second request may land on a different instance that
+    # doesn't have the file, so the admin asks for the PDF in this same response.
+    if data.get("return_pdf"):
+        safe_name = str(client_name).replace(" ", "_")
+        pdf_path = os.path.join(output_dir, f"Kashmir_Tour_{safe_name}.pdf")
+        if os.path.exists(pdf_path):
+            return send_file(pdf_path, mimetype="application/pdf", as_attachment=True,
+                             download_name=f"Kashmir_Tour_{safe_name}.pdf")
+        return jsonify({"error": "PDF was generated but could not be found on the server."}), 500
 
     return jsonify(response_payload), 200
