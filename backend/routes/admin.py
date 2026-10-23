@@ -132,8 +132,15 @@ def list_custom_hotels():
         custom_ids = {r.hotel_id for r in CustomHotel.query.all()}
     except Exception as exc:
         db.session.rollback()
-        return jsonify({"error": f"Could not read hotels table ({exc.__class__.__name__}). "
-                                 "Check DATABASE_URL on Vercel."}), 500
+        # The table may simply not exist yet (startup create_all can fail on a cold start): try once to create it.
+        try:
+            db.create_all()
+            custom_ids = {r.hotel_id for r in CustomHotel.query.all()}
+        except Exception as exc2:
+            db.session.rollback()
+            detail = str(getattr(exc2, "orig", exc2)).strip().splitlines()[0][:200]
+            return jsonify({"error": f"Could not read hotels table ({exc2.__class__.__name__}): {detail}. "
+                                     "Check DATABASE_URL on Vercel."}), 500
     try:
         photo_counts = _photo_counts()
     except Exception:
