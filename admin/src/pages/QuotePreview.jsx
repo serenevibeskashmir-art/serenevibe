@@ -367,7 +367,7 @@ export async function loadCustomHotels() {
     Object.keys(ALL_HOTELS_FLAT).forEach((id) => {
       if (ALL_HOTELS_FLAT[id].custom) delete ALL_HOTELS_FLAT[id];
     });
-    hotels.forEach((h) => {
+    hotels.filter((h) => h.custom).forEach((h) => {
       const group = String(h.place || "").toLowerCase();
       if (!HOTEL_KB[group]) return;
       const hotel = { id: h.id, name: h.name, place: h.place, images: [], custom: true };
