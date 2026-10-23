@@ -2934,6 +2934,28 @@ def generate_pdf(itinerary_data: dict) -> str:
     if not isinstance(hotel_selections, dict):
         hotel_selections = {}
 
+    # Names sent by the itinerary builder itself (what the admin actually selected) -- most reliable.
+    for _hid, _d in (itinerary_data.get("hotel_details") or {}).items():
+        if isinstance(_d, dict) and _d.get("name") and str(_hid) not in HOTEL_LOOKUP:
+            HOTEL_LOOKUP[str(_hid)] = {"name": str(_d["name"])[:150],
+                                       "place": str(_d.get("place") or "-")[:40], "images": []}
+
+    # ── Safety net: a hotel picked in the itinerary builder must never print as "To be confirmed".
+    # If a selected hotel id is missing from HOTEL_LOOKUP (e.g. the earlier bulk read of
+    # admin-added hotels failed or was stale), look that hotel up directly in the database.
+    try:
+        from backend.models import CustomHotel as _CH
+        for _raw in list(hotel_selections.values()):
+            _hid = str(_raw.get("id") if isinstance(_raw, dict) else _raw or "")
+            if _hid and _hid not in HOTEL_LOOKUP:
+                _row = _CH.query.filter_by(hotel_id=_hid).first()
+                if _row:
+                    HOTEL_LOOKUP[_hid] = {"name": _row.name, "place": _row.place, "images": []}
+                else:
+                    print(f"Warning: selected hotel id {_hid!r} not found in built-in or admin-added hotels")
+    except Exception as _e:
+        print(f"Warning: direct admin-hotel lookup failed: {_e}")
+
     # ── 3b. Hotel Reference Photos ─────────────────────────────────────────
     # Shows 2+ reference photos for every hotel actually selected anywhere
     # in this itinerary, right below the day-by-day plan.
