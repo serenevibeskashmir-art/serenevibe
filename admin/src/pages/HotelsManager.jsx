@@ -103,27 +103,38 @@ export default function HotelsManager({ onChanged, onUnauthorized }) {
 
       {msg && <p style={{ ...S.msg, color: msg.type === 'ok' ? '#047857' : '#b91c1c' }}>{msg.text}</p>}
 
-      <h3 style={S.sub}>Hotels you added</h3>
+      <h3 style={S.sub}>All hotels ({hotels.length})</h3>
       {loading ? (
         <p style={S.text}>Loading…</p>
-      ) : hotels.length === 0 ? (
-        <p style={S.text}>None yet. The built-in hotels are always available.</p>
       ) : (
-        <ul style={S.list}>
-          {hotels.map((h) => (
-            <li key={h.id} style={S.row}>
-              <div>
-                <strong>{h.name}</strong>
-                <span style={S.place}> · {h.place}</span>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button type="button" style={S.secondary} onClick={() => startEdit(h)}>Edit</button>
-                <button type="button" style={S.danger} onClick={() => remove(h)}>Delete</button>
-              </div>
-            </li>
-          ))}
-        </ul>
+        PLACES.map((pl) => {
+          const group = hotels.filter((h) => h.place === pl);
+          if (!group.length) return null;
+          return (
+            <div key={pl} style={{ marginBottom: 16 }}>
+              <div style={S.groupHead}>📍 {pl} ({group.length})</div>
+              <ul style={S.list}>
+                {group.map((h) => (
+                  <li key={h.id} style={S.row}>
+                    <div>
+                      <strong>{h.name}</strong>
+                      <span style={S.place}> · {h.photos ? `${h.photos} photo${h.photos > 1 ? 's' : ''}` : 'no photos'}</span>
+                      {!h.custom && <span style={S.badge}>built-in</span>}
+                    </div>
+                    {h.custom && (
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button type="button" style={S.secondary} onClick={() => startEdit(h)}>Edit</button>
+                        <button type="button" style={S.danger} onClick={() => remove(h)}>Delete</button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })
       )}
+      <p style={S.text}>Built-in hotels come from the code (<code>pdf_service.py</code>), so they can&rsquo;t be edited or deleted here.</p>
     </section>
   );
 }
@@ -142,4 +153,6 @@ const S = {
   list: { listStyle: 'none', margin: 0, padding: 0, border: '1px solid #e2e8f0', borderRadius: 10 },
   row: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '10px 14px', borderBottom: '1px solid #f1f5f9' },
   place: { color: '#64748b', fontSize: '0.85rem' },
+  groupHead: { fontSize: '0.75rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.6px', margin: '0 0 6px' },
+  badge: { marginLeft: 8, fontSize: '0.68rem', fontWeight: 700, color: '#475569', background: '#e2e8f0', borderRadius: 999, padding: '2px 8px' },
 };
