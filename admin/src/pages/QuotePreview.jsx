@@ -581,17 +581,42 @@ function HotelImageManager() {
     setUrlDraft("");
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target.result;
-      const updated = { ...hotelImages, [selectedId]: [...currentImages, dataUrl] };
-      setHotelImages(updated);
-    };
-    reader.readAsDataURL(file);
+  // Shrink device photos before storing them. Full-size phone photos are several MB each as base64,
+  // which exceeds the server's request limit (Vercel ~4.5 MB) and makes saving fail.
+  const compressImage = (file, maxSide = 1280, quality = 0.8) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Could not read file"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("Not a valid image"));
+        img.onload = () => {
+          const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext("2d");
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+  const handleFileChange = async (e) => {
+    const files = Array.from(e.target.files || []);
     e.target.value = "";
+    if (!files.length) return;
+    try {
+      const added = [];
+      for (const f of files) added.push(await compressImage(f));
+      setHotelImages((prev) => ({ ...prev, [selectedId]: [...(prev[selectedId] || []), ...added] }));
+    } catch (err) {
+      alert("Could not add photo: " + err.message);
+    }
   };
 
   const removeImage = (idx) => {
@@ -609,7 +634,11 @@ function HotelImageManager() {
       if (res.ok) {
         alert("✅ Images saved for " + selectedHotel?.name);
       } else {
-        alert("Save failed — check server.");
+        let detail = "";
+        try { detail = (await res.json()).error || ""; } catch { /* non-JSON error page */ }
+        if (res.status === 413) detail = "Photos are too large. Remove some photos or use smaller ones.";
+        if (res.status === 401) detail = "Session expired — please log in again.";
+        alert(`Save failed (${res.status}). ${detail}`.trim());
       }
     } catch {
       alert("Network error while saving.");
@@ -713,9 +742,9 @@ function HotelImageManager() {
                 >
                   📁 Upload from Device
                 </button>
-                <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleFileChange} />
+                <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={handleFileChange} />
                 <span style={{ fontSize: "0.72rem", color: "#94a3b8" }}>
-                  JPG, PNG, WEBP — stored as base64
+                  JPG, PNG, WEBP — auto-resized before saving
                 </span>
               </div>
 
@@ -1108,6 +1137,11 @@ export default function QuotePreview({ quote }) {
                     return_pdf: true,
                     timeline,
                     hotelSelections,
+                    hotel_details: Object.values(hotelSelections).reduce((acc, id) => {
+                      const h = ALL_HOTELS_FLAT[id];
+                      if (h) acc[id] = { name: h.name, place: h.place };
+                      return acc;
+                    }, {}),
                     start_info: startInfo,
                     end_info: endInfo,
                     start_point: (startPoint || "").trim() || DEFAULT_POINT,
