@@ -94,8 +94,25 @@ def _clean_hotel_body():
 @admin_bp.get("/hotels")
 @admin_required
 def list_custom_hotels():
-    rows = CustomHotel.query.order_by(CustomHotel.id).all()
-    return jsonify({"hotels": [_hotel_json(r) for r in rows]})
+    """Every hotel: the built-in ones (custom=False, read-only) plus those added from the admin."""
+    from backend.services import pdf_content
+
+    custom_ids = {r.hotel_id for r in CustomHotel.query.all()}
+    photo_counts = {}
+    for row in HotelImages.query.all():
+        try:
+            photo_counts[row.hotel_id] = len(json.loads(row.images_json))
+        except (TypeError, ValueError):
+            pass
+    hotels = []
+    for hid, info in pdf_content.get()["hotels"].items():
+        hotels.append({
+            "id": hid, "name": info["name"], "place": info["place"],
+            "custom": hid in custom_ids,
+            "photos": photo_counts.get(hid) or len(info.get("images") or []),
+        })
+    hotels.sort(key=lambda h: (h["place"], h["name"]))
+    return jsonify({"hotels": hotels})
 
 
 @admin_bp.post("/hotels")
