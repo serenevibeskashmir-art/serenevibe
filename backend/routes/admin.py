@@ -102,21 +102,50 @@ def _clean_hotel_body():
     return name, place, None
 
 
+def _photo_counts() -> dict:
+    """{hotel_id: number of photos} without pulling every base64 image into memory when possible."""
+    from sqlalchemy import text
+    try:
+        if db.engine.dialect.name == "postgresql":
+            rows = db.session.execute(text(
+                "SELECT hotel_id, jsonb_array_length(images_json::jsonb) FROM hotel_images"
+            )).all()
+            return {hid: int(n or 0) for hid, n in rows}
+    except Exception:
+        db.session.rollback()          # fall back to the slower, portable way below
+    counts = {}
+    for row in HotelImages.query.all():
+        try:
+            counts[row.hotel_id] = len(json.loads(row.images_json))
+        except (TypeError, ValueError):
+            pass
+    return counts
+
+
 @admin_bp.get("/hotels")
 @admin_required
 def list_custom_hotels():
     """Every hotel: the built-in ones (custom=False, read-only) plus those added from the admin."""
     from backend.services import pdf_content
 
-    custom_ids = {r.hotel_id for r in CustomHotel.query.all()}
-    photo_counts = {}
-    for row in HotelImages.query.all():
-        try:
-            photo_counts[row.hotel_id] = len(json.loads(row.images_json))
-        except (TypeError, ValueError):
-            pass
+    try:
+        custom_ids = {r.hotel_id for r in CustomHotel.query.all()}
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Could not read hotels table ({exc.__class__.__name__}). "
+                                 "Check DATABASE_URL on Vercel."}), 500
+    try:
+        photo_counts = _photo_counts()
+    except Exception:
+        db.session.rollback()
+        photo_counts = {}
+    try:
+        base = pdf_content.get()["hotels"]
+    except Exception as exc:
+        return jsonify({"error": f"Could not read hotel list ({exc.__class__.__name__})."}), 500
+
     hotels = []
-    for hid, info in pdf_content.get()["hotels"].items():
+    for hid, info in base.items():
         hotels.append({
             "id": hid, "name": info["name"], "place": info["place"],
             "custom": hid in custom_ids,
