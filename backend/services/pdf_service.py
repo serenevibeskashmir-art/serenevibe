@@ -2903,6 +2903,14 @@ def generate_pdf(itinerary_data: dict) -> str:
     	"hmi": {"name": "Hotel Mughal India",               "place": "Sonamarg", "images": []},
     }
 
+    # ── Add hotels created in the admin panel (Hotels tab) ────────────────
+    try:
+        from backend.services import custom_hotels as _custom_hotels
+        for _hid, _info in _custom_hotels.get_all().items():
+            HOTEL_LOOKUP.setdefault(_hid, _info)
+    except Exception as _e:
+        print(f"Warning: could not load admin-added hotels: {_e}")
+
     # ── Merge admin-saved hotel images into HOTEL_LOOKUP ──────────────────
     # Photos are stored permanently in the database (HotelImages model).
     # Photos uploaded from device are base64 data URLs; URL-added photos
