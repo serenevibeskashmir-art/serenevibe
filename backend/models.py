@@ -54,6 +54,20 @@ class HotelImages(db.Model):
     images_json = db.Column(db.Text, nullable=False, default="[]")
 
 
+class CustomHotel(db.Model):
+    """
+    Hotels added from the admin panel (Hotels tab), on top of the built-in list in
+    pdf_service.py. Photos for these hotels use the existing HotelImages table, keyed
+    by the same hotel_id, so the photo manager / PDF / website slideshow all just work.
+    `place` is one of Srinagar / Pahalgam / Gulmarg / Sonamarg.
+    """
+    __tablename__ = "custom_hotels"
+    id       = db.Column(db.Integer, primary_key=True)
+    hotel_id = db.Column(db.String(20), unique=True, nullable=False, index=True)
+    name     = db.Column(db.String(150), nullable=False)
+    place    = db.Column(db.String(40), nullable=False)
+
+
 def _utc_now():
     """Naive UTC timestamp (works identically on SQLite and PostgreSQL)."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
