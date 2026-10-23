@@ -771,24 +771,24 @@ export default function QuotePreview({ quote }) {
   };
   // Route picker: one apply path shared by presets and the From / To / Overnight chips.
   const [pickDraft, setPickDraft] = useState({});     // unfinished picks per day index
-  const applyRoute = (route) => {
+  const applyRoute = (route, idx = activeDay) => {
     const automaticSchedule = buildSchedule(route, startPoint, endPoint, startInfo, endInfo);
     const overnightMatch = route.match(/Overnight\s+(\w+)/i);
     const derivedCity = overnightMatch ? overnightMatch[1] : null;
     if (derivedCity) {
       const hotelGroup = HOTEL_KB[derivedCity.toLowerCase()] || HOTEL_KB["srinagar"];
-      setHotelSelections(prev => ({ ...prev, [activeDay]: hotelGroup[0].id }));
+      setHotelSelections(prev => ({ ...prev, [idx]: hotelGroup[0].id }));
     } else {
-      setHotelSelections(prev => ({ ...prev, [activeDay]: null }));
+      setHotelSelections(prev => ({ ...prev, [idx]: null }));
     }
     setTimeline(prev => {
       const next = [...prev];
-      if (next[activeDay]) {
-        next[activeDay] = { ...next[activeDay], transit_route: route, title: route, schedule: automaticSchedule, ...(derivedCity && { overnight_stay: derivedCity }) };
+      if (next[idx]) {
+        next[idx] = { ...next[idx], transit_route: route, title: route, schedule: automaticSchedule, ...(derivedCity && { overnight_stay: derivedCity }) };
       }
       return next;
     });
-    setPickDraft(prev => { const n = { ...prev }; delete n[activeDay]; return n; });
+    setPickDraft(prev => { const n = { ...prev }; delete n[idx]; return n; });
   };
   const changeStart = (v) => { setStartPoint(v); setStartInfo(null); setLocMsg((m) => ({ ...m, start: "" })); applyPoints(v, endPoint, null, endInfo); };
   const changeEnd   = (v) => { setEndPoint(v);   setEndInfo(null);   setLocMsg((m) => ({ ...m, end: "" }));   applyPoints(startPoint, v, startInfo, null); };
@@ -890,8 +890,231 @@ export default function QuotePreview({ quote }) {
   }, [quote]);
 
   useEffect(() => {
-    if (quote?.itinerary_timeline) { setTimeline(quote.itinerary_timeline); setActiveDay(0); }
+    if (quote?.itinerary_timeline) {
+      hist.current = { past: [], future: [], last: { timeline: quote.itinerary_timeline, hotelSelections: {} }, restoring: false };
+      setTimeline(quote.itinerary_timeline); setActiveDay(0);
+    }
   }, [quote]);
+
+  // ── Builder tools: day management, checks, undo / redo, autosave ──────────
+  const isDepDay = (d) => !!d && (d.transit_route === DROP_ROUTE || String(d.overnight_stay || "").toLowerCase() === "departure");
+  const flatHotels = ALL_HOTELS_FLAT;
+
+  const rebuildDays = (order, target) => {
+    // order = old day indexes in their new positions (a repeated index is a copy)
+    const nextDays = order.map((o, k) => {
+      const d = JSON.parse(JSON.stringify(timeline[o]));
+      d.day = k + 1;
+      if (/^Day \d+ Plan$/.test(d.date || "")) d.date = `Day ${k + 1} Plan`;
+      return d;
+    });
+    const nextSel = {};
+    order.forEach((o, k) => { if (hotelSelections[o]) nextSel[k] = hotelSelections[o]; });
+    setTimeline(nextDays);
+    setHotelSelections(nextSel);
+    setPickDraft({});
+    setActiveDay(Math.max(0, Math.min(target, nextDays.length - 1)));
+  };
+  const range = (n) => Array.from({ length: n }, (_, i) => i);
+  const moveDay = (i, dir) => {
+    const j = i + dir;
+    if (j < 0 || j >= timeline.length) return;
+    const order = range(timeline.length);
+    [order[i], order[j]] = [order[j], order[i]];
+    rebuildDays(order, j);
+  };
+  const copyDay = (i) => { const o = range(timeline.length); o.splice(i + 1, 0, i); rebuildDays(o, i + 1); };
+  const deleteDay = (i) => {
+    if (timeline.length <= 1) return;
+    if (!window.confirm(`Delete Day ${i + 1}? You can bring it back with Undo.`)) return;
+    rebuildDays(range(timeline.length).filter((k) => k !== i), activeDay > i ? activeDay - 1 : activeDay);
+  };
+  const addDay = () => {
+    const last = timeline[timeline.length - 1];
+    const n = timeline.length + 1;
+    const night = last && !isDepDay(last) && last.overnight_stay ? last.overnight_stay : "Srinagar";
+    setTimeline((prev) => [...prev, { day: n, title: "", date: `Day ${n} Plan`, transit_route: "", overnight_stay: night, schedule: [] }]);
+    setActiveDay(n - 1);
+    setPickDraft({});
+  };
+
+  const shortRoute = (d) => {
+    const p = parseRoute(d.transit_route);
+    if (d.transit_route === DROP_ROUTE) return "Departure";
+    if (p && p.from === "Airport") return p.to === "Local sightseeing" ? "Airport pickup" : `Airport to ${p.to}`;
+    if (p && p.to === "Local sightseeing") return `${p.from} sightseeing`;
+    if (p) return `${p.from} to ${p.to}`;
+    return d.title || "No route yet";
+  };
+
+  // Checks shown above the day editor; most come with a one-click fix.
+  const issues = (() => {
+    const out = [];
+    const n = timeline.length;
+    timeline.forEach((day, i) => {
+      const no = i + 1, dep = isDepDay(day);
+      const open = () => setActiveDay(i);
+      if (!day.transit_route && !dep) out.push({ day: i, text: `Day ${no}: no route chosen yet.`, btn: "Open day", fix: open });
+      if (!dep && day.overnight_stay && !hotelSelections[i]) {
+        const g = HOTEL_KB[getHotelGroup(day.overnight_stay)] || [];
+        out.push({ day: i, text: `Day ${no}: no hotel chosen in ${day.overnight_stay}.`, btn: g.length ? "Pick suggested hotel" : "Open day",
+          fix: g.length ? () => setHotelSelections((prev) => ({ ...prev, [i]: g[0].id })) : open });
+      }
+      const p = parseRoute(day.transit_route);
+      if (i > 0 && p && p.from && p.from !== "Airport") {
+        const prev = timeline[i - 1];
+        if (!isDepDay(prev) && prev.overnight_stay && prev.overnight_stay.toLowerCase() !== p.from.toLowerCase()) {
+          const canFix = PICK_FROM.includes(prev.overnight_stay) && p.to !== "Departure";
+          out.push({ day: i, text: `Day ${no} starts from ${p.from}, but Day ${i} ended in ${prev.overnight_stay}.`,
+            btn: canFix ? `Start from ${prev.overnight_stay}` : "Open day",
+            fix: canFix ? () => applyRoute(routeTitle(prev.overnight_stay, p.to, p.night), i) : open });
+        }
+      }
+      if ((day.schedule || []).some((x) => !String(x.description || "").trim()))
+        out.push({ day: i, text: `Day ${no}: an activity has no description.`, btn: "Open day", fix: open });
+    });
+    if (n && !isDepDay(timeline[n - 1])) {
+      out.push({ day: n - 1, text: "The last day is not a departure day.", btn: "Make it departure",
+        fix: () => { applyRoute(DROP_ROUTE, n - 1); setTimeline((prev) => prev.map((d, k) => k === n - 1 ? { ...d, overnight_stay: "Departure" } : d)); } });
+    }
+    return out;
+  })();
+  const warnDays = new Set(issues.map((x) => x.day));
+
+  // Undo / redo: edits are grouped (0.6 s) into history steps; a draft is also kept in this browser.
+  const hist = useRef({ past: [], future: [], last: null, restoring: false });
+  const [, setHistTick] = useState(0);
+  const [saveState, setSaveState] = useState("saved");
+  const [draftOffer, setDraftOffer] = useState(null);
+  const draftKey = "qp-draft:" + (quote?.meta_summary?.client_name || "client");
+  const saveDraft = (snap) => {
+    try {
+      localStorage.setItem(draftKey, JSON.stringify({ ...snap, startPoint, endPoint, editableCost, at: Date.now() }));
+    } catch (e) { /* storage unavailable: undo still works */ }
+  };
+  useEffect(() => {
+    const h = hist.current;
+    const snap = { timeline, hotelSelections };
+    if (h.restoring) { h.restoring = false; h.last = snap; return; }
+    if (!h.last) { h.last = snap; return; }
+    if (JSON.stringify(h.last) === JSON.stringify(snap)) return;
+    setSaveState("saving");
+    const t = setTimeout(() => {
+      h.past.push(h.last);
+      if (h.past.length > 40) h.past.shift();
+      h.future = [];
+      h.last = snap;
+      saveDraft(snap);
+      setSaveState("saved");
+      setHistTick((x) => x + 1);
+    }, 600);
+    return () => clearTimeout(t);
+  }, [timeline, hotelSelections]);
+
+  const restoreSnap = (target) => {
+    hist.current.restoring = true;
+    setTimeline(target.timeline);
+    setHotelSelections(target.hotelSelections);
+    setPickDraft({});
+    setActiveDay((a) => Math.max(0, Math.min(a, target.timeline.length - 1)));
+    setSaveState("saved");
+    setHistTick((x) => x + 1);
+  };
+  const undo = () => {
+    const h = hist.current, cur = { timeline, hotelSelections };
+    if (h.last && JSON.stringify(cur) !== JSON.stringify(h.last)) { h.future.unshift(cur); restoreSnap(h.last); return; }
+    if (!h.past.length) return;
+    const target = h.past.pop();
+    h.future.unshift(cur); h.last = target;
+    restoreSnap(target);
+  };
+  const redo = () => {
+    const h = hist.current;
+    if (!h.future.length) return;
+    const next = h.future.shift();
+    h.past.push({ timeline, hotelSelections }); h.last = next;
+    restoreSnap(next);
+  };
+  const canUndo = hist.current.past.length > 0 || saveState === "saving";
+  const canRedo = hist.current.future.length > 0;
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      const base = JSON.stringify(quote?.itinerary_timeline || []);
+      if (d && Array.isArray(d.timeline) && JSON.stringify(d.timeline) !== base) setDraftOffer(d);
+    } catch (e) { /* ignore */ }
+  }, [draftKey]);
+  const restoreDraft = () => {
+    const d = draftOffer;
+    if (!d) return;
+    setTimeline(d.timeline);
+    setHotelSelections(d.hotelSelections || {});
+    if (d.startPoint) setStartPoint(d.startPoint);
+    if (d.endPoint) setEndPoint(d.endPoint);
+    if (d.editableCost) setEditableCost(d.editableCost);
+    setActiveDay(0); setPickDraft({}); setDraftOffer(null);
+  };
+  const discardDraft = () => { try { localStorage.removeItem(draftKey); } catch (e) { /* ignore */ } setDraftOffer(null); };
+
+  const generateChecked = async () => {
+    if (issues.length && !window.confirm(`${issues.length} item(s) still need attention:\n\n` + issues.slice(0, 6).map((x) => "• " + x.text).join("\n") + "\n\nGenerate the PDF anyway?")) return;
+    await generatePdf();
+  };
+
+  // ── PDF export (shared by the sticky bar and the footer button) ──
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const generatePdf = async () => {
+    setPdfBusy(true);
+              try {
+                const currentClientName = quote?.meta_summary?.client_name || "Client";
+                const printRes = await apiFetch("/api/itinerary/generate", {
+                  method: "POST",
+                  body: JSON.stringify({
+                    client_name: currentClientName,
+                    client_email: quote?.meta_summary?.client_email || "N/A",
+                    days: timeline.length || quote?.meta_summary?.total_days || 5,
+                    start_date: quote?.meta_summary?.start_date || quote?.start_date || "Flexible",
+                    adults: quote?.meta_summary?.adults || quote?.adults || 2,
+                    kids: quote?.meta_summary?.kids ?? quote?.kids ?? 0,
+                    budget_tier: quote?.meta_summary?.budget_tier || "Mid-Range",
+                    trip_pace: quote?.meta_summary?.trip_pace || "Moderate",
+                    custom_cost: editableCost,
+                    return_pdf: true,
+                    timeline,
+                    hotelSelections,
+                    start_info: startInfo,
+                    end_info: endInfo,
+                    start_point: (startPoint || "").trim() || DEFAULT_POINT,
+                    end_point: (endPoint || "").trim() || DEFAULT_POINT,
+                  }),
+                });
+                const isPdf = (printRes.headers.get("content-type") || "").includes("application/pdf");
+                if (printRes.ok && isPdf) {
+                  const safeName = currentClientName.replace(/ /g, "_");
+                  const fileName = "Kashmir_Tour_" + safeName + ".pdf";
+                  const fileBlob = await printRes.blob();
+                  const blobUrl  = window.URL.createObjectURL(fileBlob);
+                  const link     = document.createElement("a");
+                  link.href      = blobUrl;
+                  link.setAttribute("download", fileName);
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  window.URL.revokeObjectURL(blobUrl);
+                } else {
+                  let msg = "";
+                  try { msg = (await printRes.json()).error || ""; } catch (e) { /* not JSON */ }
+                  alert("PDF could not be generated" + (msg ? ": " + msg : ".") + " Please try again.");
+                }
+              } catch (err) {
+                console.error(err);
+                alert("System Interface Error: Script logic execution crashed.");
+              }
+    setPdfBusy(false);
+  };
 
   const handleDescriptionChange = (dayIndex, activityIndex, newValue) => {
     const updatedTimeline = [...timeline];
@@ -982,6 +1205,42 @@ export default function QuotePreview({ quote }) {
           min-height: 36px;
           box-sizing: border-box;
         }
+        .qp-sticky { position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px;
+          background: #0f172a; color: #fff; padding: 12px 18px; border-radius: 12px; margin-bottom: 18px; box-shadow: ${UI_THEME.shadows.md}; }
+        .qp-sticky .k { font-size: 0.68rem; letter-spacing: .06em; text-transform: uppercase; color: #cbd5e1; }
+        .qp-sticky .v { font-size: 0.95rem; font-weight: 700; }
+        .qp-sticky .grow { flex: 1 1 120px; font-size: 0.8rem; color: #cbd5e1; }
+        .qp-ghost { border: 1px solid #475569; background: transparent; color: #fff; border-radius: 8px; min-height: 40px; padding: 0 14px; font-weight: 600; cursor: pointer; }
+        .qp-ghost:disabled { opacity: .4; cursor: not-allowed; }
+        .qp-gen { border: 0; background: #7c3aed; color: #fff; border-radius: 8px; min-height: 40px; padding: 0 18px; font-weight: 700; cursor: pointer; }
+        .qp-gen:disabled { opacity: .6; cursor: wait; }
+        .qp-badge { display: inline-block; background: #fbbf24; color: #1c1917; border-radius: 999px; font-size: 0.72rem; font-weight: 800; padding: 2px 9px; margin-left: 8px; }
+        .qp-badge.ok { background: #4ade80; color: #052e16; }
+        .qp-ov { display: flex; gap: 12px; overflow-x: auto; padding: 4px 4px 12px; margin-bottom: 8px; }
+        .qp-ovcard { background: #fff; border: 2px solid #e2e8f0; border-radius: 12px; flex: 0 0 160px; display: flex; flex-direction: column; overflow: hidden; }
+        .qp-ovcard.on { border-color: #2563eb; box-shadow: 0 0 0 3px #dbeafe; }
+        .qp-ovmain { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; padding: 12px; cursor: pointer; min-height: 108px; flex: 1 1 auto; }
+        .qp-ovmain:focus-visible { outline: 3px solid #2563eb; outline-offset: -3px; }
+        .qp-ovdn { font-size: 0.72rem; font-weight: 800; color: #475569; letter-spacing: .05em; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; }
+        .qp-ovrt { font-size: 0.92rem; font-weight: 800; line-height: 1.25; color: #0f172a; }
+        .qp-ovnt { font-size: 0.8rem; color: #334155; }
+        .qp-ovhot { font-size: 0.74rem; font-weight: 700; border-radius: 6px; padding: 3px 7px; background: #e0f2fe; color: #075985; align-self: flex-start; }
+        .qp-ovhot.bad { background: #fee2e2; color: #991b1b; }
+        .qp-ovdot { width: 10px; height: 10px; border-radius: 50%; background: #f59e0b; }
+        .qp-ovacts { display: flex; border-top: 1px solid #e2e8f0; }
+        .qp-ovacts button { flex: 1; border: 0; border-right: 1px solid #e2e8f0; background: #f8fafc; color: #334155; min-height: 40px; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
+        .qp-ovacts button:last-child { border-right: 0; }
+        .qp-ovacts button:hover:not(:disabled) { background: #e2e8f0; }
+        .qp-ovacts button:disabled { opacity: .35; cursor: not-allowed; }
+        .qp-ovadd { all: unset; box-sizing: border-box; flex: 0 0 112px; min-height: 150px; border: 2px dashed #94a3b8; border-radius: 12px; display: flex; align-items: center; justify-content: center; text-align: center; color: #334155; font-weight: 700; font-size: 0.85rem; cursor: pointer; background: #f8fafc; }
+        .qp-ovadd:hover { border-color: #2563eb; color: #1d4ed8; }
+        .qp-ovadd:focus-visible { outline: 3px solid #2563eb; }
+        .qp-checks { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px; }
+        .qp-warn { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 10px; padding: 8px 12px; }
+        .qp-warn span { font-size: 0.85rem; color: #78350f; font-weight: 600; }
+        .qp-fix { border: 1px solid #b45309; background: #fff; color: #78350f; border-radius: 8px; min-height: 38px; padding: 0 12px; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
+        .qp-fix:hover { background: #fef3c7; }
+        .qp-draft { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; background: #eff6ff; border: 1px solid #93c5fd; color: #1e3a8a; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: 0.88rem; font-weight: 600; }
         .qp-footer-bar {
           display: flex;
           justify-content: space-between;
@@ -1055,12 +1314,29 @@ export default function QuotePreview({ quote }) {
           </p>
         </div>
 
-        {/* 2. Client Metadata */}
-        <div className="qp-meta-grid">
-          <div style={{ fontSize: "0.9rem", color: UI_THEME.colors.textDark }}><strong style={{ color: UI_THEME.colors.textLight }}>Client:</strong> {quote?.meta_summary?.client_name || "N/A"}</div>
-          <div style={{ fontSize: "0.9rem", color: UI_THEME.colors.textDark }}><strong style={{ color: UI_THEME.colors.textLight }}>Budget Tier:</strong> {quote?.meta_summary?.budget_tier || "N/A"}</div>
-          <div style={{ fontSize: "0.9rem", color: UI_THEME.colors.textDark }}><strong style={{ color: UI_THEME.colors.textLight }}>Vehicle:</strong> {quote?.meta_summary?.vehicle_type || "N/A"}</div>
+        {/* 2. Sticky summary bar */}
+        <div className="qp-sticky">
+          <div><div className="k">Client</div><div className="v">{quote?.meta_summary?.client_name || "N/A"}</div></div>
+          <div><div className="k">Trip</div><div className="v">{timeline.length} days · {quote?.meta_summary?.budget_tier || "N/A"} · {quote?.meta_summary?.vehicle_type || "N/A"}</div></div>
+          <div><div className="k">Estimated total</div><div className="v">{fmtINR(Number(editableCost) || 0)}</div></div>
+          <div className="grow" aria-live="polite">{saveState === "saving" ? "Saving…" : "All changes saved"}</div>
+          <button type="button" className="qp-ghost" onClick={undo} disabled={!canUndo} aria-label="Undo last change">Undo</button>
+          <button type="button" className="qp-ghost" onClick={redo} disabled={!canRedo} aria-label="Redo">Redo</button>
+          <button type="button" className="qp-gen" onClick={generateChecked} disabled={pdfBusy}>
+            {pdfBusy ? "Generating…" : "Generate PDF"}
+            {!pdfBusy && <span className={"qp-badge" + (issues.length ? "" : " ok")}>{issues.length ? `${issues.length} ${issues.length === 1 ? "issue" : "issues"}` : "Ready"}</span>}
+          </button>
         </div>
+
+        {draftOffer && (
+          <div className="qp-draft">
+            <span>An unsaved draft from {new Date(draftOffer.at || Date.now()).toLocaleString()} was found on this device.</span>
+            <span style={{ display: "flex", gap: "8px" }}>
+              <button type="button" className="qp-fix" style={{ borderColor: "#1d4ed8", color: "#1e3a8a" }} onClick={restoreDraft}>Restore draft</button>
+              <button type="button" className="qp-fix" style={{ borderColor: "#64748b", color: "#334155" }} onClick={discardDraft}>Discard</button>
+            </span>
+          </div>
+        )}
 
         {/* Tour start / end points */}
         <div style={{ background: "#fff", border: "1px solid " + UI_THEME.colors.border, borderRadius: "12px", padding: "14px 18px", marginBottom: "20px", boxShadow: UI_THEME.shadows.sm }}>
@@ -1118,12 +1394,46 @@ export default function QuotePreview({ quote }) {
           </p>
         </div>
 
-        {/* 3. Day tabs */}
-        <div style={{ display: "flex", gap: "8px", overflowX: "auto", WebkitOverflowScrolling: "touch", paddingBottom: "10px", marginBottom: "15px", scrollbarWidth: "none" }}>
-          {timeline.map((dayData, idx) => (
-            <button key={idx} onClick={() => setActiveDay(idx)} style={{ padding: "8px 16px", border: "none", borderRadius: "20px", cursor: "pointer", fontWeight: "bold", backgroundColor: activeDay === idx ? "#1e293b" : "#f1f5f9", color: activeDay === idx ? "#fff" : "#334155", whiteSpace: "nowrap", flexShrink: 0, minHeight: "40px" }}>
-              Day {dayData.day}
-            </button>
+        {/* 3. Trip overview strip */}
+        <h3 style={{ margin: "0 0 8px 0", fontSize: "1rem", color: "#0f172a" }}>
+          Trip overview <span style={{ fontWeight: 500, fontSize: "0.8rem", color: "#475569" }}>· click a day to edit it; use the buttons under it to move, copy or remove</span>
+        </h3>
+        <div className="qp-ov">
+          {timeline.map((d, i) => {
+            const dep = isDepDay(d);
+            const hot = flatHotels[hotelSelections[i]];
+            return (
+              <div key={i} className={"qp-ovcard" + (i === activeDay ? " on" : "")}>
+                <button type="button" className="qp-ovmain" onClick={() => setActiveDay(i)} aria-label={`Edit day ${i + 1}`}>
+                  <span className="qp-ovdn"><span>Day {i + 1}</span>{warnDays.has(i) && <span className="qp-ovdot" title="Needs attention" />}</span>
+                  <span className="qp-ovrt">{shortRoute(d)}</span>
+                  <span className="qp-ovnt">{dep ? "No overnight" : (d.overnight_stay ? `Night in ${d.overnight_stay}` : "—")}</span>
+                  <span className={"qp-ovhot" + (!dep && !hot ? " bad" : "")}>{dep ? "Drop-off" : (hot ? hot.name : "No hotel yet")}</span>
+                </button>
+                <div className="qp-ovacts">
+                  <button type="button" onClick={() => moveDay(i, -1)} disabled={i === 0} aria-label="Move day earlier">&#8249;</button>
+                  <button type="button" onClick={() => moveDay(i, 1)} disabled={i === timeline.length - 1} aria-label="Move day later">&#8250;</button>
+                  <button type="button" onClick={() => copyDay(i)} aria-label="Duplicate day">Copy</button>
+                  <button type="button" onClick={() => deleteDay(i)} disabled={timeline.length <= 1} aria-label="Delete day">Del</button>
+                </div>
+              </div>
+            );
+          })}
+          <button type="button" className="qp-ovadd" onClick={addDay}>+ Add day</button>
+        </div>
+
+        {/* Checks */}
+        <div className="qp-checks">
+          <div style={{ fontWeight: 800, fontSize: "0.95rem", color: "#0f172a" }}>
+            Checks <span className={"qp-badge" + (issues.length ? "" : " ok")}>{issues.length ? `${issues.length} ${issues.length === 1 ? "issue" : "issues"}` : "Ready"}</span>
+          </div>
+          {issues.length === 0 && (
+            <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "10px", padding: "10px 12px", fontSize: "0.85rem", fontWeight: 600, color: "#14532d" }}>
+              Everything looks consistent. Ready to generate the PDF.
+            </div>
+          )}
+          {issues.map((w, k) => (
+            <div key={k} className="qp-warn"><span>{w.text}</span><button type="button" className="qp-fix" onClick={w.fix}>{w.btn}</button></div>
           ))}
         </div>
 
@@ -1320,55 +1630,10 @@ export default function QuotePreview({ quote }) {
 
           <button
             className="qp-save-btn"
-            onClick={async () => {
-              try {
-                const currentClientName = quote?.meta_summary?.client_name || "Client";
-                const printRes = await apiFetch("/api/itinerary/generate", {
-                  method: "POST",
-                  body: JSON.stringify({
-                    client_name: currentClientName,
-                    client_email: quote?.meta_summary?.client_email || "N/A",
-                    days: quote?.meta_summary?.total_days || 5,
-                    start_date: quote?.meta_summary?.start_date || quote?.start_date || "Flexible",
-                    adults: quote?.meta_summary?.adults || quote?.adults || 2,
-                    kids: quote?.meta_summary?.kids ?? quote?.kids ?? 0,
-                    budget_tier: quote?.meta_summary?.budget_tier || "Mid-Range",
-                    trip_pace: quote?.meta_summary?.trip_pace || "Moderate",
-                    custom_cost: editableCost,
-                    return_pdf: true,
-                    timeline,
-                    hotelSelections,
-                    start_info: startInfo,
-                    end_info: endInfo,
-                    start_point: (startPoint || "").trim() || DEFAULT_POINT,
-                    end_point: (endPoint || "").trim() || DEFAULT_POINT,
-                  }),
-                });
-                const isPdf = (printRes.headers.get("content-type") || "").includes("application/pdf");
-                if (printRes.ok && isPdf) {
-                  const safeName = currentClientName.replace(/ /g, "_");
-                  const fileName = "Kashmir_Tour_" + safeName + ".pdf";
-                  const fileBlob = await printRes.blob();
-                  const blobUrl  = window.URL.createObjectURL(fileBlob);
-                  const link     = document.createElement("a");
-                  link.href      = blobUrl;
-                  link.setAttribute("download", fileName);
-                  document.body.appendChild(link);
-                  link.click();
-                  document.body.removeChild(link);
-                  window.URL.revokeObjectURL(blobUrl);
-                } else {
-                  let msg = "";
-                  try { msg = (await printRes.json()).error || ""; } catch (e) { /* not JSON */ }
-                  alert("PDF could not be generated" + (msg ? ": " + msg : ".") + " Please try again.");
-                }
-              } catch (err) {
-                console.error(err);
-                alert("System Interface Error: Script logic execution crashed.");
-              }
-            }}
+            onClick={generateChecked}
+            disabled={pdfBusy}
           >
-            💾 Lock Changes & Generate PDF
+            {pdfBusy ? "Generating…" : "💾 Lock Changes & Generate PDF"}
           </button>
         </div>
       </div>
