@@ -354,6 +354,31 @@ const ALL_HOTELS_FLAT = Object.values(HOTEL_KB).flat().reduce((acc, h) => {
   return acc;
 }, {});
 
+// Hotels added from the admin "Hotels" tab are merged into HOTEL_KB / ALL_HOTELS_FLAT in place,
+// so every picker, the cost dashboard and the photo manager see them without further changes.
+export async function loadCustomHotels() {
+  try {
+    const res = await apiFetch("/api/admin/hotels");
+    if (!res.ok) return;
+    const { hotels = [] } = await res.json();
+    Object.keys(HOTEL_KB).forEach((g) => {
+      HOTEL_KB[g] = HOTEL_KB[g].filter((h) => !h.custom);
+    });
+    Object.keys(ALL_HOTELS_FLAT).forEach((id) => {
+      if (ALL_HOTELS_FLAT[id].custom) delete ALL_HOTELS_FLAT[id];
+    });
+    hotels.forEach((h) => {
+      const group = String(h.place || "").toLowerCase();
+      if (!HOTEL_KB[group]) return;
+      const hotel = { id: h.id, name: h.name, place: h.place, images: [], custom: true };
+      HOTEL_KB[group].push(hotel);
+      ALL_HOTELS_FLAT[hotel.id] = hotel;
+    });
+  } catch {
+    /* built-in hotels still work */
+  }
+}
+
 // ── Hotel Cost Dashboard ───────────────────────────────────────────────────
 function calcRowTotal(row) {
   const n  = Number(row.stays)    || 0;
@@ -529,11 +554,9 @@ function HotelCostDashboard({ hotelSelections = {}, timeline = [], onTotalChange
 }
 
 // ── Hotel Image Manager ────────────────────────────────────────────────────
-const ALL_HOTELS_LIST = Object.values(HOTEL_KB).flat();
-
 function HotelImageManager() {
   const [hotelImages, setHotelImages]   = useState({});
-  const [selectedId,  setSelectedId]    = useState(ALL_HOTELS_LIST[0]?.id || "");
+  const [selectedId,  setSelectedId]    = useState(Object.values(HOTEL_KB).flat()[0]?.id || "");
   const [urlDraft,    setUrlDraft]       = useState("");
   const [uploadFile,  setUploadFile]    = useState(null);
   const [saving,      setSaving]        = useState(false);
