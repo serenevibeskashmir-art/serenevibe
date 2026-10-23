@@ -21,10 +21,14 @@ export default function HotelsManager({ onChanged, onUnauthorized }) {
     try {
       const res = await apiFetch('/api/admin/hotels');
       if (res.status === 401) return onUnauthorized?.();
-      const data = await res.json();
+      let data = {};
+      try { data = await res.json(); } catch { /* server returned a non-JSON error page */ }
+      if (!res.ok) {
+        throw new Error(data.error || `Server error ${res.status}. Open Vercel > Logs for /api/admin/hotels.`);
+      }
       setHotels(data.hotels || []);
-    } catch {
-      setMsg({ type: 'error', text: 'Could not load hotels.' });
+    } catch (err) {
+      setMsg({ type: 'error', text: `Could not load hotels. ${err.message || ''}`.trim() });
     } finally {
       setLoading(false);
     }
