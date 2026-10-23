@@ -66,13 +66,24 @@ def get_hotel_images():
 def save_hotel_images():
     """
     Body: { "hotelId": ["url1", "url2", ...], ... }
-    Merges with existing data so partial updates are safe.
+    Only the hotels in the request are written; other hotels are left untouched.
     """
-    incoming = request.get_json(silent=True) or {}
-    existing = _load_hotel_images()
-    existing.update(incoming)
-    _save_hotel_images(existing)
-    return jsonify({"ok": True, "saved": list(incoming.keys())})
+    incoming = request.get_json(silent=True)
+    if not isinstance(incoming, dict) or not incoming:
+        return jsonify({"error": "Invalid request body."}), 400
+
+    clean = {}
+    for hotel_id, images in incoming.items():
+        if not isinstance(images, list):
+            return jsonify({"error": "Images must be a list."}), 400
+        clean[str(hotel_id)[:20]] = [i for i in images if isinstance(i, str) and i.strip()]
+
+    try:
+        _save_hotel_images(clean)
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"error": f"Database error: {exc.__class__.__name__}"}), 500
+    return jsonify({"ok": True, "saved": list(clean.keys())})
 
 
 # ── Admin-added hotels ────────────────────────────────────────────────────────
