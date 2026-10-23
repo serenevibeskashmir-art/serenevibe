@@ -2945,8 +2945,8 @@ def generate_pdf(itinerary_data: dict) -> str:
     # admin-added hotels failed or was stale), look that hotel up directly in the database.
     try:
         from backend.models import CustomHotel as _CH
-        for _raw in list(hotel_selections.values()):
-            _hid = str(_raw.get("id") if isinstance(_raw, dict) else _raw or "")
+        for _hsel in list(hotel_selections.values()):
+            _hid = str(_hsel.get("id") if isinstance(_hsel, dict) else _hsel or "")
             if _hid and _hid not in HOTEL_LOOKUP:
                 _row = _CH.query.filter_by(hotel_id=_hid).first()
                 if _row:
