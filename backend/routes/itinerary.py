@@ -195,6 +195,7 @@ def generate_custom_itinerary():
         "start_info": _point_info(data.get("start_info")),
         "end_info": _point_info(data.get("end_info")),
         "selected_hotels": selected_hotels,
+        "hotel_details": data.get("hotel_details") if isinstance(data.get("hotel_details"), dict) else {},
         "custom_cost": custom_cost,
         "meta_summary": {
             "client_name": client_name,
