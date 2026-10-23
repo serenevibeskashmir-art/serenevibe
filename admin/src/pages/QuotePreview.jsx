@@ -1241,6 +1241,20 @@ export default function QuotePreview({ quote }) {
         .qp-fix { border: 1px solid #b45309; background: #fff; color: #78350f; border-radius: 8px; min-height: 38px; padding: 0 12px; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
         .qp-fix:hover { background: #fef3c7; }
         .qp-draft { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; background: #eff6ff; border: 1px solid #93c5fd; color: #1e3a8a; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: 0.88rem; font-weight: 600; }
+        .qp-daypills { display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding: 2px 0 12px; margin-bottom: 6px; background: #f8fafc; }
+        .qp-daypills::-webkit-scrollbar { display: none; }
+        .qp-daypill { position: relative; flex: 0 0 auto; border: 0; border-radius: 999px; min-height: 44px; padding: 0 18px; font-size: 0.9rem; font-weight: 700; cursor: pointer; background: #e2e8f0; color: #1e293b; }
+        .qp-daypill.on { background: #1e293b; color: #fff; }
+        .qp-daypill .pd { position: absolute; top: 6px; right: 7px; width: 9px; height: 9px; border-radius: 50%; background: #f59e0b; border: 1px solid #fff; }
+        .qp-daypill.plus { background: #fff; border: 2px dashed #94a3b8; color: #334155; }
+        .qp-active-day { scroll-margin-top: 12px; }
+        @media (max-width: 640px) {
+          .qp-sticky { position: static; padding: 12px 14px; gap: 8px 16px; }
+          .qp-sticky .grow { flex-basis: 100%; order: 5; }
+          .qp-gen, .qp-ghost { flex: 1 1 auto; }
+          .qp-ovcard { flex-basis: 140px; }
+          .qp-daypills { position: sticky; top: 0; z-index: 25; margin: -2px -2px 8px; padding: 8px 2px 10px; border-bottom: 1px solid #e2e8f0; }
+        }
         .qp-footer-bar {
           display: flex;
           justify-content: space-between;
@@ -1404,7 +1418,7 @@ export default function QuotePreview({ quote }) {
             const hot = flatHotels[hotelSelections[i]];
             return (
               <div key={i} className={"qp-ovcard" + (i === activeDay ? " on" : "")}>
-                <button type="button" className="qp-ovmain" onClick={() => setActiveDay(i)} aria-label={`Edit day ${i + 1}`}>
+                <button type="button" className="qp-ovmain" onClick={() => { setActiveDay(i); setTimeout(() => { const el = document.getElementById("qp-editor"); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 0); }} aria-label={`Edit day ${i + 1}`}>
                   <span className="qp-ovdn"><span>Day {i + 1}</span>{warnDays.has(i) && <span className="qp-ovdot" title="Needs attention" />}</span>
                   <span className="qp-ovrt">{shortRoute(d)}</span>
                   <span className="qp-ovnt">{dep ? "No overnight" : (d.overnight_stay ? `Night in ${d.overnight_stay}` : "—")}</span>
@@ -1439,7 +1453,15 @@ export default function QuotePreview({ quote }) {
 
         {/* 4. Active day editor */}
         {timeline[activeDay] && (
-          <div className="qp-active-day">
+          <div className="qp-active-day" id="qp-editor">
+            <div className="qp-daypills" role="tablist" aria-label="Days">
+              {timeline.map((d, i) => (
+                <button key={i} type="button" role="tab" aria-selected={i === activeDay} className={"qp-daypill" + (i === activeDay ? " on" : "")} onClick={() => setActiveDay(i)}>
+                  Day {i + 1}{warnDays.has(i) && <span className="pd" title="Needs attention" />}
+                </button>
+              ))}
+              <button type="button" className="qp-daypill plus" onClick={addDay} aria-label="Add a day">+ Day</button>
+            </div>
             <h3 style={{ margin: "0 0 15px 0", color: "#0f172a", fontSize: "clamp(1rem, 3vw, 1.2rem)" }}>
               📍 Day {timeline[activeDay].day}: {timeline[activeDay].title || timeline[activeDay].date}
             </h3>
