@@ -168,10 +168,22 @@ def add_custom_hotel():
     name, place, error = _clean_hotel_body()
     if error:
         return jsonify({"error": error}), 400
-    row = CustomHotel(hotel_id="c" + uuid.uuid4().hex[:10], name=name, place=place)
-    db.session.add(row)
-    db.session.commit()
-    return jsonify({"ok": True, "hotel": _hotel_json(row)}), 201
+    for attempt in (1, 2):
+        try:
+            row = CustomHotel(hotel_id="c" + uuid.uuid4().hex[:10], name=name, place=place)
+            db.session.add(row)
+            db.session.commit()
+            return jsonify({"ok": True, "hotel": _hotel_json(row)}), 201
+        except Exception as exc:
+            db.session.rollback()
+            if attempt == 1:
+                try:
+                    db.create_all()      # table may be missing on a fresh database
+                except Exception:
+                    db.session.rollback()
+                continue
+            detail = str(getattr(exc, "orig", exc)).strip().splitlines()[0][:200]
+            return jsonify({"error": f"Could not save hotel ({exc.__class__.__name__}): {detail}"}), 500
 
 
 @admin_bp.put("/hotels/<hotel_id>")
