@@ -92,13 +92,27 @@ def _read() -> dict:
     return data
 
 
+def _with_custom_hotels(data: dict) -> dict:
+    """Add hotels created in the admin panel to the built-in list (never changes the cached copy)."""
+    try:
+        from backend.services import custom_hotels
+        extra = custom_hotels.get_all()
+    except Exception:
+        extra = {}
+    if not extra:
+        return data
+    merged = dict(data)
+    merged["hotels"] = {**data["hotels"], **{k: v for k, v in extra.items() if k not in data["hotels"]}}
+    return merged
+
+
 def get() -> dict:
-    """The PDF's content. Re-read automatically whenever pdf_service.py changes."""
+    """The PDF's content (plus admin-added hotels). Re-read automatically whenever pdf_service.py changes."""
     try:
         mtime = _PDF_SERVICE.stat().st_mtime
         if _cache["data"] is None or _cache["mtime"] != mtime:
             _cache.update(mtime=mtime, data=_read())
-        return _cache["data"]
+        return _with_custom_hotels(_cache["data"])
     except Exception as exc:   # never let this break the chat
         log.warning("pdf_content: could not read pdf_service.py: %s", exc)
-        return _cache["data"] or _empty()
+        return _with_custom_hotels(_cache["data"] or _empty())
