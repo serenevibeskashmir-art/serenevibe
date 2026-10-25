@@ -24,6 +24,11 @@ class Config:
         "pool_pre_ping": True,   # test connection before using from pool
         "pool_recycle": 300,     # recycle connections every 5 minutes
     }
+    # Optional 2nd Neon database used as a failover when DATABASE_URL can't be reached.
+    DATABASE_URL_2 = os.getenv("DATABASE_URL_2", "").strip()
+    if DATABASE_URL_2 and SQLALCHEMY_DATABASE_URI.startswith("postgresql"):
+        from backend.db_failover import make_creator
+        SQLALCHEMY_ENGINE_OPTIONS["creator"] = make_creator(SQLALCHEMY_DATABASE_URI, DATABASE_URL_2)
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
