@@ -47,6 +47,16 @@ def create_app():
             db.create_all()
         except Exception as exc:  # never let a DB hiccup crash the whole app on cold start
             print(f"db.create_all() skipped/failed at startup: {exc}")
+        # Make sure the failover database has the same tables, so it is ready if it's ever needed.
+        if app.config.get("DATABASE_URL_2"):
+            try:
+                from sqlalchemy import create_engine
+                from backend.db_failover import sqlalchemy_url
+                engine2 = create_engine(sqlalchemy_url(app.config["DATABASE_URL_2"]), pool_pre_ping=True)
+                db.metadata.create_all(engine2)
+                engine2.dispose()
+            except Exception as exc:
+                print(f"DATABASE_URL_2 schema setup skipped/failed: {exc}")
 
     @app.get("/")
     def serve_public_home():
