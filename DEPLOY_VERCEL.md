@@ -29,6 +29,7 @@ In your Vercel project → Settings → Environment Variables, add:
 | Variable         | Value                                      |
 |------------------|--------------------------------------------|
 | `DATABASE_URL`   | Your PostgreSQL URL (e.g. from Neon)       |
+| `DATABASE_URL_2` | (Optional) 2nd Neon database, used automatically if `DATABASE_URL` is unreachable |
 | `SECRET_KEY`     | A long random string                       |
 | `ADMIN_PASSWORD` | Your admin panel password                  |
 
