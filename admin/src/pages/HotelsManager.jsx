@@ -1,18 +1,22 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from '../api';
+import { cleanPlaceName, locatePlace } from './QuotePreview.jsx';
 
-const PLACES = ['Srinagar', 'Pahalgam', 'Gulmarg', 'Sonamarg'];
+// Built into the app; any other location can be typed in and is kept for next time.
+const BUILT_IN_PLACES = ['Srinagar', 'Pahalgam', 'Gulmarg', 'Sonamarg', 'Doodhpathri'];
 
 /**
  * Hotels tab: add / rename / delete hotels. Hotels added here are used by the
  * itinerary builder, cost calculator, PDF quotation, website slideshow and the AI assistant.
+ * Any location works: type a new place and it is added to the list automatically.
  * Photos are added from the "Hotel Photo Manager" at the bottom of the Itinerary Builder.
  */
 export default function HotelsManager({ onChanged, onUnauthorized }) {
   const [hotels, setHotels] = useState([]);
+  const [places, setPlaces] = useState(BUILT_IN_PLACES);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
-  const [place, setPlace] = useState(PLACES[0]);
+  const [place, setPlace] = useState(BUILT_IN_PLACES[0]);
   const [editId, setEditId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -32,26 +36,36 @@ export default function HotelsManager({ onChanged, onUnauthorized }) {
     } finally {
       setLoading(false);
     }
+    try {
+      const res = await apiFetch('/api/admin/places');
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.places)) setPlaces(data.places.map((p) => p.name));
+    } catch { /* the built-in list is still shown */ }
   }, [onUnauthorized]);
 
   useEffect(() => { load(); }, [load]);
 
-  const reset = () => { setName(''); setPlace(PLACES[0]); setEditId(null); };
+  const reset = () => { setName(''); setPlace(BUILT_IN_PLACES[0]); setEditId(null); };
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    const cleanPlace = cleanPlaceName(place);
+    if (!name.trim() || !cleanPlace) return;
     setBusy(true);
     setMsg(null);
     try {
+      // A location nobody has used before is looked up on the map, so it can be pinned on the PDF route map.
+      const known = places.some((p) => p.toLowerCase() === cleanPlace.toLowerCase());
+      const loc = known ? null : await locatePlace(cleanPlace);
       const res = await apiFetch(editId ? `/api/admin/hotels/${editId}` : '/api/admin/hotels', {
         method: editId ? 'PUT' : 'POST',
-        body: JSON.stringify({ name, place }),
+        body: JSON.stringify({ name, place: cleanPlace, lat: loc?.lat ?? null, lon: loc?.lon ?? null }),
       });
       if (res.status === 401) return onUnauthorized?.();
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Save failed.');
-      setMsg({ type: 'ok', text: editId ? 'Hotel updated.' : `"${data.hotel.name}" added to ${data.hotel.place}.` });
+      const note = (loc || known) ? '' : ' (its map position was not found, so it is not pinned on the PDF map)';
+      setMsg({ type: 'ok', text: editId ? 'Hotel updated.' : `"${data.hotel.name}" added to ${data.hotel.place}.${note}` });
       reset();
       await load();
       await onChanged?.();
@@ -78,12 +92,16 @@ export default function HotelsManager({ onChanged, onUnauthorized }) {
 
   const startEdit = (h) => { setEditId(h.id); setName(h.name); setPlace(h.place); setMsg(null); };
 
+  // Every known location, plus any place a hotel already uses.
+  const allPlaces = [...new Set([...places, ...hotels.map((h) => h.place)])];
+
   return (
     <section style={S.panel}>
       <h2 style={S.title}>Hotels</h2>
       <p style={S.text}>
         Add hotels here and they appear everywhere: itinerary builder, cost calculator, PDF quotation, the website
-        &ldquo;Where You&rsquo;ll Stay&rdquo; slideshow and the AI assistant. After adding a hotel, upload its photos
+        &ldquo;Where You&rsquo;ll Stay&rdquo; slideshow and the AI assistant. Any location works: type a new place and it
+        is added to the list for future trips. After adding a hotel, upload its photos
         in the <strong>Hotel Photo Manager</strong> at the bottom of the Itinerary Builder (a hotel with no photos
         is not shown in the website slideshow).
       </p>
@@ -96,11 +114,19 @@ export default function HotelsManager({ onChanged, onUnauthorized }) {
           maxLength={150}
           onChange={(e) => setName(e.target.value)}
         />
-        <select style={{ ...S.input, flex: '1 1 140px' }} value={place} onChange={(e) => setPlace(e.target.value)}>
-          {PLACES.map((p) => <option key={p} value={p}>{p}</option>)}
-        </select>
-        <button type="submit" disabled={busy || !name.trim()} style={S.primary}>
-          {editId ? 'Save changes' : '+ Add hotel'}
+        <input
+          style={{ ...S.input, flex: '1 1 160px' }}
+          list="hotel-places"
+          placeholder="Place, e.g. Sopore"
+          value={place}
+          maxLength={40}
+          onChange={(e) => setPlace(e.target.value)}
+        />
+        <datalist id="hotel-places">
+          {allPlaces.map((p) => <option key={p} value={p} />)}
+        </datalist>
+        <button type="submit" disabled={busy || !name.trim() || !place.trim()} style={S.primary}>
+          {busy ? 'Saving…' : editId ? 'Save changes' : '+ Add hotel'}
         </button>
         {editId && <button type="button" onClick={reset} style={S.secondary}>Cancel</button>}
       </form>
@@ -111,7 +137,7 @@ export default function HotelsManager({ onChanged, onUnauthorized }) {
       {loading ? (
         <p style={S.text}>Loading…</p>
       ) : (
-        PLACES.map((pl) => {
+        allPlaces.map((pl) => {
           const group = hotels.filter((h) => h.place === pl);
           if (!group.length) return null;
           return (
