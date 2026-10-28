@@ -150,7 +150,7 @@ const PICKUP_ROUTE = "Airport Pickup and Local Sightseeing: Overnight Srinagar";
 const DROP_ROUTE   = "Airport Drop-Departure";
 // Day 1 can end in any base: "Airport Pickup ...: Overnight <City>".
 const isPickupRoute = (r) => /^Airport Pickup/i.test(r || "");
-const pickupCity = (r) => ((r || "").match(/Overnight\s+(\w+)/i) || [])[1] || "Srinagar";
+const pickupCity = (r) => ((((r || "").match(/Overnight\s+(.+)$/i) || [])[1]) || "").trim() || "Srinagar";
 const pickupRouteFor = (city) =>
   /^srinagar$/i.test(city) ? PICKUP_ROUTE : `Airport Pickup: Overnight ${city}`;
 const PICKUP_CITY_BLURB = {
@@ -171,14 +171,23 @@ const AIRPORT_RE = /Srinagar International Airport|Srinagar Airport/g;
 
 // ── Route picker: "Starting from / Going to / Overnight" ───────────────────
 // The day title is generated from three picks, so new combinations never need a new list entry.
-const PICK_FROM  = ["Airport", "Srinagar", "Pahalgam", "Gulmarg", "Sonamarg"];
-const PICK_TO    = ["Local sightseeing", "Srinagar", "Pahalgam", "Gulmarg", "Sonamarg", "Doodhpathri", "Departure"];
-const PICK_NIGHT = ["Srinagar", "Pahalgam", "Gulmarg", "Sonamarg"];
+const KNOWN_PLACES = ["Srinagar", "Pahalgam", "Gulmarg", "Sonamarg", "Doodhpathri"];  // built into the app
+const BASE_NIGHT    = ["Srinagar", "Pahalgam", "Gulmarg", "Sonamarg"];                  // overnight bases built in
+// Locations the admin added (name, lat, lon). Filled by loadCustomPlaces(); every picker and the PDF use it.
+export const CUSTOM_PLACES = [];
+const customNames = () => CUSTOM_PLACES
+  .map((p) => p.name)
+  .filter((n) => !KNOWN_PLACES.some((k) => k.toLowerCase() === n.toLowerCase()));
+const fromOptions  = () => ["Airport", ...BASE_NIGHT, ...customNames()];
+const toOptions    = () => ["Local sightseeing", ...BASE_NIGHT, "Doodhpathri", ...customNames(), "Departure"];
+const nightOptions = () => [...BASE_NIGHT, ...customNames()];
+const isFromPlace  = (name) => fromOptions().includes(name);
+const isNightPlace = (name) => nightOptions().includes(name);
 
 function defaultNightFor(to, from) {
-  if (PICK_NIGHT.includes(to)) return to;                       // going to a base: sleep there
+  if (isNightPlace(to)) return to;                        // going to a base: sleep there
   if (from === "Airport") return "Srinagar";
-  return PICK_NIGHT.includes(from) ? from : "Srinagar";         // sightseeing / day trip: back where you started
+  return isNightPlace(from) ? from : "Srinagar";          // sightseeing / day trip: back where you started
 }
 
 function routeTitle(from, to, night) {
@@ -199,10 +208,10 @@ function parseRoute(route) {
   const r = (route || "").trim();
   let m;
   if (r === DROP_ROUTE) return { from: null, to: "Departure", night: "" };
-  if ((m = r.match(/^Airport Pickup and Local Sightseeing: Overnight (\w+)$/i))) return { from: "Airport", to: "Local sightseeing", night: m[1] };
-  if ((m = r.match(/^Airport Pickup: Overnight (\w+)$/i)))                       return { from: "Airport", to: m[1], night: m[1] };
-  if ((m = r.match(/^(\w+) Local Sightseeing: Overnight (\w+)$/i)))              return { from: m[1], to: "Local sightseeing", night: m[2] };
-  if ((m = r.match(/^(\w+) to (\w+): Overnight (\w+)$/i)))                       return { from: m[1], to: m[2], night: m[3] };
+  if ((m = r.match(/^Airport Pickup and Local Sightseeing: Overnight (.+)$/i))) return { from: "Airport", to: "Local sightseeing", night: m[1].trim() };
+  if ((m = r.match(/^Airport Pickup: Overnight (.+)$/i)))                       return { from: "Airport", to: m[1].trim(), night: m[1].trim() };
+  if ((m = r.match(/^(.+?) Local Sightseeing: Overnight (.+)$/i)))              return { from: m[1].trim(), to: "Local sightseeing", night: m[2].trim() };
+  if ((m = r.match(/^(.+?) to (.+?): Overnight (.+)$/i)))                       return { from: m[1].trim(), to: m[2].trim(), night: m[3].trim() };
   return null;
 }
 
@@ -243,7 +252,7 @@ function dayTravel(day, idx, timeline, startPoint, endPoint) {
   const prevNight = idx > 0 ? (timeline[idx - 1]?.overnight_stay || "") : "";
   let from = p?.from || "", to = p?.to || "", kind = "";
   if (!p) {                                            // hand-picked preset: read it from the text
-    const m = (day.transit_route || "").match(/^(\w+) to (\w+)/i);
+    const m = (day.transit_route || "").match(/^(.+?) to (.+?)(?::|$)/i);
     if (m) { from = m[1]; to = m[2]; }
   }
   if (to === "Departure") { kind = "departure"; from = prevNight || from || "Srinagar"; to = endPoint || DEFAULT_POINT; }
@@ -341,12 +350,10 @@ export const HOTEL_KB = {
   ],
 };
 
+// Key of a place in HOTEL_KB: "Pahalgam" -> "pahalgam", "Dal Lake" -> "dal-lake".
+export const groupKey = (place = "") => String(place).split(":")[0].trim().toLowerCase().replace(/\s+/g, "-");
 function getHotelGroup(overnight_stay = "") {
-  const s = overnight_stay.toLowerCase();
-  if (s.includes("pahalgam")) return "pahalgam";
-  if (s.includes("gulmarg"))  return "gulmarg";
-  if (s.includes("sonamarg")) return "sonamarg";
-  return "srinagar";
+  return groupKey(overnight_stay) || "srinagar";
 }
 
 const ALL_HOTELS_FLAT = Object.values(HOTEL_KB).flat().reduce((acc, h) => {
@@ -354,9 +361,44 @@ const ALL_HOTELS_FLAT = Object.values(HOTEL_KB).flat().reduce((acc, h) => {
   return acc;
 }, {});
 
+function ensureGroup(place) {
+  const g = groupKey(place);
+  if (g && !HOTEL_KB[g]) HOTEL_KB[g] = [];
+  return g;
+}
+
+export function cleanPlaceName(raw) {
+  return String(raw || "").replace(/:/g, " ").replace(/\s+/g, " ").trim().slice(0, 40);
+}
+
+// AI lookup of a place's coordinates (admin only). Returns {lat, lon} or null. Never throws.
+export async function locatePlace(name) {
+  try {
+    const res = await apiFetch("/api/admin/locate-place", { method: "POST", body: JSON.stringify({ name }) });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.found && Number.isFinite(data.lat) && Number.isFinite(data.lon)) return { lat: data.lat, lon: data.lon };
+  } catch { /* optional: the place is still saved without a map position */ }
+  return null;
+}
+
+// Locations the admin added. Hotels can be attached to any of them.
+export async function loadCustomPlaces() {
+  try {
+    const res = await apiFetch("/api/admin/places");
+    if (!res.ok) return;
+    const { places = [] } = await res.json();
+    CUSTOM_PLACES.length = 0;
+    places.filter((p) => !p.builtin).forEach((p) => CUSTOM_PLACES.push({ name: p.name, lat: p.lat, lon: p.lon }));
+    CUSTOM_PLACES.forEach((p) => ensureGroup(p.name));
+  } catch {
+    /* built-in places still work */
+  }
+}
+
 // Hotels added from the admin "Hotels" tab are merged into HOTEL_KB / ALL_HOTELS_FLAT in place,
 // so every picker, the cost dashboard and the photo manager see them without further changes.
 export async function loadCustomHotels() {
+  await loadCustomPlaces();
   try {
     const res = await apiFetch("/api/admin/hotels");
     if (!res.ok) return;
@@ -368,8 +410,8 @@ export async function loadCustomHotels() {
       if (ALL_HOTELS_FLAT[id].custom) delete ALL_HOTELS_FLAT[id];
     });
     hotels.filter((h) => h.custom).forEach((h) => {
-      const group = String(h.place || "").toLowerCase();
-      if (!HOTEL_KB[group]) return;
+      const group = ensureGroup(h.place);
+      if (!group) return;
       const hotel = { id: h.id, name: h.name, place: h.place, images: [], custom: true };
       HOTEL_KB[group].push(hotel);
       ALL_HOTELS_FLAT[hotel.id] = hotel;
@@ -806,6 +848,36 @@ export default function QuotePreview({ quote }) {
   const [activeDay,       setActiveDay]       = useState(0);
   const [editableCost,    setEditableCost]    = useState(quote?.financial_summary?.total_payable_inr || 38500);
   const [hotelSelections, setHotelSelections] = useState({});
+  const [, setPlacesVer] = useState(0);                  // bumps when a location is added, so the pickers redraw
+  const [addOpen, setAddOpen] = useState(null);          // picker row (1 From, 2 To, 3 Overnight) with the add box open
+  const [addText, setAddText] = useState("");
+  const [addBusy, setAddBusy] = useState(false);
+  const [addErr,  setAddErr]  = useState("");
+  const [addNote, setAddNote] = useState("");
+
+  // Saves a new location (AI-located when possible) and uses it for the picker row that asked for it.
+  const addCustomPlace = async (raw, onPick) => {
+    const name = cleanPlaceName(raw);
+    if (!name) return;
+    const known = [...KNOWN_PLACES, ...customNames()].find((n) => n.toLowerCase() === name.toLowerCase());
+    if (known) { setAddOpen(null); setAddText(""); onPick(known); return; }
+    setAddBusy(true); setAddErr(""); setAddNote("");
+    try {
+      const loc = await locatePlace(name);
+      const res = await apiFetch("/api/admin/places", { method: "POST", body: JSON.stringify({ name, lat: loc?.lat ?? null, lon: loc?.lon ?? null }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not add this location.");
+      await loadCustomPlaces();
+      setPlacesVer((v) => v + 1);
+      setAddOpen(null); setAddText("");
+      if (!loc) setAddNote(`${data.place.name} was added, but its map position was not found. It appears in the PDF day table, but not as a pin on the map.`);
+      onPick(data.place.name);
+    } catch (e) {
+      setAddErr(e.message);
+    } finally {
+      setAddBusy(false);
+    }
+  };
   const [startPoint,      setStartPoint]      = useState(quote?.meta_summary?.start_point || DEFAULT_POINT);
   const [endPoint,        setEndPoint]        = useState(quote?.meta_summary?.end_point   || DEFAULT_POINT);
 
@@ -825,11 +897,11 @@ export default function QuotePreview({ quote }) {
   const [pickDraft, setPickDraft] = useState({});     // unfinished picks per day index
   const applyRoute = (route, idx = activeDay) => {
     const automaticSchedule = buildSchedule(route, startPoint, endPoint, startInfo, endInfo);
-    const overnightMatch = route.match(/Overnight\s+(\w+)/i);
-    const derivedCity = overnightMatch ? overnightMatch[1] : null;
+    const overnightMatch = route.match(/Overnight\s+(.+)$/i);
+    const derivedCity = overnightMatch ? overnightMatch[1].trim() : null;
     if (derivedCity) {
-      const hotelGroup = HOTEL_KB[derivedCity.toLowerCase()] || HOTEL_KB["srinagar"];
-      setHotelSelections(prev => ({ ...prev, [idx]: hotelGroup[0].id }));
+      const hotelGroup = HOTEL_KB[groupKey(derivedCity)] || [];
+      setHotelSelections(prev => ({ ...prev, [idx]: hotelGroup[0]?.id || null }));
     } else {
       setHotelSelections(prev => ({ ...prev, [idx]: null }));
     }
@@ -1016,7 +1088,7 @@ export default function QuotePreview({ quote }) {
       if (i > 0 && p && p.from && p.from !== "Airport") {
         const prev = timeline[i - 1];
         if (!isDepDay(prev) && prev.overnight_stay && prev.overnight_stay.toLowerCase() !== p.from.toLowerCase()) {
-          const canFix = PICK_FROM.includes(prev.overnight_stay) && p.to !== "Departure";
+          const canFix = isFromPlace(prev.overnight_stay) && p.to !== "Departure";
           out.push({ day: i, text: `Day ${no} starts from ${p.from}, but Day ${i} ended in ${prev.overnight_stay}.`,
             btn: canFix ? `Start from ${prev.overnight_stay}` : "Open day",
             fix: canFix ? () => applyRoute(routeTitle(prev.overnight_stay, p.to, p.night), i) : open });
@@ -1529,7 +1601,7 @@ export default function QuotePreview({ quote }) {
               const parsed = parseRoute(day.transit_route);
               const draft = pickDraft[activeDay] || {};
               const prevNight = activeDay > 0 ? (timeline[activeDay - 1]?.overnight_stay || "") : "";
-              const autoFrom = activeDay === 0 ? "Airport" : (PICK_FROM.includes(prevNight) ? prevNight : "Srinagar");
+              const autoFrom = activeDay === 0 ? "Airport" : (isFromPlace(prevNight) ? prevNight : "Srinagar");
               const from  = draft.from  ?? parsed?.from  ?? autoFrom;
               const to    = draft.to    ?? parsed?.to    ?? "";
               const isDep = to === "Departure";
@@ -1568,6 +1640,31 @@ export default function QuotePreview({ quote }) {
                       <button key={o} type="button" disabled={disabled} onClick={() => onPick(o)} style={chipStyle(value === o, disabled)}>{o}</button>
                     ))}
                   </div>
+                  {!disabled && (addOpen === step ? (
+                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center", marginTop: "8px" }}>
+                      <input
+                        autoFocus
+                        className="qp-route-select"
+                        style={{ maxWidth: "260px", minHeight: "38px" }}
+                        placeholder="Place name, e.g. Sopore"
+                        maxLength={40}
+                        value={addText}
+                        disabled={addBusy}
+                        onChange={(e) => setAddText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); addCustomPlace(addText, onPick); }
+                          if (e.key === "Escape") setAddOpen(null);
+                        }}
+                      />
+                      <button type="button" disabled={addBusy || !addText.trim()} onClick={() => addCustomPlace(addText, onPick)} style={{ ...chipStyle(true, false), border: "none" }}>
+                        {addBusy ? "Locating…" : "Add"}
+                      </button>
+                      <button type="button" disabled={addBusy} onClick={() => setAddOpen(null)} style={chipStyle(false, false)}>Cancel</button>
+                      {addErr && <div style={{ width: "100%", color: "#b91c1c", fontSize: "0.8rem" }}>{addErr}</div>}
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => { setAddOpen(step); setAddText(""); setAddErr(""); }} style={{ ...chipStyle(false, false), borderStyle: "dashed", color: "#0284c7", borderColor: "#7dd3fc", marginTop: "8px" }}>+ Add location</button>
+                  ))}
                 </div>
               );
 
@@ -1589,27 +1686,39 @@ export default function QuotePreview({ quote }) {
                     </select>
                   </div>
 
-                  {row(1, "Starting from", activeDay > 0 && !draft.from && !parsed && prevNight ? `(Day ${activeDay} overnight)` : (parsed && activeDay > 0 && from !== autoFrom ? `(Day ${activeDay} ended in ${prevNight || "?"})` : ""), PICK_FROM, from, (o) => pick({ from: o }))}
-                  {row(2, "Going to", "", PICK_TO, to, (o) => pick({ to: o }))}
-                  {row(3, "Overnight stay", isDep ? "(not needed on departure day)" : "", PICK_NIGHT, night || (customRoute ? (day.overnight_stay || "") : ""), pickNight, isDep)}
+                  {row(1, "Starting from", activeDay > 0 && !draft.from && !parsed && prevNight ? `(Day ${activeDay} overnight)` : (parsed && activeDay > 0 && from !== autoFrom ? `(Day ${activeDay} ended in ${prevNight || "?"})` : ""), fromOptions(), from, (o) => pick({ from: o }))}
+                  {row(2, "Going to", "", toOptions(), to, (o) => pick({ to: o }))}
+                  {row(3, "Overnight stay", isDep ? "(not needed on departure day)" : "", nightOptions(), night || (customRoute ? (day.overnight_stay || "") : ""), pickNight, isDep)}
+                  {addNote && <div style={{ fontSize: "0.8rem", color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "8px 10px", marginBottom: "10px" }}>{addNote}</div>}
                   {customRoute && <div style={{ fontSize: "0.78rem", color: "#64748b", marginBottom: "10px" }}>Using preset “{day.transit_route}”. Pick From / To above to replace it.</div>}
                 </div>
               );
             })()}
 
-            {/* Hotel dropdown */}
-            <div style={{ marginBottom: "15px" }}>
-              <select
-                className="qp-hotel-select"
-                value={hotelSelections[activeDay] || ""}
-                onChange={(e) => setHotelSelections(prev => ({ ...prev, [activeDay]: e.target.value }))}
-              >
-                <option value="">-- Choose Hotel --</option>
-                {(HOTEL_KB[getHotelGroup(timeline[activeDay].overnight_stay)] || HOTEL_KB["srinagar"]).map((hotel) => (
-                  <option key={hotel.id} value={hotel.id}>{hotel.name} — {hotel.place} · B&D Included</option>
-                ))}
-              </select>
-            </div>
+            {/* Hotel dropdown: the hotels added for this day's overnight place */}
+            {!isDepDay(timeline[activeDay]) && (() => {
+              const place = timeline[activeDay].overnight_stay || "";
+              const list = HOTEL_KB[getHotelGroup(place)] || [];
+              return (
+                <div style={{ marginBottom: "15px" }}>
+                  <select
+                    className="qp-hotel-select"
+                    value={hotelSelections[activeDay] || ""}
+                    onChange={(e) => setHotelSelections(prev => ({ ...prev, [activeDay]: e.target.value }))}
+                  >
+                    <option value="">{list.length ? "-- Choose Hotel --" : `-- No hotels added for ${place || "this place"} yet --`}</option>
+                    {list.map((hotel) => (
+                      <option key={hotel.id} value={hotel.id}>{hotel.name} — {hotel.place} · B&D Included</option>
+                    ))}
+                  </select>
+                  {!list.length && place && (
+                    <div style={{ color: "#64748b", fontSize: "0.78rem", marginTop: "6px" }}>
+                      Add hotels for {place} in the Hotels tab. They then appear here and in the PDF.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* AI writer */}
             <div style={{ background: "#faf5ff", border: "1px solid #e9d5ff", borderRadius: "8px", padding: "10px 12px", marginBottom: "4px" }}>
