@@ -7,7 +7,7 @@ from backend.auth import admin_required, create_admin_token
 from backend.config import Config
 from backend.extensions import db
 from backend.models import CustomHotel, HotelImages
-from backend.services.custom_hotels import PLACES
+from backend.services.custom_hotels import clean_place_name, ensure_place, get_places, place_key
 
 admin_bp = Blueprint("admin", __name__)
 
@@ -94,11 +94,12 @@ def _hotel_json(row):
 def _clean_hotel_body():
     data = request.get_json(silent=True) or {}
     name = " ".join(str(data.get("name", "")).split())
-    place = str(data.get("place", "")).strip().title()
+    place = clean_place_name(data.get("place"))
     if not name or len(name) > 150:
         return None, None, "Hotel name is required (max 150 characters)."
-    if place not in PLACES:
-        return None, None, "Place must be one of: " + ", ".join(PLACES) + "."
+    if not place:
+        return None, None, "Place is required (max 40 characters)."
+    ensure_place(place, data.get("lat"), data.get("lon"))   # a new location becomes available everywhere
     return name, place, None
 
 
@@ -210,3 +211,27 @@ def delete_custom_hotel(hotel_id):
     db.session.delete(row)
     db.session.commit()
     return jsonify({"ok": True})
+
+
+# ── Locations (itinerary builder + Hotels tab) ───────────────────────────────
+@admin_bp.get("/places")
+@admin_required
+def list_places():
+    return jsonify({"places": get_places()})
+
+
+@admin_bp.post("/places")
+@admin_required
+def add_place():
+    data = request.get_json(silent=True) or {}
+    name = clean_place_name(data.get("name"))
+    if not name or len(name) > 40:
+        return jsonify({"error": "Place name is required (max 40 characters)."}), 400
+    row = ensure_place(name, data.get("lat"), data.get("lon"))
+    if row is None:
+        existing = next((p for p in get_places() if p["key"] == place_key(name)), None)
+        if existing:                       # a built-in location: nothing to store
+            return jsonify({"ok": True, "place": existing}), 200
+        return jsonify({"error": "Could not save this location. Please try again."}), 500
+    place = {"name": row.name, "key": row.key, "lat": row.lat, "lon": row.lon, "builtin": False}
+    return jsonify({"ok": True, "place": place}), 201
