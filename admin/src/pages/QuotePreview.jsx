@@ -1610,6 +1610,11 @@ export default function QuotePreview({ quote }) {
 
               const pick = (patch) => {
                 const next = { from, to, night, ...patch };
+                // Day 1 starts where the guests are collected: a real place (e.g. Pathankot) becomes the tour
+                // start point, so the PDF cover, journey line and map show it. "Airport" keeps the start point as set.
+                if (activeDay === 0 && patch.from !== undefined && patch.from !== "Airport" && patch.from !== startPoint) {
+                  changeStart(patch.from);
+                }
                 if (patch.to !== undefined && patch.night === undefined) next.night = patch.to === "Departure" ? "" : defaultNightFor(patch.to, next.from);
                 if (next.to === "Departure" || (next.to && next.night)) {
                   applyRoute(routeTitle(next.from, next.to, next.night));
