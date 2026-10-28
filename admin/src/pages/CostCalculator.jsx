@@ -1,17 +1,19 @@
 import React, { useMemo, useState } from 'react';
-import { HOTEL_KB } from './QuotePreview.jsx';
+import { HOTEL_KB, CUSTOM_PLACES, groupKey } from './QuotePreview.jsx';
 
 /* Step-by-step trip cost calculator.
    Step 0: number of nights. Steps 1..N: one night each (location, hotel,
    rooms, cost per night, extra beds, EB cost). Last step: vehicle + total.
    Works entirely in the browser; nothing is saved or sent to the server. */
 
-const LOCS = [
+const BASE_LOCS = [
   { key: 'srinagar', label: 'Srinagar' },
   { key: 'pahalgam', label: 'Pahalgam' },
   { key: 'gulmarg',  label: 'Gulmarg'  },
   { key: 'sonamarg', label: 'Sonamarg' },
 ];
+// Built-in locations plus any the admin added (their hotels are picked the same way).
+const locsList = () => [...BASE_LOCS, ...CUSTOM_PLACES.map((p) => ({ key: groupKey(p.name), label: p.name }))];
 const MAX_NIGHTS = 30;
 
 const inr = (n) => '₹' + Math.round(n).toLocaleString('en-IN');
@@ -55,7 +57,7 @@ export default function CostCalculator() {
   const go = (s) => { setStep(s); window.scrollTo(0, 0); };
 
   const copySummary = async () => {
-    const label = (r) => (LOCS.find((l) => l.key === r.loc) || {}).label;
+    const label = (r) => (locsList().find((l) => l.key === r.loc) || {}).label;
     const lines = rows.map((r, i) => {
       const c = dayCost(r);
       return `Day ${i + 1}: ${label(r)}, ${r.hotel}, ${num(r.rooms)} room(s) x ${inr(num(r.rate))}` +
@@ -117,7 +119,7 @@ export default function CostCalculator() {
               <label style={S.field}>
                 <span style={S.label}>Location</span>
                 <select style={S.input} value={row.loc} onChange={(e) => changeLoc(step - 1, e.target.value)}>
-                  {LOCS.map((l) => <option key={l.key} value={l.key}>{l.label}</option>)}
+                  {locsList().map((l) => <option key={l.key} value={l.key}>{l.label}</option>)}
                 </select>
               </label>
 
@@ -190,7 +192,7 @@ export default function CostCalculator() {
               <ul style={S.list}>
                 {rows.map((r, i) => {
                   const c = dayCost(r);
-                  const loc = (LOCS.find((l) => l.key === r.loc) || {}).label;
+                  const loc = (locsList().find((l) => l.key === r.loc) || {}).label;
                   return (
                     <li key={i} style={S.li}>
                       <div style={{ minWidth: 0 }}>
