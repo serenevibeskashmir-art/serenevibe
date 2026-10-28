@@ -1209,7 +1209,7 @@ def _stay_segments(timeline, hotel_selections, lookup):
         sig = f"{day.get('title', '')} {day.get('transit_route', '')}".lower()
         if not night or night.lower() == "departure" or "departure" in sig or "airport drop" in sig:
             continue
-        hid = hotel_selections.get(str(idx - 1)) or hotel_selections.get(str(idx)) or hotel_selections.get(idx)
+        hid = hotel_selections.get(str(idx - 1))          # selections are keyed by 0-based day index
         if isinstance(hid, dict):
             hid = hid.get("id")
         hname = lookup.get(str(hid), {}).get("name") if hid else None
@@ -1692,6 +1692,10 @@ class KashmirRouteMap(Flowable):
         r = (route_str or "").lower().strip()
         if "departure" in r or "airport drop" in r:
             return "departure"
+        for rx, kind in _ROUTE_SHAPES:
+            m = rx.match((route_str or "").strip())
+            if m:
+                return _place_key(m.group(2) if kind == "to" else m.group(1))
 
         def first_stop(text, skip_hub):
             hits = [(text.find(k), k) for k in self.STOPS if k in text]
@@ -1719,11 +1723,7 @@ class KashmirRouteMap(Flowable):
             if route:
                 key = self._destination(route)
             else:
-                key = "srinagar"
-                for k in self.STOPS:
-                    if k in overnight.lower():
-                        key = k
-                        break
+                key = _place_key(overnight) or "srinagar"
                 if "departure" in overnight.lower() or not overnight:
                     key = "departure"
 
@@ -1737,7 +1737,7 @@ class KashmirRouteMap(Flowable):
             self._rows.append({
                 "day": idx, "loc": loc, "key": hub_key, "is_dep": is_dep,
                 "gps": ("-" if is_dep and not _is_srinagar_point(self.end_point)
-                        else self.GPS_LABEL.get(hub_key, self.GPS_LABEL["srinagar"])),
+                        else self.GPS_LABEL.get(hub_key, "-")),
                 "activity": activity,
                 "night": "-" if (is_dep or overnight.lower() in ("", "departure")) else overnight,
             })
@@ -1746,8 +1746,8 @@ class KashmirRouteMap(Flowable):
         prev = "srinagar"
         for r in self._rows:
             r["origin"] = prev
-            night = r["night"].lower()
-            prev = next((k for k in self.STOPS if k in night), r["key"] if not r["is_dep"] else "srinagar")
+            night = "" if r["night"] == "-" else _place_key(r["night"])
+            prev = "srinagar" if r["is_dep"] else (night or r["key"])
 
     # ── projection / primitives ─────────────────────────────────────────────
     def _proj(self, lat, lon):
@@ -2621,6 +2621,65 @@ def _quote_ref(client_name) -> str:
     return f"SVK-{datetime.datetime.now(IST).strftime('%y%m%d')}-{initials}"
 
 
+# ── Custom locations (added in the admin itinerary builder / Hotels tab) ──────
+# Route titles name places by their text ("Sopore to Gulmarg: Overnight Gulmarg"), so any name works.
+# For one PDF build, every admin-added place is registered into KashmirRouteMap: it always gets a
+# row in the day table, and gets a pin and road on the map when its coordinates are known.
+_ROUTE_SHAPES = (
+    (re.compile(r"^airport pickup(?: and local sightseeing)?\s*:\s*overnight\s+(.+)$", re.I), "pickup"),
+    (re.compile(r"^(.+?)\s+local sightseeing\s*:\s*overnight\s+(.+)$", re.I), "local"),
+    (re.compile(r"^(.+?)\s+to\s+(.+?)\s*:\s*overnight\s+(.+)$", re.I), "to"),
+)
+_CUSTOM_PALETTE = (
+    ("#7c2d12", "#fb923c", "#fff7ed"),   # orange
+    ("#164e63", "#06b6d4", "#ecfeff"),   # cyan
+    ("#831843", "#ec4899", "#fdf2f8"),   # pink
+    ("#365314", "#84cc16", "#f7fee5"),   # lime
+    ("#312e81", "#6366f1", "#eef2ff"),   # indigo
+)
+_CUSTOM_MAP_KEYS = set()
+
+
+def _place_key(name) -> str:
+    """Matching key for a place name as it appears in route text: lower case, single spaces."""
+    return " ".join(str(name or "").replace(":", " ").split()).lower()
+
+
+def _register_custom_map_places():
+    """Load the admin-added places into the route map tables (repeated on every build)."""
+    cls = KashmirRouteMap
+    tables = (cls.STOPS, cls.DISPLAY, cls.GPS_LABEL, cls.ROADS, cls.PIN_COLORS, cls.ROW_TINT, cls.LABEL_SIDE)
+    for key in list(_CUSTOM_MAP_KEYS):
+        for table in tables:
+            table.pop(key, None)
+    _CUSTOM_MAP_KEYS.clear()
+    try:
+        from backend.models import CustomPlace
+        rows = CustomPlace.query.order_by(CustomPlace.id).all()
+    except Exception as exc:
+        print(f"Warning: could not load custom places for the route map: {exc}")
+        return
+    hub = cls.STOPS["srinagar"]
+    for i, row in enumerate(rows):
+        key = _place_key(row.name)
+        if not key or key in cls.STOPS:          # a built-in place is never redefined
+            continue
+        dark, bright, tint = _CUSTOM_PALETTE[i % len(_CUSTOM_PALETTE)]
+        cls.DISPLAY[key] = row.name
+        cls.PIN_COLORS[key] = (colors.HexColor(dark), colors.HexColor(bright))
+        cls.ROW_TINT[key] = colors.HexColor(tint)
+        cls.LABEL_SIDE[key] = "right"
+        _CUSTOM_MAP_KEYS.add(key)
+        if row.lat is None or row.lon is None:
+            continue                              # listed in the day table; no pin without coordinates
+        dest = (row.lat, row.lon)
+        cls.STOPS[key] = dest
+        cls.GPS_LABEL[key] = (f"{abs(row.lat):.2f}°{'N' if row.lat >= 0 else 'S'}  "
+                              f"{abs(row.lon):.2f}°{'E' if row.lon >= 0 else 'W'}")
+        cls.ROADS[key] = [(hub[0] + (dest[0] - hub[0]) * t, hub[1] + (dest[1] - hub[1]) * t)
+                          for t in (0.0, 0.25, 0.5, 0.75, 1.0)]
+
+
 def generate_pdf(itinerary_data: dict) -> str:
     import os as _os; _out = _os.environ.get("OUTPUT_DIR", "/tmp/output"); Path(_out).mkdir(exist_ok=True)
     client_name = str(itinerary_data.get("client_name", "Client"))
@@ -2652,6 +2711,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     start_point  = str(itinerary_data.get("start_point") or "").strip() or DEFAULT_POINT
     end_point    = str(itinerary_data.get("end_point") or "").strip() or DEFAULT_POINT
     itinerary_data = dict(itinerary_data)
+    _register_custom_map_places()
     itinerary_data["timeline"] = _apply_points(itinerary_data.get("timeline", []), start_point, end_point)
     custom_cost  = itinerary_data.get("custom_cost") or \
                    itinerary_data.get("financial_summary", {}).get("total_payable_inr", "On Request")
@@ -2766,7 +2826,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         def _banner_hotel(_i=idx, _sel=_hsel):
             if not isinstance(_sel, dict):
                 return ""
-            hid = _sel.get(str(_i - 1)) or _sel.get(str(_i)) or _sel.get(_i - 1) or _sel.get(_i)
+            hid = _sel.get(str(_i - 1))                    # 0-based day index, as the itinerary builder stores it
             if isinstance(hid, dict):
                 hid = hid.get("id")
             info = HOTEL_LOOKUP.get(str(hid), {}) if hid else {}
@@ -3005,9 +3065,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     day_place_map = {}
 
     for idx, day_info in enumerate(timeline, start=1):
-        hotel_id   = (hotel_selections.get(str(idx - 1)) or
-                      hotel_selections.get(str(idx)) or
-                      hotel_selections.get(idx))
+        hotel_id   = hotel_selections.get(str(idx - 1))    # 0-based day index, as the itinerary builder stores it
         if isinstance(hotel_id, dict):
             hotel_id = hotel_id.get("id")
 
