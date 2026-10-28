@@ -68,6 +68,20 @@ class CustomHotel(db.Model):
     place    = db.Column(db.String(40), nullable=False)
 
 
+class CustomPlace(db.Model):
+    """
+    A location added from the admin panel (beyond the built-in list). It can be picked as a
+    starting point, a destination or an overnight stop, and hotels can be attached to it.
+    lat/lon are optional; with coordinates the place gets a pin on the PDF route map.
+    """
+    __tablename__ = "custom_places"
+    id   = db.Column(db.Integer, primary_key=True)
+    key  = db.Column(db.String(120), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(60), nullable=False)
+    lat  = db.Column(db.Float, nullable=True)
+    lon  = db.Column(db.Float, nullable=True)
+
+
 def _utc_now():
     """Naive UTC timestamp (works identically on SQLite and PostgreSQL)."""
     return datetime.now(timezone.utc).replace(tzinfo=None)
