@@ -21,11 +21,12 @@ Admin endpoints (Bearer token required)
 """
 import json
 
-from flask import Blueprint, Response, abort, jsonify, request
+from flask import Blueprint, Response, abort, jsonify, redirect, request
 
 from backend.auth import admin_required
 from backend.extensions import db
 from backend.models import SitePackage, SitePhoto
+from backend.services import cloud_media
 
 site_packages_bp = Blueprint("site_packages", __name__)
 
@@ -103,9 +104,13 @@ def _version(updated_at) -> int:
     return int(updated_at.timestamp() * 1000) if updated_at else 0
 
 
-def _photo_url(pkg):
+def _photo_url(pkg, cloud=None):
     if not pkg.photo_mime:
         return None
+    if cloud is None:
+        cloud = cloud_media.get("package", pkg.id)
+    if cloud is not None:
+        return cloud_media.optimized(cloud.url)
     return f"/api/media/package/{pkg.id}?v={_version(pkg.updated_at)}"
 
 
@@ -182,6 +187,11 @@ def get_package_photo(pkg_id):
     pkg = SitePackage.query.filter_by(id=pkg_id).first()
     if pkg is None or not pkg.photo_mime:
         abort(404)
+    if not pkg.photo_data:
+        cloud = cloud_media.get("package", pkg_id)
+        if cloud is None:
+            abort(404)
+        return redirect(cloud_media.optimized(cloud.url), code=302)
     resp = Response(bytes(pkg.photo_data), mimetype=pkg.photo_mime)
     resp.headers["X-Content-Type-Options"] = "nosniff"
     if request.args.get("v"):
@@ -260,6 +270,7 @@ def admin_update_package(pkg_id):
 def admin_delete_package(pkg_id):
     pkg = SitePackage.query.filter_by(id=pkg_id).first()
     if pkg is not None:
+        cloud_media.remove("package", pkg_id)
         db.session.delete(pkg)
         db.session.commit()
     return jsonify({"deleted": pkg_id})
@@ -284,7 +295,17 @@ def admin_upload_package_photo(pkg_id):
     if not mime:
         return jsonify({"error": "Unsupported file. Please upload a JPG, PNG or WEBP photo."}), 415
 
-    pkg.photo_data, pkg.photo_mime, pkg.photo_size = data, mime, len(data)
+    if cloud_media.configured():
+        try:
+            cloud_media.save("package", pkg.id, data)
+        except RuntimeError as exc:
+            db.session.rollback()
+            return jsonify({"error": str(exc)}), 502
+        pkg.photo_data = None            # bytes live on Cloudinary; DB keeps only the pointer
+    else:
+        pkg.photo_data = data
+        cloud_media.remove("package", pkg.id)
+    pkg.photo_mime, pkg.photo_size = mime, len(data)
     alt_arg = request.args.get("alt")
     if alt_arg is not None:
         pkg.photo_alt = alt_arg.strip()[:200]
@@ -299,5 +320,6 @@ def admin_delete_package_photo(pkg_id):
     if pkg is None:
         return jsonify({"error": "Package not found."}), 404
     pkg.photo_data, pkg.photo_mime, pkg.photo_size = None, None, 0
+    cloud_media.remove("package", pkg.id)
     db.session.commit()
     return jsonify(_admin_shape(pkg))
