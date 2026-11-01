@@ -32,6 +32,21 @@ class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 
+    # --- Cloudinary image storage (optional; without these, images stay in the database) ---
+    # Either set CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>  (copy it from the
+    # Cloudinary dashboard) or the three separate variables below.
+    CLOUDINARY_CLOUD_NAME = os.getenv("CLOUDINARY_CLOUD_NAME", "").strip()
+    CLOUDINARY_API_KEY = os.getenv("CLOUDINARY_API_KEY", "").strip()
+    CLOUDINARY_API_SECRET = os.getenv("CLOUDINARY_API_SECRET", "").strip()
+    _cld_url = os.getenv("CLOUDINARY_URL", "").strip()
+    if _cld_url.startswith("cloudinary://") and not (CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET):
+        from urllib.parse import urlparse as _urlparse
+        _u = _urlparse(_cld_url)
+        CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET, CLOUDINARY_CLOUD_NAME = _u.username or "", _u.password or "", _u.hostname or ""
+
+    # Hotel photos: set CLOUDINARY_HOTEL_PHOTOS=false to keep them in the database (Neon) instead.
+    CLOUDINARY_HOTEL_PHOTOS = os.getenv("CLOUDINARY_HOTEL_PHOTOS", "true").strip().lower() not in ("0", "false", "no", "off")
+
     # --- AI Kashmir Travel Assistant (optional; the chat button stays hidden without a key) ---
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
     ASSISTANT_MODEL = os.getenv("ASSISTANT_MODEL", "openai/gpt-oss-120b")
