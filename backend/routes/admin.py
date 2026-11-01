@@ -7,6 +7,7 @@ from backend.auth import admin_required, create_admin_token
 from backend.config import Config
 from backend.extensions import db
 from backend.models import CustomHotel, HotelImages
+from backend.services import cloud_media
 from backend.services.custom_hotels import clean_place_name, ensure_place, get_places, place_key
 
 admin_bp = Blueprint("admin", __name__)
@@ -77,6 +78,17 @@ def save_hotel_images():
         if not isinstance(images, list):
             return jsonify({"error": "Images must be a list."}), 400
         clean[str(hotel_id)[:20]] = [i for i in images if isinstance(i, str) and i.strip()]
+
+    # Photos picked from a device arrive as base64; with Cloudinary configured, store them
+    # there and keep only the https URL in the database. Already-uploaded URLs pass through.
+    if cloud_media.configured() and Config.CLOUDINARY_HOTEL_PHOTOS:
+        try:
+            for hotel_id, images in clean.items():
+                clean[hotel_id] = [cloud_media.hotel_data_url_to_cloud(i, hotel_id) for i in images]
+        except RuntimeError as exc:
+            return jsonify({"error": str(exc)}), 502
+        except Exception:
+            return jsonify({"error": "One of the photos could not be read. Please try another file."}), 400
 
     try:
         _save_hotel_images(clean)
