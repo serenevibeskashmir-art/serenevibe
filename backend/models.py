@@ -107,6 +107,22 @@ class SitePhoto(db.Model):
     updated_at = db.Column(db.DateTime, nullable=False, default=_utc_now, onupdate=_utc_now)
 
 
+class CloudMedia(db.Model):
+    """
+    Pointer to an image stored on Cloudinary (see services/cloud_media.py).
+    kind = "site_photo" (ref = slot) or "package" (ref = package id).
+    A separate table, so db.create_all() creates it on an existing database.
+    """
+    __tablename__ = "cloud_media"
+    id         = db.Column(db.Integer, primary_key=True)
+    kind       = db.Column(db.String(20), nullable=False, index=True)
+    ref        = db.Column(db.String(60), nullable=False, index=True)
+    url        = db.Column(db.String(500), nullable=False)
+    public_id  = db.Column(db.String(200), nullable=False, default="")
+    updated_at = db.Column(db.DateTime, nullable=False, default=_utc_now, onupdate=_utc_now)
+    __table_args__ = (db.UniqueConstraint("kind", "ref", name="uq_cloud_media_kind_ref"),)
+
+
 class SiteLink(db.Model):
     """
     An optional link attached to a website photo slot (currently the Highlights
