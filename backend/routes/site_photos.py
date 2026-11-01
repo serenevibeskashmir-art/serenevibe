@@ -22,11 +22,12 @@ Admin endpoints (Bearer token required)
 import re
 from urllib.parse import urlparse
 
-from flask import Blueprint, Response, abort, jsonify, request
+from flask import Blueprint, Response, abort, jsonify, redirect, request
 
 from backend.auth import admin_required
 from backend.extensions import db
 from backend.models import SiteLink, SitePhoto
+from backend.services import cloud_media
 
 site_photos_bp = Blueprint("site_photos", __name__)
 
@@ -169,7 +170,11 @@ def _version(updated_at) -> int:
     return int(updated_at.timestamp() * 1000) if updated_at else 0
 
 
-def _url(slot: str, updated_at) -> str:
+def _url(slot: str, updated_at, cloud=None) -> str:
+    """Cloudinary URL when the photo lives there (its URL already changes on every replacement),
+    otherwise the database-backed /api/media URL."""
+    if cloud is not None:
+        return cloud_media.optimized(cloud.url)
     return f"/api/media/{slot}?v={_version(updated_at)}"
 
 
@@ -218,17 +223,18 @@ def _save_link(slot: str, url: str):
 def public_manifest() -> dict:
     """{"photos": {slot: {"url", "alt"}}, "links": {slot: url}} (uploaded photos / saved links only)."""
     photos = {}
+    clouds = cloud_media.url_map("site_photo")
     for row in _metadata_rows():
         if row.slot in SLOT_INDEX:
-            photos[row.slot] = {"url": _url(row.slot, row.updated_at), "alt": row.alt or ""}
+            photos[row.slot] = {"url": _url(row.slot, row.updated_at, clouds.get(row.slot)), "alt": row.alt or ""}
     return {"photos": photos, "links": _link_rows()}
 
 
-def _slot_payload(slot_def: dict, row, link: str = "") -> dict:
+def _slot_payload(slot_def: dict, row, link: str = "", cloud=None) -> dict:
     payload = dict(slot_def)
     payload.update(
         has_photo=row is not None,
-        url=_url(slot_def["slot"], row.updated_at) if row else None,
+        url=_url(slot_def["slot"], row.updated_at, cloud) if row else None,
         alt=(row.alt if row else "") or "",
         size_bytes=row.size if row else 0,
         updated_at=row.updated_at.isoformat() + "Z" if row else None,
@@ -256,6 +262,13 @@ def get_photo_bytes(slot):
     if row is None:
         abort(404)
 
+    if not row.data:
+        # The photo lives on Cloudinary: send old/cached /api/media links there.
+        cloud = cloud_media.get("site_photo", slot)
+        if cloud is None:
+            abort(404)
+        return redirect(cloud_media.optimized(cloud.url), code=302)
+
     resp = Response(bytes(row.data), mimetype=row.mime)  # bytes(): psycopg2 returns memoryview
     resp.headers["X-Content-Type-Options"] = "nosniff"
     if request.args.get("v"):
@@ -275,8 +288,10 @@ def get_photo_bytes(slot):
 def admin_list_photos():
     rows = {r.slot: r for r in _metadata_rows()}
     links = _link_rows()
+    clouds = cloud_media.url_map("site_photo")
     return jsonify({
-        "slots": [_slot_payload(s, rows.get(s["slot"]), links.get(s["slot"], "")) for s in SLOTS],
+        "slots": [_slot_payload(s, rows.get(s["slot"]), links.get(s["slot"], ""), clouds.get(s["slot"]))
+                  for s in SLOTS],
         "max_upload_bytes": MAX_UPLOAD_BYTES,
     })
 
@@ -299,19 +314,33 @@ def admin_upload_photo(slot):
     if not mime:
         return jsonify({"error": "Unsupported file. Please upload a JPG, PNG or WEBP photo."}), 415
 
+    # With Cloudinary configured the bytes go there and the DB keeps only a pointer
+    # (the `data` column is NOT NULL, so it holds an empty placeholder).
+    stored = data
+    if cloud_media.configured():
+        try:
+            cloud_media.save("site_photo", slot, data)
+        except RuntimeError as exc:
+            db.session.rollback()
+            return jsonify({"error": str(exc)}), 502
+        stored = b""
+
     row = SitePhoto.query.filter_by(slot=slot).first()
     alt_arg = request.args.get("alt")
     if row is None:
-        row = SitePhoto(slot=slot, data=data, mime=mime, size=len(data),
+        row = SitePhoto(slot=slot, data=stored, mime=mime, size=len(data),
                         alt=(alt_arg or "").strip()[:200])
         db.session.add(row)
     else:
-        row.data, row.mime, row.size = data, mime, len(data)
+        row.data, row.mime, row.size = stored, mime, len(data)
         if alt_arg is not None:
             row.alt = alt_arg.strip()[:200]
+    if not cloud_media.configured():
+        cloud_media.remove("site_photo", slot)   # DB copy is now the current one
     db.session.commit()
 
-    return jsonify(_slot_payload(SLOT_INDEX[slot], row, _link_rows().get(slot, "")))
+    return jsonify(_slot_payload(SLOT_INDEX[slot], row, _link_rows().get(slot, ""),
+                                 cloud_media.get("site_photo", slot)))
 
 
 @site_photos_bp.patch("/admin/site-photos/<slot>")
@@ -337,7 +366,8 @@ def admin_update_slot(slot):
         row.alt = str(body.get("alt", "")).strip()[:200]
 
     db.session.commit()
-    return jsonify(_slot_payload(SLOT_INDEX[slot], row, _link_rows().get(slot, "")))
+    return jsonify(_slot_payload(SLOT_INDEX[slot], row, _link_rows().get(slot, ""),
+                                 cloud_media.get("site_photo", slot)))
 
 
 @site_photos_bp.delete("/admin/site-photos/<slot>")
@@ -348,6 +378,7 @@ def admin_delete_photo(slot):
     row = SitePhoto.query.filter_by(slot=slot).first()
     if row is not None:
         db.session.delete(row)
-        db.session.commit()
+    cloud_media.remove("site_photo", slot)
+    db.session.commit()
     # The video link is kept: removing the thumbnail should not lose the link.
     return jsonify(_slot_payload(SLOT_INDEX[slot], None, _link_rows().get(slot, "")))
