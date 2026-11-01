@@ -216,8 +216,13 @@ def _load_hero_photo():
     try:
         from backend.models import SitePhoto
         row = SitePhoto.query.filter_by(slot="hero").first()
-        if row is not None and row.data:
-            return ImageReader(_compress_image(bytes(row.data)))
+        if row is not None:
+            raw = bytes(row.data) if row.data else None
+            if raw is None:   # photo lives on Cloudinary
+                from backend.services import cloud_media
+                raw = cloud_media.fetch_bytes("site_photo", "hero")
+            if raw:
+                return ImageReader(_compress_image(raw))
     except Exception as exc:
         print(f"Warning: could not load hero photo: {exc}")
     return None
@@ -804,9 +809,15 @@ def _load_destination_backgrounds():
         from backend.models import SitePhoto
         for key in _DEST_KEYS:
             row = SitePhoto.query.filter_by(slot=f"dest-{key}").first()
-            if row is not None and row.data:
+            raw = None
+            if row is not None:
+                raw = bytes(row.data) if row.data else None
+                if raw is None:   # photo lives on Cloudinary
+                    from backend.services import cloud_media
+                    raw = cloud_media.fetch_bytes("site_photo", f"dest-{key}")
+            if raw:
                 try:
-                    found[key] = _faded_reader(bytes(row.data))
+                    found[key] = _faded_reader(raw)
                 except Exception as exc:
                     print(f"Destination photo '{key}' unreadable: {exc}")
     except Exception as exc:
