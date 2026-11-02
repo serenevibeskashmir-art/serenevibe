@@ -2615,12 +2615,31 @@ def _day_date(start_date, day_no) -> str:
 
 
 def _route_text(timeline, start=DEFAULT_POINT, end=DEFAULT_POINT) -> str:
-    """'Srinagar Airport  >  Pahalgam  >  Srinagar Airport': starts at the pickup point, ends at the departure point."""
+    """Cover 'Your Journey': pickup point -> every place visited each day (day trips AND overnight
+    stays, in order) -> departure point.
+
+    e.g. 'Srinagar Airport -> Srinagar -> Sonamarg -> Srinagar -> Gulmarg -> Srinagar -> Pahalgam
+    -> Srinagar -> Srinagar Airport'.  Built the same way as the day table: each day contributes
+    its destination (from the day's route) and then where the guests sleep, if that differs."""
+    def _name(key):
+        return KashmirRouteMap.DISPLAY.get(key) or str(key).title()
+
     out = [start]
-    for d in timeline or []:
-        place = str(d.get("overnight_stay") or "").strip()
-        if place and place.lower() not in ("departure", "-") and out[-1].lower() != place.lower():
+
+    def _add(place):
+        place = str(place or "").strip()
+        if place and out[-1].lower() != place.lower():
             out.append(place)
+
+    for d in timeline or []:
+        overnight = str(d.get("overnight_stay") or "").strip()
+        route = str(d.get("transit_route") or d.get("title") or "").strip()
+        key = KashmirRouteMap._destination(KashmirRouteMap, route) if route else None
+        if key and key != "departure":
+            for leg in re.split(r"\s+to\s+", str(key)):      # "gulmarg to srinagar" -> two stops
+                _add(_name(leg.strip()))
+        if overnight and overnight.lower() not in ("departure", "-"):
+            _add(overnight)
     if out[-1].lower() != end.lower():
         out.append(end)
     return "  \u2192  ".join(out)
