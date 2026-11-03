@@ -1,4 +1,4 @@
-const CACHE_NAME = "serene-vibes-shell-v11";
+const CACHE_NAME = "serene-vibes-shell-v12";
 
 // Only the public marketing site's own assets — never the admin SPA,
 // API routes (which include the website photos), or generated PDFs,
@@ -7,6 +7,8 @@ const SHELL_ASSETS = [
   "/css/styles.css",
   "/js/main.js",
   "/css/assistant.css",
+  "/css/redesign.css",
+  "/js/redesign.js",
   "/js/assistant.js",
   "/manifest.json",
   "/icons/icon-192.png",
