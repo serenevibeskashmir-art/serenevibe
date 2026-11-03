@@ -667,10 +667,10 @@ class RouteBadge(Flowable):
         c.setFillColor(BLACK)
         c.setFont("Lato", 8)
         route_txt = clean(self.route)
-        max_w = self.width - 40
+        max_w = self.width - 52
         while c.stringWidth(route_txt, "Lato", 8) > max_w and len(route_txt) > 6:
             route_txt = route_txt[:-4] + "..."
-        c.drawString(38, self.height/2 - 3, route_txt)
+        c.drawString(46, self.height/2 - 3, route_txt)
 
 
 class HotelPhotoStrip(Flowable):
@@ -833,6 +833,62 @@ def _day_photo_key(day_info):
     if key in (None, "departure"):
         key = next((k for k in _DEST_KEYS if k in overnight), "srinagar")
     return key
+
+
+class DayPhotoStrip(Flowable):
+    """Slim destination photo that sits directly under the day banner (text never goes on the photo)."""
+    def __init__(self, width, reader, label="", height=24 * mm):
+        super().__init__()
+        self.width, self.height, self.reader, self.label = width, height, reader, label
+
+    def wrap(self, aw, ah):
+        return self.width, self.height
+
+    def draw(self):
+        c, w, h = self.canv, self.width, self.height
+        iw, ih = self.reader.getSize()
+        sc = max(w / iw, h / ih)
+        dw, dh = iw * sc, ih * sc
+        c.saveState()
+        p = c.beginPath(); p.rect(0, 0, w, h); c.clipPath(p, stroke=0, fill=0)
+        c.drawImage(self.reader, -(dw - w) / 2, -(dh - h) * 0.5, width=dw, height=dh)
+        # soft dark fade along the bottom so the place label is always readable
+        steps = 14
+        for i in range(steps):
+            c.setFillColor(colors.Color(0.03, 0.09, 0.15, alpha=0.55 * (1 - i / steps) ** 1.6))
+            c.rect(0, i * (h * 0.7 / steps), w, h * 0.7 / steps + 0.2, fill=1, stroke=0)
+        c.restoreState()
+        if self.label:
+            txt = clean(self.label).upper()
+            c.setFont("Lato-Bold", 8)
+            tw = c.stringWidth(txt, "Lato-Bold", 8)
+            c.setFillColor(colors.Color(1, 1, 1, alpha=0.92))
+            c.roundRect(4 * mm, 3 * mm, tw + 9 * mm, 6 * mm, 3 * mm, fill=1, stroke=0)
+            c.setFillColor(SKY)
+            c.circle(7 * mm, 6 * mm, 1 * mm, fill=1, stroke=0)
+            c.setFillColor(NAVY)
+            c.drawString(9.2 * mm, 4.9 * mm, txt)
+        c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+        c.line(0, 0, 0, h); c.line(w, 0, w, h)
+
+
+class StepDot(Flowable):
+    """Numbered circle marking one step of the day."""
+    def __init__(self, n, size=5.4 * mm):
+        super().__init__()
+        self.n, self.size = n, size
+        self.hAlign = "CENTER"
+
+    def wrap(self, aw, ah):
+        return self.size, self.size
+
+    def draw(self):
+        c, s = self.canv, self.size
+        c.setFillColor(SKY)
+        c.circle(s / 2, s / 2, s / 2, fill=1, stroke=0)
+        c.setFillColor(WHITE)
+        c.setFont("Lato-Bold", 6.8)
+        c.drawCentredString(s / 2, s / 2 - 2.3, str(self.n))
 
 
 class BgBlock(Flowable):
@@ -2867,65 +2923,66 @@ def generate_pdf(itinerary_data: dict) -> str:
         block.append(Spacer(1, 2*mm))
 
         # Only show the ROUTE strip when it adds something the banner doesn't say
-        if route and route.strip().lower() != str(title).strip().lower():
-            block.append(RouteBadge(usable_w, route))
+        _route_show = route.split(":", 1)[0].strip() if ":" in str(route) else str(route).strip()   # "...: Overnight X" is in the Stay badge
+        if _route_show and _route_show.lower() != str(banner_title).strip().lower():
+            block.append(RouteBadge(usable_w, _route_show))
             block.append(Spacer(1, 2*mm))
 
         if schedule:
-            # Build a 2-col activity table: [time | description]
-            act_rows = []
-            has_real_label = False
+            # Clean card: slim destination photo on top, then numbered steps on a light background.
             day_bg = dest_bgs.get(_day_photo_key(day_info))
-            # on photo days the text colour is matched to the photo look (white on dark bands, black on pale ones)
-            dark_look = day_bg is not None and _BG_STYLE == "dark"
-            if day_bg is None:
-                desc_style, dot_style, time_style = styles["activity_desc"], styles["activity_dot"], styles["activity_time"]
-            else:
-                txt = colors.white if dark_look else colors.black
-                acc = colors.HexColor("#7dd3fc") if dark_look else SKY
-                desc_style = ParagraphStyle("AD_photo", parent=styles["activity_desc"], textColor=txt)
-                dot_style  = ParagraphStyle("ADT_photo", parent=styles["activity_dot"], textColor=acc)
-                time_style = ParagraphStyle("AT_photo", parent=styles["activity_time"], textColor=acc)
-            for slot in schedule:
-                time_val = slot.get("time_slot") or slot.get("time", "")
-                desc_val = slot.get("description") or slot.get("activity") or ""
-                act_title = slot.get("activity_title", "")
-                time_txt = str(time_val or "").strip()
-                if time_txt in ("", "***", "*", "—", "–", "-"):
-                    # placeholder label from the admin form -> neat bullet
-                    cell_time = Paragraph("&#9679;", dot_style)
-                else:
-                    has_real_label = True
-                    cell_time = Paragraph(clean(time_txt), time_style)
-                desc_text = (f"<b>{clean(act_title)}</b><br/>" if act_title else "") + clean(str(desc_val))
-                cell_desc = Paragraph(desc_text, desc_style)
-                act_rows.append([cell_time, cell_desc])
-
-            _lw = 0.17 if has_real_label else 0.055
-            act_col_w = [usable_w * _lw, usable_w * (1 - _lw)]
-            act_table = Table(act_rows, colWidths=act_col_w, hAlign="LEFT")
             if day_bg is not None:
-                # photo shows through: transparent rows, softly tinted bullet column
-                main_bg = colors.Color(1, 1, 1, alpha=0.0)
-                if dark_look:
-                    dot_bg, line_col, box_w = colors.Color(0.03, 0.11, 0.15, alpha=0.30), colors.Color(1, 1, 1, alpha=0.30), 0
-                else:
-                    dot_bg, line_col, box_w = colors.Color(0.88, 0.95, 0.99, alpha=0.55), colors.Color(0.5, 0.55, 0.62, alpha=0.35), 0
-            else:
-                main_bg, dot_bg, line_col, box_w = WHITE, SKY_LIGHT, GRAY_200, 0.5
+                _pk = _day_photo_key(day_info)
+                block.append(DayPhotoStrip(usable_w, day_bg, KashmirRouteMap.DISPLAY.get(_pk, str(_pk).title())))
+
+            # Tidy the slots: drop empties and merge repeats (same heading twice -> one step, both descriptions).
+            steps = []
+            for slot in schedule:
+                time_txt = str(slot.get("time_slot") or slot.get("time") or "").strip()
+                if time_txt in ("***", "*", "\u2014", "\u2013", "-"):
+                    time_txt = ""
+                head = str(slot.get("activity_title") or "").strip()
+                desc = str(slot.get("description") or slot.get("activity") or "").strip()
+                if not head and not desc:
+                    continue
+                prev = steps[-1] if steps else None
+                if prev and head and prev["head"].lower() == head.lower() and prev["time"] == time_txt:
+                    if desc and desc.lower() not in prev["desc"].lower():
+                        prev["desc"] = (prev["desc"] + " " + desc).strip()
+                    continue
+                steps.append({"time": time_txt, "head": head, "desc": desc})
+
+            has_real_label = any(s["time"] for s in steps)
+            head_style = ParagraphStyle("AH_card", fontName="Lato-Bold", fontSize=9, leading=12, textColor=NAVY, spaceAfter=1.5)
+            desc_style = ParagraphStyle("AD_card", fontName="Lato", fontSize=8.4, leading=12.2, textColor=GRAY_600)
+            time_style = ParagraphStyle("AT_card", fontName="Lato-Bold", fontSize=8, leading=11, textColor=SKY, alignment=TA_CENTER)
+
+            act_rows = []
+            for n, s in enumerate(steps, start=1):
+                marker = Paragraph(clean(s["time"]), time_style) if s["time"] else StepDot(n)
+                parts = []
+                if s["head"]:
+                    parts.append(Paragraph(clean(s["head"]), head_style))
+                if s["desc"]:
+                    parts.append(Paragraph(clean(s["desc"]), desc_style))
+                act_rows.append([marker, parts])
+
+            _lw = 0.15 if has_real_label else 0.075
+            act_table = Table(act_rows, colWidths=[usable_w * _lw, usable_w * (1 - _lw)], hAlign="LEFT")
             act_table.setStyle(TableStyle([
-                ("BACKGROUND",    (0, 0), (-1, -1), main_bg),
-                ("BACKGROUND",    (0, 0), (0, -1), dot_bg),
-                ("BOX",           (0, 0), (-1, -1), box_w, GRAY_200),
-                ("LINEBELOW",     (0, 0), (-1, -2), 0.3, line_col),
+                ("ROWBACKGROUNDS", (0, 0), (-1, -1), [WHITE, GRAY_50]),
+                ("BOX",           (0, 0), (-1, -1), 0.5, GRAY_200),
+                ("LINEBELOW",     (0, 0), (-1, -2), 0.3, GRAY_200),
                 ("LINEBEFORE",    (0, 0), (0, -1), 2.5, SKY),
-                ("LEFTPADDING",   (0, 0), (-1, -1), 6),
-                ("RIGHTPADDING",  (0, 0), (-1, -1), 6),
+                ("LEFTPADDING",   (0, 0), (0, -1), 3),
+                ("RIGHTPADDING",  (0, 0), (0, -1), 3),
+                ("LEFTPADDING",   (1, 0), (1, -1), 4),
+                ("RIGHTPADDING",  (1, 0), (1, -1), 8),
                 ("TOPPADDING",    (0, 0), (-1, -1), 6),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
                 ("VALIGN",        (0, 0), (-1, -1), "TOP"),
             ]))
-            block.append(BgBlock(usable_w, act_table, day_bg) if day_bg is not None else act_table)
+            block.append(act_table)
         else:
             block.append(Paragraph(
                 "<i>Details to be confirmed with your travel coordinator.</i>",
