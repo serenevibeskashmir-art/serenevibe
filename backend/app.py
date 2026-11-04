@@ -47,6 +47,15 @@ def create_app():
             db.create_all()
         except Exception as exc:  # never let a DB hiccup crash the whole app on cold start
             print(f"db.create_all() skipped/failed at startup: {exc}")
+        # create_all() never adds columns to a table that already exists, so add the lead "source" column by hand.
+        try:
+            from sqlalchemy import inspect, text
+            if "source" not in {c["name"] for c in inspect(db.engine).get_columns("whatsapp_leads")}:
+                db.session.execute(text("ALTER TABLE whatsapp_leads ADD COLUMN source VARCHAR(20) DEFAULT 'whatsapp'"))
+                db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            print(f"whatsapp_leads.source column check skipped/failed: {exc}")
         # Make sure the failover database has the same tables, so it is ready if it's ever needed.
         if app.config.get("DATABASE_URL_2"):
             try:
