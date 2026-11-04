@@ -199,6 +199,7 @@ class WhatsappLead(db.Model):
     notes = db.Column(db.Text, default="")
     last_message = db.Column(db.Text, default="")
     msg_count = db.Column(db.Integer, default=0)
+    source = db.Column(db.String(20), default="whatsapp")   # whatsapp (Meta webhook) / website (form or chat assistant)
     first_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     last_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
