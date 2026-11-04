@@ -35,6 +35,19 @@ function whatsappUrl(text) {
   return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`;
 }
 
+/* Saves the enquiry in the admin "WhatsApp Leads" tab at the moment it is submitted, so it is
+   recorded even if the visitor never taps Send in WhatsApp. Fire-and-forget: never blocks the chat. */
+function captureLead(fields) {
+  try {
+    fetch('/api/whatsapp/website-lead', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fields),
+      keepalive: true
+    }).catch(() => {});
+  } catch (e) { /* capture is a bonus; WhatsApp still opens */ }
+}
+
 function openWhatsApp(text) {
   const url = whatsappUrl(text);
   const win = window.open(url, '_blank');
@@ -578,12 +591,14 @@ function initForms() {
       }
       const travelers = document.getElementById('travelers').value;
       const date = formatTravelDate(document.getElementById('dates').value);
-      openWhatsApp([
+      const quoteText = [
         '*Quote request: Serene Vibes Kashmir website*',
         `Destination: ${dest}`,
         `Travel date: ${date}`,
         `Guests: ${travelers}`
-      ].join('\n'));
+      ].join('\n');
+      captureLead({ message: quoteText, destination: dest, travel_dates: date, people: String(travelers) });
+      openWhatsApp(quoteText);
       showNote('searchNote', 'Opening WhatsApp… tap Send there to deliver your request to our team.');
     });
   }
@@ -600,6 +615,12 @@ function initForms() {
       if (val('phone')) lines.push(`Phone: ${val('phone')}`);
       if (interest && interest.value) lines.push(`Package: ${interest.selectedOptions[0].text}`);
       if (val('message')) lines.push(`Requirements: ${val('message')}`);
+      captureLead({
+        message: lines.join('\n'),
+        name: `${val('firstName')} ${val('lastName')}`.trim(),
+        phone: val('phone'),
+        destination: interest && interest.value ? interest.selectedOptions[0].text : ''
+      });
       openWhatsApp(lines.join('\n'));
       showNote('formNote', 'Opening WhatsApp… tap Send there to deliver your enquiry to our team.');
       contactForm.reset();
