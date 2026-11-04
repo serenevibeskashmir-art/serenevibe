@@ -85,8 +85,9 @@ export default function WhatsAppLeads({ onUnauthorized }) {
 
         {!connected && (
           <div style={S.warn}>
-            WhatsApp is not connected yet, so no leads can arrive. Finish the setup steps for the webhook
-            (WHATSAPP_VERIFY_TOKEN and WHATSAPP_APP_SECRET on the server), then new messages will appear here.
+            Website enquiries (quote pop-up, enquiry form, chat assistant) are captured here already. Direct
+            WhatsApp messages are not yet: set WHATSAPP_VERIFY_TOKEN and WHATSAPP_APP_SECRET on the server and
+            point Meta's webhook to /api/whatsapp/webhook.
           </div>
         )}
         {error && <div style={S.err}>{error}</div>}
@@ -113,7 +114,10 @@ export default function WhatsAppLeads({ onUnauthorized }) {
               <div style={S.cardTop}>
                 <div style={{ minWidth: 0 }}>
                   <b style={S.name}>{l.name || 'Unknown name'}</b>
-                  <a href={`https://wa.me/${l.phone}`} target="_blank" rel="noreferrer" style={S.phone}>+{l.phone}</a>
+                  {/^\d+$/.test(l.phone)
+                    ? <a href={`https://wa.me/${l.phone}`} target="_blank" rel="noreferrer" style={S.phone}>+{l.phone}</a>
+                    : <span style={S.phone}>No phone given</span>}
+                  {l.source === 'website' && <span style={S.phone}> · from website</span>}
                 </div>
                 <select value={l.status} onChange={(e) => save(l.id, { status: e.target.value })}
                   style={{ ...S.status, borderColor: STATUS_COLOR[l.status], color: STATUS_COLOR[l.status] }}
