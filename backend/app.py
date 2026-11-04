@@ -104,6 +104,12 @@ def create_app():
     def serve_public_css(filename):
         return send_from_directory(os.path.join(PUBLIC_DIR, "css"), filename)
 
+    @app.get("/fonts/<path:filename>")
+    def serve_public_fonts(filename):
+        response = send_from_directory(os.path.join(PUBLIC_DIR, "fonts"), filename)
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
+
     @app.get("/js/<path:filename>")
     def serve_public_js(filename):
         return send_from_directory(os.path.join(PUBLIC_DIR, "js"), filename)
