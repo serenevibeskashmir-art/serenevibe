@@ -152,6 +152,7 @@
     store();      // saved first: if the browser has to leave this page for WhatsApp, the chat is still here on return
     render();
 
+    if (typeof captureLead === 'function') captureLead({ message: text });      // defined in main.js
     // This runs inside the visitor's tap/click, so pop-up blockers allow it.
     var win = window.open(url, '_blank');
     if (win) { win.opener = null; } else { window.location.href = url; }
