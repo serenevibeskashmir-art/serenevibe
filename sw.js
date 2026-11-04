@@ -1,4 +1,4 @@
-const CACHE_NAME = "serene-vibes-shell-v12";
+const CACHE_NAME = "serene-vibes-shell-v13";
 
 // Only the public marketing site's own assets — never the admin SPA,
 // API routes (which include the website photos), or generated PDFs,
