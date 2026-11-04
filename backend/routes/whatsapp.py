@@ -21,6 +21,7 @@ import io
 import json
 import logging
 import re
+import uuid
 from datetime import datetime, timezone
 
 import requests
@@ -171,10 +172,65 @@ def receive():
     return "ok", 200
 
 
+# ── Website capture ───────────────────────────────────────────────────────
+# The website's forms and chat assistant open a wa.me chat, which Meta never reports
+# to the webhook until the visitor taps Send (and not at all if the number is not on the
+# Cloud API). So the page also posts the enquiry here, and it shows up in the admin tab.
+
+WEB_HOURLY_CAP = 120     # spam guard: website leads accepted per hour, all visitors together
+
+
+def _clean_phone(raw: str) -> str:
+    digits = re.sub(r"\D", "", raw or "")
+    if len(digits) == 10:
+        digits = "91" + digits           # bare Indian mobile number
+    return digits if 10 <= len(digits) <= 15 else ""
+
+
+@whatsapp_bp.post("/whatsapp/website-lead")
+def website_lead():
+    from datetime import timedelta
+    data = request.get_json(silent=True) or {}
+    text = str(data.get("message") or "").strip()[:1500]
+    if not text:
+        return jsonify({"ok": False}), 400
+    now = datetime.now(timezone.utc)
+    try:
+        recent = WhatsappMessage.query.filter(WhatsappMessage.wamid.like("web-%"),
+                                              WhatsappMessage.created_at >= now - timedelta(hours=1)).count()
+        if recent >= WEB_HOURLY_CAP:
+            return jsonify({"ok": False}), 429
+
+        phone = _clean_phone(data.get("phone"))
+        lead = WhatsappLead.query.filter_by(phone=phone).first() if phone else None
+        if not lead:
+            # No phone given: use a placeholder key so the enquiry is still listed.
+            lead = WhatsappLead(phone=phone or "web-" + uuid.uuid4().hex[:12], first_at=now, msg_count=0,
+                                source="website")
+            db.session.add(lead)
+            db.session.flush()
+        details = {**_regex_extract(text), **{k: str(data.get(k) or "").strip()[:200]
+                                              for k in FIELDS if str(data.get(k) or "").strip()}}
+        for k, v in details.items():
+            if k in FIELDS and v and not getattr(lead, k):
+                setattr(lead, k, v)
+        db.session.add(WhatsappMessage(wamid="web-" + uuid.uuid4().hex, lead_id=lead.id, text=text, created_at=now))
+        lead.msg_count = (lead.msg_count or 0) + 1
+        lead.last_message = text[:500]
+        lead.last_at = now
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        log.exception("whatsapp: could not store website lead")
+        return jsonify({"ok": False}), 500
+    return jsonify({"ok": True})
+
+
 # ── Admin ─────────────────────────────────────────────────────────────────
 
 def _row(l: WhatsappLead) -> dict:
     return {
+        "source": l.source or "whatsapp",
         "id": l.id, "phone": l.phone, "name": l.name or "", "destination": l.destination or "",
         "travel_dates": l.travel_dates or "", "people": l.people or "", "budget": l.budget or "",
         "status": l.status or "new", "notes": l.notes or "", "last_message": l.last_message or "",
@@ -232,7 +288,7 @@ def export_xlsx():
         ws.append([
             l.first_at.strftime("%d-%b-%Y %H:%M") if l.first_at else "",
             l.last_at.strftime("%d-%b-%Y %H:%M") if l.last_at else "",
-            l.name, "+" + l.phone, l.destination, l.travel_dates, l.people, l.budget,
+            l.name, ("+" + l.phone) if l.phone.isdigit() else "(no phone given)", l.destination, l.travel_dates, l.people, l.budget,
             l.status, l.msg_count, l.last_message, l.notes,
         ])
     for col, w in zip("ABCDEFGHIJKL", (18, 18, 20, 16, 24, 20, 12, 14, 12, 10, 50, 40)):
