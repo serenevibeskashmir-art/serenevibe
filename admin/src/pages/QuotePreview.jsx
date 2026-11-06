@@ -1499,9 +1499,17 @@ export default function QuotePreview({ quote }) {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "14px" }}>
             <div>
               <label style={{ display: "block", fontWeight: "700", color: "#334155", fontSize: "0.9rem", marginBottom: "6px" }}>🚗 Vehicle</label>
-              <select className="qp-route-select" value={vehicleType} onChange={(e) => setVehicleType(e.target.value)}>
-                {(VEHICLE_OPTIONS.includes(vehicleType) ? VEHICLE_OPTIONS : [vehicleType, ...VEHICLE_OPTIONS]).map((v) => <option key={v} value={v}>{v}</option>)}
+              <select className="qp-route-select"
+                value={VEHICLE_OPTIONS.includes(vehicleType) ? vehicleType : "__custom"}
+                onChange={(e) => setVehicleType(e.target.value === "__custom" ? "" : e.target.value)}>
+                {VEHICLE_OPTIONS.map((v) => <option key={v} value={v}>{v}</option>)}
+                <option value="__custom">Other (type your vehicle name)…</option>
               </select>
+              {!VEHICLE_OPTIONS.includes(vehicleType) && (
+                <input className="qp-route-select" style={{ marginTop: "6px" }}
+                  placeholder="e.g. Toyota Innova Hycross, Force Urbania"
+                  value={vehicleType} onChange={(e) => setVehicleType(e.target.value)} />
+              )}
               <div style={{ fontSize: "0.75rem", color: "#94a3b8", marginTop: "4px" }}>Shown in the PDF summary and inclusions.</div>
             </div>
             <div>
