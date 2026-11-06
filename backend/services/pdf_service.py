@@ -546,7 +546,7 @@ class HeroHeader(Flowable):
         c.drawString(bx + 9, by + 0.8*mm, badge_label)
 
         # ── Total cost (bottom-right) with emerald pill ───────────────────────
-        cost_str = f"INR {int(float(str(self.total_cost).replace(',', ''))):,}" if _is_amount(self.total_cost) else clean(str(self.total_cost))
+        cost_str = f"INR {_amount_int(self.total_cost):,}" if _is_amount(self.total_cost) else "TBD"
         # Cost label
         c.setFillColor(colors.HexColor("#e2e8f0") if photo else GRAY_400)
         c.setFont("Lato", 7)
@@ -2407,12 +2407,17 @@ class KashmirRouteMap(Flowable):
 
 
 # ─── Helper: build styles ─────────────────────────────────────────────────────
-def _is_amount(v):
+def _amount_int(v):
+    """Whole-rupee amount, or 0 when blank / zero / not a number."""
     try:
-        float(str(v).replace(",", ""))
-        return True
-    except (TypeError, ValueError):
-        return False
+        n = int(round(float(str(v).replace(",", "").strip())))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+    return n if n > 0 else 0
+
+
+def _is_amount(v):
+    return _amount_int(v) > 0
 
 
 _MEAL_PLAN_LABELS = {
@@ -2821,8 +2826,8 @@ def generate_pdf(itinerary_data: dict) -> str:
     itinerary_data = dict(itinerary_data)
     _register_custom_map_places()
     itinerary_data["timeline"] = _apply_points(itinerary_data.get("timeline", []), start_point, end_point)
-    custom_cost  = itinerary_data.get("custom_cost") or \
-                   itinerary_data.get("financial_summary", {}).get("total_payable_inr", "On Request")
+    # No cost entered (blank / 0) -> "TBD" everywhere in the PDF
+    custom_cost  = _amount_int(itinerary_data.get("custom_cost")) or "TBD"
 
     # ── 1. Hero header ────────────────────────────────────────────────────────
     story.append(HeroHeader(
@@ -2863,9 +2868,9 @@ def generate_pdf(itinerary_data: dict) -> str:
             Paragraph(clean(str(budget_tier)), styles["summary_value"]),
             Paragraph("ESTIMATED COST", styles["summary_label"]),
             Paragraph(
-                f"<b><font color='#059669'>INR {int(float(str(custom_cost).replace(",", ""))):,}</font></b>"
+                f"<b><font color='#059669'>INR {_amount_int(custom_cost):,}</font></b>"
                 if _is_amount(custom_cost)
-                else clean(str(custom_cost)),
+                else "TBD",
                 ParagraphStyle("cv", fontName="Lato-Bold", fontSize=9, textColor=EMERALD)
             ),
         ],
@@ -3345,7 +3350,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     page_block_1.append(Spacer(1, 3*mm))
 
     # Calculate payment milestones dynamically (25% / 25% / 50% split per policy)
-    total_amt   = int(float(str(custom_cost).replace(",", ""))) if _is_amount(custom_cost) else 0
+    total_amt   = _amount_int(custom_cost)
     inst1_amt   = round(total_amt * 0.25)
     inst2_amt   = round(total_amt * 0.25)
     inst3_amt   = total_amt - inst1_amt - inst2_amt
@@ -3373,17 +3378,17 @@ def generate_pdf(itinerary_data: dict) -> str:
     _d3 = _sd.strftime("%d %b %Y") if _sd else ""
     pay_data = [
         ("1st Instalment (25%)",
-         f"INR {inst1_amt:,}" if total_amt else "As Quoted",
+         f"INR {inst1_amt:,}" if total_amt else "TBD",
          f"On Confirmation<br/><font size='7' color='#64748b'>hold quote by {_d1}</font>",
          "NEFT / UPI / Cheque",
          "Pending"),
         ("2nd Instalment (25%)",
-         f"INR {inst2_amt:,}" if total_amt else "As Quoted",
+         f"INR {inst2_amt:,}" if total_amt else "TBD",
          "A month before travel date" + (f"<br/><font size='7' color='#64748b'>by {_d2}</font>" if _d2 else ""),
          "NEFT / UPI / Cheque",
          "Pending"),
         ("3rd Instalment (50%)",
-         f"INR {inst3_amt:,}" if total_amt else "As Quoted",
+         f"INR {inst3_amt:,}" if total_amt else "TBD",
          "On Arrival" + (f"<br/><font size='7' color='#64748b'>{_d3}</font>" if _d3 else ""),
          "NEFT / UPI / Cheque",
          "Pending"),
