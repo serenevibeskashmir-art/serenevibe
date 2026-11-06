@@ -2418,8 +2418,8 @@ def _is_amount(v):
 _MEAL_PLAN_LABELS = {
     "EP": "EP (Room Only)",
     "CP": "CP (Breakfast)",
-    "MAP": "MAP (Breakfast &amp; Dinner)",
-    "AP": "AP (All Meals)",
+    "MAP": "MAP (B&amp;D)",
+    "AP": "AP (B, L &amp; D)",
 }
 _MEAL_INCLUSION = {
     "EP": "Meal Plan EP - Room only, no meals included",
@@ -3205,7 +3205,7 @@ def generate_pdf(itinerary_data: dict) -> str:
             hotel_name  = "To be confirmed"
             hotel_place = clean(str(overnight_raw)) if overnight_raw else "-"
 
-        meal_plan = "-" if is_departure_day else _MEAL_PLAN_LABELS.get(meal_plan_code, "Breakfast &amp; Dinner")
+        meal_plan = "-" if is_departure_day else _MEAL_PLAN_LABELS.get(meal_plan_code, "MAP (B&amp;D)")
 
         hotel_rows.append([
             Paragraph(f"<b>Day {idx}</b>", ParagraphStyle("dc", fontName="Lato-Bold",
