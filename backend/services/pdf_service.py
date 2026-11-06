@@ -546,7 +546,7 @@ class HeroHeader(Flowable):
         c.drawString(bx + 9, by + 0.8*mm, badge_label)
 
         # ── Total cost (bottom-right) with emerald pill ───────────────────────
-        cost_str = f"INR {int(self.total_cost):,}" if str(self.total_cost).replace(",","").isdigit() else clean(str(self.total_cost))
+        cost_str = f"INR {int(float(str(self.total_cost).replace(',', ''))):,}" if _is_amount(self.total_cost) else clean(str(self.total_cost))
         # Cost label
         c.setFillColor(colors.HexColor("#e2e8f0") if photo else GRAY_400)
         c.setFont("Lato", 7)
@@ -2407,6 +2407,14 @@ class KashmirRouteMap(Flowable):
 
 
 # ─── Helper: build styles ─────────────────────────────────────────────────────
+def _is_amount(v):
+    try:
+        float(str(v).replace(",", ""))
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
 _MEAL_PLAN_LABELS = {
     "EP": "EP (Room Only)",
     "CP": "CP (Breakfast)",
@@ -2855,8 +2863,8 @@ def generate_pdf(itinerary_data: dict) -> str:
             Paragraph(clean(str(budget_tier)), styles["summary_value"]),
             Paragraph("ESTIMATED COST", styles["summary_label"]),
             Paragraph(
-                f"<b><font color='#059669'>INR {int(custom_cost):,}</font></b>"
-                if str(custom_cost).replace(".", "").isdigit()
+                f"<b><font color='#059669'>INR {int(float(str(custom_cost).replace(",", ""))):,}</font></b>"
+                if _is_amount(custom_cost)
                 else clean(str(custom_cost)),
                 ParagraphStyle("cv", fontName="Lato-Bold", fontSize=9, textColor=EMERALD)
             ),
@@ -3337,7 +3345,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     page_block_1.append(Spacer(1, 3*mm))
 
     # Calculate payment milestones dynamically (25% / 25% / 50% split per policy)
-    total_amt   = int(custom_cost) if str(custom_cost).replace(".", "").isdigit() else 0
+    total_amt   = int(float(str(custom_cost).replace(",", ""))) if _is_amount(custom_cost) else 0
     inst1_amt   = round(total_amt * 0.25)
     inst2_amt   = round(total_amt * 0.25)
     inst3_amt   = total_amt - inst1_amt - inst2_amt
