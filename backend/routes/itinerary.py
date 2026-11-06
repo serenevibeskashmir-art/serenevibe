@@ -133,6 +133,16 @@ def _meal_plan(value):
     return value if value in MEAL_PLANS else "MAP"
 
 
+def _cost_value(value):
+    """Cost as a whole number of rupees, or None when blank, zero or not a number
+    (the cost box can send text such as "0.0" or "45000.5")."""
+    try:
+        n = int(round(float(str(value).replace(",", "").strip())))
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return n if n > 0 else None
+
+
 def _vehicle_type(adults):
     adults = int(adults or 2)
     if adults <= 3:
@@ -184,13 +194,13 @@ def generate_custom_itinerary():
     budget_tier = data.get("budget_tier", "Mid-Range")
     trip_pace = data.get("trip_pace", "Moderate")
     adults = int(data.get("adults", 2))
-    custom_cost = data.get("custom_cost")
+    custom_cost = _cost_value(data.get("custom_cost"))
     selected_hotels = data.get("hotelSelections") or data.get("selected_hotels", [])
 
     start_point = (data.get("start_point") or "").strip() or "Srinagar Airport"
     end_point = (data.get("end_point") or "").strip() or "Srinagar Airport"
 
-    calculated_cost = int(custom_cost) if custom_cost else days * (4000 if budget_tier == "Budget" else 6500)
+    calculated_cost = custom_cost if custom_cost else days * (4000 if budget_tier == "Budget" else 6500)
     vehicle = data.get("vehicle_type") or _vehicle_type(adults)
     meal_plan = _meal_plan(data.get("meal_plan"))
 
