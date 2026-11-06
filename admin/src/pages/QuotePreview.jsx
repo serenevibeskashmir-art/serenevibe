@@ -146,6 +146,13 @@ const POINT_PRESETS = [
   "Katra Railway Station",
   "Pathankot Railway Station",
 ];
+const VEHICLE_OPTIONS = ["Sedan", "Ertiga/Innova", "Innova Crysta", "Tempo/Traveler", "Tempo Traveler (17 seater)", "Mini Bus"];
+const MEAL_PLANS = [
+  { code: "EP",  name: "European Plan",          desc: "Room only. No meals included." },
+  { code: "CP",  name: "Continental Plan",       desc: "Room + Breakfast" },
+  { code: "MAP", name: "Modified American Plan", desc: "Room + Breakfast + One major meal (Lunch or Dinner)" },
+  { code: "AP",  name: "American Plan",          desc: "Room + Breakfast + Lunch + Dinner (All meals)" },
+];
 const PICKUP_ROUTE = "Airport Pickup and Local Sightseeing: Overnight Srinagar";
 const DROP_ROUTE   = "Airport Drop-Departure";
 // Day 1 can end in any base: "Airport Pickup ...: Overnight <City>".
@@ -881,6 +888,8 @@ export default function QuotePreview({ quote }) {
   const [startPoint,      setStartPoint]      = useState(quote?.meta_summary?.start_point || DEFAULT_POINT);
   const [endPoint,        setEndPoint]        = useState(quote?.meta_summary?.end_point   || DEFAULT_POINT);
 
+  const [vehicleType, setVehicleType] = useState(quote?.meta_summary?.vehicle_type || quote?.vehicle_type || "Sedan");
+  const [mealPlan, setMealPlan] = useState(quote?.meta_summary?.meal_plan || "MAP");   // default MAP
   const [startInfo, setStartInfo] = useState(quote?.meta_summary?.start_info || null);
   const [endInfo,   setEndInfo]   = useState(quote?.meta_summary?.end_info   || null);
   const [locBusy,   setLocBusy]   = useState("");     // "" | "start" | "end"
@@ -1113,7 +1122,7 @@ export default function QuotePreview({ quote }) {
   const draftKey = "qp-draft:" + (quote?.meta_summary?.client_name || "client");
   const saveDraft = (snap) => {
     try {
-      localStorage.setItem(draftKey, JSON.stringify({ ...snap, startPoint, endPoint, editableCost, at: Date.now() }));
+      localStorage.setItem(draftKey, JSON.stringify({ ...snap, startPoint, endPoint, editableCost, vehicleType, mealPlan, at: Date.now() }));
     } catch (e) { /* storage unavailable: undo still works */ }
   };
   useEffect(() => {
@@ -1179,6 +1188,8 @@ export default function QuotePreview({ quote }) {
     if (d.startPoint) setStartPoint(d.startPoint);
     if (d.endPoint) setEndPoint(d.endPoint);
     if (d.editableCost) setEditableCost(d.editableCost);
+    if (d.vehicleType) setVehicleType(d.vehicleType);
+    if (d.mealPlan) setMealPlan(d.mealPlan);
     setActiveDay(0); setPickDraft({}); setDraftOffer(null);
   };
   const discardDraft = () => { try { localStorage.removeItem(draftKey); } catch (e) { /* ignore */ } setDraftOffer(null); };
@@ -1206,6 +1217,8 @@ export default function QuotePreview({ quote }) {
                     budget_tier: quote?.meta_summary?.budget_tier || "Mid-Range",
                     trip_pace: quote?.meta_summary?.trip_pace || "Moderate",
                     custom_cost: editableCost,
+                    vehicle_type: vehicleType,
+                    meal_plan: mealPlan,
                     return_pdf: true,
                     timeline,
                     hotelSelections,
@@ -1460,7 +1473,7 @@ export default function QuotePreview({ quote }) {
         {/* 2. Sticky summary bar */}
         <div className="qp-sticky">
           <div><div className="k">Client</div><div className="v">{quote?.meta_summary?.client_name || "N/A"}</div></div>
-          <div><div className="k">Trip</div><div className="v">{timeline.length} days · {quote?.meta_summary?.budget_tier || "N/A"} · {quote?.meta_summary?.vehicle_type || "N/A"}</div></div>
+          <div><div className="k">Trip</div><div className="v">{timeline.length} days · {quote?.meta_summary?.budget_tier || "N/A"} · {vehicleType || "N/A"} · {mealPlan}</div></div>
           <div><div className="k">Estimated total</div><div className="v">{fmtINR(Number(editableCost) || 0)}</div></div>
           <div className="grow" aria-live="polite">{saveState === "saving" ? "Saving…" : "All changes saved"}</div>
           <button type="button" className="qp-ghost" onClick={undo} disabled={!canUndo} aria-label="Undo last change">Undo</button>
@@ -1480,6 +1493,26 @@ export default function QuotePreview({ quote }) {
             </span>
           </div>
         )}
+
+        {/* Vehicle + meal plan */}
+        <div style={{ background: "#fff", border: "1px solid " + UI_THEME.colors.border, borderRadius: "12px", padding: "14px 18px", marginBottom: "20px", boxShadow: UI_THEME.shadows.sm }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "14px" }}>
+            <div>
+              <label style={{ display: "block", fontWeight: "700", color: "#334155", fontSize: "0.9rem", marginBottom: "6px" }}>🚗 Vehicle</label>
+              <select className="qp-route-select" value={vehicleType} onChange={(e) => setVehicleType(e.target.value)}>
+                {(VEHICLE_OPTIONS.includes(vehicleType) ? VEHICLE_OPTIONS : [vehicleType, ...VEHICLE_OPTIONS]).map((v) => <option key={v} value={v}>{v}</option>)}
+              </select>
+              <div style={{ fontSize: "0.75rem", color: "#94a3b8", marginTop: "4px" }}>Shown in the PDF summary and inclusions.</div>
+            </div>
+            <div>
+              <label style={{ display: "block", fontWeight: "700", color: "#334155", fontSize: "0.9rem", marginBottom: "6px" }}>🍽️ Meal Plan</label>
+              <select className="qp-route-select" value={mealPlan} onChange={(e) => setMealPlan(e.target.value)}>
+                {MEAL_PLANS.map((m) => <option key={m.code} value={m.code}>{m.code} – {m.name}</option>)}
+              </select>
+              <div style={{ fontSize: "0.75rem", color: "#94a3b8", marginTop: "4px" }}>{MEAL_PLANS.find((m) => m.code === mealPlan)?.desc}</div>
+            </div>
+          </div>
+        </div>
 
         {/* Tour start / end points */}
         <div style={{ background: "#fff", border: "1px solid " + UI_THEME.colors.border, borderRadius: "12px", padding: "14px 18px", marginBottom: "20px", boxShadow: UI_THEME.shadows.sm }}>
