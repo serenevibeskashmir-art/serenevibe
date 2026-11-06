@@ -2407,6 +2407,20 @@ class KashmirRouteMap(Flowable):
 
 
 # ─── Helper: build styles ─────────────────────────────────────────────────────
+_MEAL_PLAN_LABELS = {
+    "EP": "EP (Room Only)",
+    "CP": "CP (Breakfast)",
+    "MAP": "MAP (Breakfast &amp; Dinner)",
+    "AP": "AP (All Meals)",
+}
+_MEAL_INCLUSION = {
+    "EP": "Meal Plan EP - Room only, no meals included",
+    "CP": "Meal Plan CP - Breakfast",
+    "MAP": "Meal Plan MAP - Breakfast and one major meal (Lunch or Dinner)",
+    "AP": "Meal Plan AP - Breakfast, Lunch and Dinner (all meals)",
+}
+
+
 def make_styles():
     base = getSampleStyleSheet()
 
@@ -3150,6 +3164,7 @@ def generate_pdf(itinerary_data: dict) -> str:
 
     hotel_rows = [hotel_header]
     day_place_map = {}
+    meal_plan_code = str(itinerary_data.get("meal_plan") or "MAP").strip().upper()
 
     for idx, day_info in enumerate(timeline, start=1):
         hotel_id   = hotel_selections.get(str(idx - 1))    # 0-based day index, as the itinerary builder stores it
@@ -3182,7 +3197,7 @@ def generate_pdf(itinerary_data: dict) -> str:
             hotel_name  = "To be confirmed"
             hotel_place = clean(str(overnight_raw)) if overnight_raw else "-"
 
-        meal_plan = "-" if is_departure_day else "Breakfast &amp; Dinner"
+        meal_plan = "-" if is_departure_day else _MEAL_PLAN_LABELS.get(meal_plan_code, "Breakfast &amp; Dinner")
 
         hotel_rows.append([
             Paragraph(f"<b>Day {idx}</b>", ParagraphStyle("dc", fontName="Lato-Bold",
@@ -3244,10 +3259,10 @@ def generate_pdf(itinerary_data: dict) -> str:
 
     # ── 5. Inclusions / Exclusions ────────────────────────────────────────────
     inc_items = [
-        "01 SEDAN for all tours and transfers including pick up and drop",
+        f"01 {clean(str(vehicle_type)).upper()} for all tours and transfers including pick up and drop",
         "Sightseeing tours as per the itinerary by individual car",
         "Stay at the hotels mentioned in the itinerary or similar",
-        "Meals - Breakfast and Dinner",
+        _MEAL_INCLUSION.get(str(itinerary_data.get("meal_plan") or "MAP").strip().upper(), _MEAL_INCLUSION["MAP"]),
         "Celebration Cake",
         "Accommodation on triple sharing basis",
         "01 Hour complimentary Shikara ride",
@@ -3255,7 +3270,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     ]
     exc_items = [
         "Any Airfare or Train fare",
-        "Entrances, Lunch and Snacks",
+        "Entrances, Snacks" + ("" if str(itinerary_data.get("meal_plan") or "MAP").strip().upper() == "AP" else ", Lunch") + " and any meals not covered by the meal plan",
         "Activities: River Rafting, Paragliding and Skiing, Gondola (Phase I INR 800 & Phase II INR 1000 per person)",
         "All personal expenses such as tips, laundry, telephone bills, beverages and camera fees",
         "Union cabs for ABC Pahalgam and snow chain vehicle if required for Gulmarg",
