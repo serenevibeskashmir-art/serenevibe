@@ -120,6 +120,19 @@ def _point_info(raw):
     return out if any(v is not None for v in out.values()) else None
 
 
+MEAL_PLANS = {
+    "EP": "Room only. No meals included.",
+    "CP": "Room + Breakfast",
+    "MAP": "Room + Breakfast + One major meal (Lunch or Dinner)",
+    "AP": "Room + Breakfast + Lunch + Dinner (All meals)",
+}
+
+
+def _meal_plan(value):
+    value = str(value or "").strip().upper()
+    return value if value in MEAL_PLANS else "MAP"
+
+
 def _vehicle_type(adults):
     adults = int(adults or 2)
     if adults <= 3:
@@ -179,6 +192,7 @@ def generate_custom_itinerary():
 
     calculated_cost = int(custom_cost) if custom_cost else days * (4000 if budget_tier == "Budget" else 6500)
     vehicle = data.get("vehicle_type") or _vehicle_type(adults)
+    meal_plan = _meal_plan(data.get("meal_plan"))
 
     response_payload = {
         "client_name": client_name,
@@ -189,6 +203,7 @@ def generate_custom_itinerary():
         "start_date": data.get("start_date", "Flexible"),
         "budget_tier": budget_tier,
         "vehicle_type": vehicle,
+        "meal_plan": meal_plan,
         "trip_pace": trip_pace,
         "start_point": start_point,
         "end_point": end_point,
@@ -207,6 +222,7 @@ def generate_custom_itinerary():
             "adults": adults,
             "start_date": data.get("start_date", "Flexible"),
             "vehicle_type": vehicle,
+            "meal_plan": meal_plan,
             "start_point": start_point,
             "end_point": end_point,
         },
