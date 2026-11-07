@@ -1260,7 +1260,7 @@ export default function QuotePreview({ quote }) {
         .qp-daypill.plus { background: #fff; border: 2px dashed #94a3b8; color: #334155; }
         .qp-active-day { scroll-margin-top: 12px; }
         .qp-set { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 14px 12px; margin-bottom: 14px; box-shadow: ${UI_THEME.shadows.sm}; }
-        .qp-set-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; }
+        .qp-set-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
         .qp-set-grid label { display: block; font-size: 0.74rem; font-weight: 700; color: #475569; margin-bottom: 3px; }
         .qp-set-grid .qp-route-select { max-width: 100%; width: 100%; min-height: 38px; padding: 6px 8px; font-size: 0.84rem; }
         @media (max-width: 900px) { .qp-set-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -1517,16 +1517,6 @@ export default function QuotePreview({ quote }) {
                 {MEAL_PLANS.map((m) => <option key={m.code} value={m.code}>{m.code} – {m.name}</option>)}
               </select>
             </div>
-            {[["🛫 Starts from", startPoint, changeStart, "start"], ["🛬 Ends at", endPoint, changeEnd, "end"]].map(([label, val, setter, key]) => (
-              <div key={key}>
-                <label>{label}</label>
-                <select className="qp-route-select" value={POINT_PRESETS.includes(val) ? val : "__custom"}
-                  onChange={(e) => setter(e.target.value === "__custom" ? "" : e.target.value)}>
-                  {POINT_PRESETS.map((p) => <option key={p} value={p}>{p}</option>)}
-                  <option value="__custom">Other…</option>
-                </select>
-              </div>
-            ))}
           </div>
 
           {/* Extra fields only appear when "Other…" is chosen */}
@@ -1536,19 +1526,14 @@ export default function QuotePreview({ quote }) {
               value={vehicleType} onChange={(e) => setVehicleType(e.target.value)} />
           )}
           {[["start", "Start", startPoint, changeStart], ["end", "End", endPoint, changeEnd]].map(([key, label, val, setter]) => {
-            const isCustom = !POINT_PRESETS.includes(val);
             const showFind = !isSrinagarPoint(val) && val.trim().length >= 3;
-            if (!isCustom && !showFind) return null;
+            if (!showFind) return null;
             const info = key === "start" ? startInfo : endInfo;
             const small = { width: "78px", padding: "4px 6px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "0.8rem", boxSizing: "border-box" };
             return (
               <div key={key} style={{ marginTop: "8px" }}>
                 <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-                  <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#334155" }}>{label} point:</span>
-                  {isCustom && (
-                    <input className="qp-route-select" style={{ maxWidth: "300px", minHeight: "36px" }}
-                      placeholder="e.g. Delhi Airport, Udhampur Railway Station" value={val} onChange={(e) => setter(e.target.value)} />
-                  )}
+                  <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#334155" }}>{label} point: {val}</span>
                   {showFind && (
                     <button type="button" onClick={() => locatePoint(key)} disabled={!!locBusy}
                       style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #c4b5fd", background: "#f5f3ff", color: "#6d28d9", fontWeight: "bold", cursor: locBusy ? "wait" : "pointer", fontSize: "0.8rem" }}>
@@ -1643,8 +1628,9 @@ export default function QuotePreview({ quote }) {
                 const next = { from, to, night, ...patch };
                 // Day 1 starts where the guests are collected: a real place (e.g. Pathankot) becomes the tour
                 // start point, so the PDF cover, journey line and map show it. "Airport" keeps the start point as set.
-                if (activeDay === 0 && patch.from !== undefined && patch.from !== "Airport" && patch.from !== startPoint) {
-                  changeStart(patch.from);
+                if (activeDay === 0 && patch.from !== undefined) {
+                  const wantStart = patch.from === "Airport" ? DEFAULT_POINT : patch.from;
+                  if (wantStart !== startPoint) changeStart(wantStart);
                 }
                 if (patch.to !== undefined && patch.night === undefined) next.night = patch.to === "Departure" ? "" : defaultNightFor(patch.to, next.from);
                 if (next.to === "Departure" || (next.to && next.night)) {
@@ -1717,6 +1703,7 @@ export default function QuotePreview({ quote }) {
                   {row(1, "From", activeDay > 0 && !draft.from && !parsed && prevNight ? `Day ${activeDay} night` : (parsed && activeDay > 0 && from !== autoFrom ? `Day ${activeDay} ended in ${prevNight || "?"}` : ""), fromOptions(), from, (o) => pick({ from: o }))}
                   {row(2, "To", "", toOptions(), to, (o) => pick({ to: o }))}
                   {row(3, "Overnight", isDep ? "not needed" : "", nightOptions(), night || (customRoute ? (day.overnight_stay || "") : ""), pickNight, isDep)}
+                  {(isDep || day.transit_route === DROP_ROUTE) && row(4, "Drop at", "", [...POINT_PRESETS, ...fromOptions().filter((o) => o !== "Airport" && o !== "Srinagar")], endPoint || DEFAULT_POINT, (o) => changeEnd(o))}
                   {addNote && <div style={{ fontSize: "0.8rem", color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "8px 10px", marginBottom: "10px" }}>{addNote}</div>}
                   {customRoute && <div style={{ fontSize: "0.78rem", color: "#64748b", marginBottom: "10px" }}>Using “{day.transit_route}”. Pick From / To to replace it.</div>}
                 </div>
