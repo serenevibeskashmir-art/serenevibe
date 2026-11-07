@@ -1286,7 +1286,7 @@ export default function QuotePreview({ quote, trip }) {
         .qp-sticky .grow { flex: 1 1 120px; font-size: 0.8rem; color: #cbd5e1; }
         .qp-ghost { border: 1px solid #475569; background: transparent; color: #fff; border-radius: 8px; min-height: 40px; padding: 0 14px; font-weight: 600; cursor: pointer; }
         .qp-ghost:disabled { opacity: .4; cursor: not-allowed; }
-        .qp-gen { border: 0; background: #7c3aed; color: #fff; border-radius: 8px; min-height: 40px; padding: 0 18px; font-weight: 700; cursor: pointer; }
+        .qp-gen { border: 0; background: #b4690a; color: #fff; border-radius: 8px; min-height: 40px; padding: 0 18px; font-weight: 700; cursor: pointer; }
         .qp-gen:disabled { opacity: .6; cursor: wait; }
         .qp-badge { display: inline-block; background: #fbbf24; color: #1c1917; border-radius: 999px; font-size: 0.72rem; font-weight: 800; padding: 2px 9px; margin-left: 8px; }
         .qp-badge.ok { background: #4ade80; color: #052e16; }
@@ -1410,7 +1410,7 @@ export default function QuotePreview({ quote, trip }) {
         .qp-sticky .v { font-size: 0.85rem; }
         .qp-sticky .grow { font-size: 0.74rem; }
         .qp-ghost, .qp-gen { min-height: 32px; font-size: 0.8rem; padding: 0 12px; border-radius: 8px; }
-        .qp-gen { background: #4f46e5; }
+        .qp-gen { background: #1b5666; }
         .qp-badge { font-size: 0.66rem; padding: 1px 7px; margin-left: 6px; }
         .qp-set { padding: 8px 10px; margin-bottom: 8px; border-radius: 10px; }
         .qp-set-grid { gap: 6px 10px; }
@@ -1428,7 +1428,7 @@ export default function QuotePreview({ quote, trip }) {
         .qp-warn span { font-size: 0.8rem; }
         .qp-ov { gap: 8px; padding: 4px 2px 8px; margin-bottom: 4px; }
         .qp-ovcard { flex: 0 0 142px; border-width: 1.5px; border-radius: 10px; }
-        .qp-ovcard.on { border-color: #4f46e5; box-shadow: 0 0 0 3px #e0e7ff; }
+        .qp-ovcard.on { border-color: #1b5666; box-shadow: 0 0 0 3px #d3e4e7; }
         .qp-ovmain { padding: 8px 10px; gap: 3px; min-height: 84px; }
         .qp-ovdn { font-size: 0.64rem; }
         .qp-ovrt { font-size: 0.82rem; line-height: 1.2; }
@@ -1439,7 +1439,7 @@ export default function QuotePreview({ quote, trip }) {
         .qp-active-day { padding: 10px 12px 12px; background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgb(0 0 0 / .04); }
         .qp-daypills { gap: 6px; padding: 0 0 8px; margin-bottom: 4px; background: #fff; }
         .qp-daypill { min-height: 32px; padding: 0 14px; font-size: 0.8rem; }
-        .qp-daypill.on { background: #4f46e5; }
+        .qp-daypill.on { background: #1b5666; }
         .qp-daytitle { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-bottom: 8px; }
         .qp-daytitle h3 { margin: 0; font-size: 1rem; font-weight: 800; color: #0f172a; }
         .qp-route-select.qp-preset { max-width: 320px; min-height: 32px; padding: 3px 8px; font-size: 0.8rem; border-radius: 8px; }
@@ -1452,7 +1452,7 @@ export default function QuotePreview({ quote, trip }) {
         .qp-pair .qp-hotel-select { max-width: 100%; min-height: 34px; padding: 4px 8px; border-radius: 8px; }
         .qp-ai { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
         .qp-ai input { flex: 1; min-width: 140px; max-width: none; min-height: 34px; padding: 4px 8px; font-size: 0.8rem; border-radius: 8px; }
-        .qp-ai button { padding: 0 12px; border-radius: 8px; border: none; background: #4f46e5; color: #fff; font-weight: 700; font-size: 0.8rem; min-height: 34px; cursor: pointer; }
+        .qp-ai button { padding: 0 12px; border-radius: 8px; border: none; background: #1b5666; color: #fff; font-weight: 700; font-size: 0.8rem; min-height: 34px; cursor: pointer; }
         .qp-act { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; }
         .qp-act .qp-activity-row { margin-bottom: 6px; gap: 6px; }
         .qp-time-input, .qp-title-input { min-height: 32px; font-size: 0.82rem; border-radius: 6px; }
@@ -1463,7 +1463,7 @@ export default function QuotePreview({ quote, trip }) {
         .qp-more > summary::after { margin-left: auto; float: none; font-size: 0.72rem; }
         .qp-more .qp-sub { display: inline; margin: 0; font-size: 0.72rem; }
         .qp-footer-bar { margin-top: 10px; padding-top: 10px; align-items: center; }
-        .qp-save-btn { background: #4f46e5; min-height: 40px; padding: 8px 16px; border-radius: 8px; font-size: 0.88rem; }
+        .qp-save-btn { background: #1b5666; min-height: 40px; padding: 8px 16px; border-radius: 8px; font-size: 0.88rem; }
         .qp-cost-input { min-height: 36px; font-size: 1rem; border-radius: 8px; }
         .qp-daypill { padding: 0 18px 0 14px; }
         .qp-daypill .pd { top: 50%; right: 6px; transform: translateY(-50%); }
@@ -1520,7 +1520,7 @@ export default function QuotePreview({ quote, trip }) {
         .qp-ovcard { flex: none; width: auto; border-left-width: 4px; }
         .qp-ovcard.ok { border-left-color: #22c55e; }
         .qp-ovcard.warn { border-left-color: #f59e0b; }
-        .qp-ovcard.on { border-color: #4f46e5; border-left-color: #4f46e5; }
+        .qp-ovcard.on { border-color: #1b5666; border-left-color: #1b5666; }
         .qp-ovmain { min-height: 0; padding: 7px 10px 4px; gap: 2px; }
         .qp-ovrt { font-size: 0.86rem; }
         .qp-ovok { color: #16a34a; font-weight: 800; font-size: 0.8rem; }
@@ -1536,7 +1536,7 @@ export default function QuotePreview({ quote, trip }) {
         .qp-stp b { min-width: 22px; text-align: center; font-size: 0.95rem; color: #0f172a; }
         .qp-stp button { width: 34px; height: 34px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-size: 1.1rem; font-weight: 700; color: #1e293b; cursor: pointer; touch-action: manipulation; }
         .qp-stp button:disabled { opacity: .35; cursor: not-allowed; }
-        .qp-stp button:active:not(:disabled) { background: #e0e7ff; }
+        .qp-stp button:active:not(:disabled) { background: #d3e4e7; }
         @media (max-width: 959px) {
           .qp-layout { grid-template-columns: 1fr; }
           .qp-side { position: static; max-height: none; overflow: visible; }
@@ -1549,9 +1549,39 @@ export default function QuotePreview({ quote, trip }) {
           .qp-cost-input { width: 92px !important; min-height: 38px; font-size: 0.95rem; }
           .qp-save-btn { flex: 1 1 auto; width: auto !important; min-height: 38px; padding: 6px 8px; font-size: 0.8rem; white-space: normal; align-self: center; }
         }
-      `}</style>
+      
+        /* ===== Visual layer: Dal Lake dusk (ink teal, lake blue, saffron) ===== */
+        #qp-top { scroll-margin-top: 12px; --ink: #10272e; --lake: #1b5666; --lake-soft: #e4eef0; --saffron: #c98a14; --line: #d5e0df; }
+        #qp-top .qp-head h2 { font-family: Georgia, "Iowan Old Style", "Times New Roman", serif; font-weight: 700; font-size: 1.3rem; color: var(--ink); letter-spacing: 0; }
+        #qp-top .qp-head span { color: #5b7479; }
+        #qp-top .qp-sticky { background: linear-gradient(120deg, #10272e 0%, #17414d 100%); border-bottom: 3px solid var(--saffron); border-radius: 12px; box-shadow: 0 10px 24px -14px rgb(16 39 46 / .7); padding: 10px 16px; }
+        #qp-top .qp-sticky .k { color: #9fc0c6; letter-spacing: .05em; }
+        #qp-top .qp-sticky .v { font-family: Georgia, "Iowan Old Style", serif; font-weight: 700; font-size: 1.02rem; }
+        #qp-top .qp-set, #qp-top .qp-active-day, #qp-top .qp-more { border-color: var(--line); border-radius: 14px; box-shadow: 0 1px 0 rgb(16 39 46 / .04), 0 12px 28px -22px rgb(16 39 46 / .45); }
+        #qp-top .qp-active-day { padding: 12px 14px 14px; border-top: 3px solid var(--lake); }
+        #qp-top .qp-daytitle h3 { font-family: Georgia, "Iowan Old Style", serif; font-size: 1.12rem; font-weight: 700; color: var(--ink); }
+        #qp-top .qp-daypills { background: transparent; }
+        #qp-top .qp-daypill { background: #fff; border: 1px solid var(--line); color: #2c4a52; transition: background .15s, color .15s; }
+        #qp-top .qp-daypill:hover:not(.on) { background: var(--lake-soft); }
+        #qp-top .qp-daypill.on { background: var(--lake); border-color: var(--lake); color: #fff; box-shadow: 0 4px 10px -4px rgb(27 86 102 / .7); }
+        #qp-top .qp-daypill .pd { background: var(--saffron); }
+        #qp-top .qp-daypill.plus { border: 1px dashed #8fb3ba; background: transparent; color: var(--lake); }
+        #qp-top .qp-row { border-top-color: #e6eded; }
+        #qp-top .qp-rl { color: #3d5a62; flex-basis: 96px; white-space: nowrap; }
+        @media (max-width: 720px) { #qp-top .qp-rl { flex-basis: auto; } }
+        #qp-top .qp-act { background: #f6f9f9; border-color: var(--line); border-radius: 12px; }
+        #qp-top select, #qp-top input[type="text"], #qp-top input[type="number"], #qp-top textarea { transition: border-color .15s, box-shadow .15s; }
+        #qp-top select:focus-visible, #qp-top input:focus-visible, #qp-top textarea:focus-visible, #qp-top button:focus-visible { outline: 2px solid var(--lake); outline-offset: 1px; border-color: var(--lake); }
+        #qp-top .qp-hotline { background: var(--lake-soft); border: 1px solid #c9dde0; border-radius: 12px; padding: 8px 10px; }
+        #qp-top .qp-hotline select.bad { border-color: #e0a45a; background: #fff6e8; color: #8a4b00; }
+        #qp-top .qp-stp button:active:not(:disabled) { background: var(--lake-soft); }
+        #qp-top .qp-fix { border-color: #c9dde0; color: var(--lake); }
+        #qp-top .qp-chk-warn { background: #fff3d6; color: #8a5a00; }
+        #qp-top .qp-save-btn { background: var(--ink); border: 0; border-bottom: 3px solid var(--saffron); }
+        @media (prefers-reduced-motion: reduce) { #qp-top * { transition: none !important; } }
+`}</style>
 
-      <div className="qp-wrap">
+      <div className="qp-wrap" id="qp-top">
         {/* 1. Header */}
         <div className="qp-head">
           <h2>Build the itinerary</h2>
@@ -1595,7 +1625,7 @@ export default function QuotePreview({ quote, trip }) {
                   <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#334155" }}>{label} point: {val}</span>
                   {showFind && (
                     <button type="button" onClick={() => locatePoint(key)} disabled={!!locBusy}
-                      style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #c4b5fd", background: "#f5f3ff", color: "#6d28d9", fontWeight: "bold", cursor: locBusy ? "wait" : "pointer", fontSize: "0.8rem" }}>
+                      style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #c4b5fd", background: "#f5f3ff", color: "#1b5666", fontWeight: "bold", cursor: locBusy ? "wait" : "pointer", fontSize: "0.8rem" }}>
                       {locBusy === key ? "Looking up…" : "📍 Find location & distance (AI)"}
                     </button>
                   )}
@@ -1708,7 +1738,7 @@ export default function QuotePreview({ quote, trip }) {
 
               const chipStyle = (on, disabled) => ({
                 padding: "4px 12px", borderRadius: "999px", minHeight: "30px", fontSize: "0.8rem", fontWeight: 700,
-                border: on ? "1px solid #4f46e5" : "1px solid #cbd5e1", backgroundColor: on ? "#4f46e5" : "#fff",
+                border: on ? "1px solid #1b5666" : "1px solid #cbd5e1", backgroundColor: on ? "#1b5666" : "#fff",
                 color: on ? "#fff" : "#1e293b", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.45 : 1, transition: "all 0.12s",
               });
               const row = (step, label, hint, options, value, onPick, disabled) => (
@@ -1729,7 +1759,7 @@ export default function QuotePreview({ quote, trip }) {
                         );
                       })}
                       {!disabled && addOpen !== step && (
-                        <button type="button" onClick={() => { setAddOpen(step); setAddText(""); setAddErr(""); }} style={{ ...chipStyle(false, false), borderStyle: "dashed", color: "#4f46e5", borderColor: "#a5b4fc" }}>+ Place</button>
+                        <button type="button" onClick={() => { setAddOpen(step); setAddText(""); setAddErr(""); }} style={{ ...chipStyle(false, false), borderStyle: "dashed", color: "#1b5666", borderColor: "#8fb3ba" }}>+ Place</button>
                       )}
                     </div>
                     {!disabled && addOpen === step && (
@@ -1815,7 +1845,7 @@ export default function QuotePreview({ quote, trip }) {
                   type="button"
                   onClick={aiRewriteDay}
                   disabled={!!aiBusy}
-                  style={{ padding: "8px 14px", borderRadius: "6px", border: "none", background: "#7c3aed", color: "#fff", fontWeight: "bold", cursor: aiBusy ? "wait" : "pointer", minHeight: "38px", opacity: aiBusy ? 0.7 : 1 }}
+                  style={{ padding: "8px 14px", borderRadius: "6px", border: "none", background: "#b4690a", color: "#fff", fontWeight: "bold", cursor: aiBusy ? "wait" : "pointer", minHeight: "38px", opacity: aiBusy ? 0.7 : 1 }}
                 >
                   {aiBusy === "day" ? "Writing…" : "✨ Rewrite day"}
                 </button>
@@ -1847,7 +1877,7 @@ export default function QuotePreview({ quote, trip }) {
                       onClick={() => aiWriteActivity(actIdx)}
                       disabled={!!aiBusy}
                       title="Write this description with AI"
-                      style={{ padding: "4px 10px", borderRadius: "6px", border: "1px solid #c7d2fe", background: "#eef2ff", color: "#4338ca", fontWeight: "bold", fontSize: "0.8rem", cursor: aiBusy ? "wait" : "pointer", minHeight: "32px", flexShrink: 0, opacity: aiBusy ? 0.7 : 1 }}
+                      style={{ padding: "4px 10px", borderRadius: "6px", border: "1px solid #b9d0d4", background: "#e4eef0", color: "#1b5666", fontWeight: "bold", fontSize: "0.8rem", cursor: aiBusy ? "wait" : "pointer", minHeight: "32px", flexShrink: 0, opacity: aiBusy ? 0.7 : 1 }}
                     >
                       {aiBusy === "act-" + actIdx ? "Writing…" : "✨ Write"}
                     </button>
