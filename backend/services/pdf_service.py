@@ -3173,11 +3173,24 @@ def generate_pdf(itinerary_data: dict) -> str:
                   fontSize=8.5, textColor=WHITE)),
         Paragraph("<b>Location</b>", ParagraphStyle("hh3", fontName="Lato-Bold",
                   fontSize=8.5, textColor=WHITE, alignment=TA_CENTER)),
+        Paragraph("<b>Rooms</b>", ParagraphStyle("hh5", fontName="Lato-Bold",
+                  fontSize=8.5, textColor=WHITE, alignment=TA_CENTER)),
+        Paragraph("<b>EB</b>", ParagraphStyle("hh6", fontName="Lato-Bold",
+                  fontSize=8.5, textColor=WHITE, alignment=TA_CENTER)),
         Paragraph("<b>Meal Plan</b>", ParagraphStyle("hh4", fontName="Lato-Bold",
                   fontSize=8.5, textColor=WHITE, alignment=TA_CENTER)),
     ]
 
     hotel_rows = [hotel_header]
+    _hd = itinerary_data.get("hotel_details") or {}
+
+    def _count(hid, key, default):
+        # rooms / extra beds typed in the itinerary builder for this hotel
+        try:
+            v = (_hd.get(str(hid)) or {}).get(key)
+            return str(max(0, int(float(v)))) if v not in (None, "") else default
+        except (TypeError, ValueError):
+            return default
     day_place_map = {}
     meal_plan_code = str(itinerary_data.get("meal_plan") or "MAP").strip().upper()
 
@@ -3213,6 +3226,11 @@ def generate_pdf(itinerary_data: dict) -> str:
             hotel_place = clean(str(overnight_raw)) if overnight_raw else "-"
 
         meal_plan = "-" if is_departure_day else _MEAL_PLAN_LABELS.get(meal_plan_code, "MAP (B&amp;D)")
+        _has_hotel = bool(hotel_id) and not is_departure_day
+        rooms_txt = _count(hotel_id, "rooms", "1") if _has_hotel else "-"
+        eb_txt    = _count(hotel_id, "eb", "0") if _has_hotel else "-"
+        if eb_txt == "0":
+            eb_txt = "-"     # no extra bed
 
         hotel_rows.append([
             Paragraph(f"<b>Day {idx}</b>", ParagraphStyle("dc", fontName="Lato-Bold",
@@ -3220,11 +3238,15 @@ def generate_pdf(itinerary_data: dict) -> str:
             Paragraph(clean(hotel_name), styles["hotel_cell_bold"]),
             Paragraph(clean(hotel_place), ParagraphStyle("hp", fontName="Lato",
                       fontSize=8, textColor=GRAY_600, alignment=TA_CENTER)),
+            Paragraph(rooms_txt, ParagraphStyle("rm", fontName="Lato-Bold",
+                      fontSize=8.5, textColor=NAVY, alignment=TA_CENTER)),
+            Paragraph(eb_txt, ParagraphStyle("eb", fontName="Lato-Bold",
+                      fontSize=8.5, textColor=NAVY, alignment=TA_CENTER)),
             Paragraph(meal_plan, ParagraphStyle("mp", fontName="Lato",
                       fontSize=8, textColor=TEAL, alignment=TA_CENTER)),
         ])
 
-    hotel_col_w = [usable_w*0.10, usable_w*0.50, usable_w*0.20, usable_w*0.20]
+    hotel_col_w = [usable_w*0.09, usable_w*0.33, usable_w*0.17, usable_w*0.10, usable_w*0.09, usable_w*0.22]
     hotel_table = Table(hotel_rows, colWidths=hotel_col_w, hAlign="LEFT", repeatRows=1)
     hotel_table.setStyle(TableStyle([
         # Header
