@@ -758,6 +758,7 @@ export default function QuotePreview({ quote, trip }) {
   const [timeline,        setTimeline]        = useState(quote?.itinerary_timeline || []);
   const [activeDay,       setActiveDay]       = useState(0);
   const [editableCost,    setEditableCost]    = useState(quote?.financial_summary?.total_payable_inr || 38500);
+  const [showPerPerson,   setShowPerPerson]   = useState(false);   // per-person price on the PDF cover is opt-in
   const [hotelSelections, setHotelSelections] = useState({});
   const [, setPlacesVer] = useState(0);                  // bumps when a location is added, so the pickers redraw
   const [addOpen, setAddOpen] = useState(null);          // picker row (1 From, 2 To, 3 Overnight) with the add box open
@@ -1058,7 +1059,7 @@ export default function QuotePreview({ quote, trip }) {
   const draftKey = "qp-draft:" + (quote?.meta_summary?.client_name || "client");
   const saveDraft = (snap) => {
     try {
-      localStorage.setItem(draftKey, JSON.stringify({ ...snap, startPoint, endPoint, editableCost, vehicleType, mealPlan, at: Date.now() }));
+      localStorage.setItem(draftKey, JSON.stringify({ ...snap, startPoint, endPoint, editableCost, showPerPerson, vehicleType, mealPlan, at: Date.now() }));
     } catch (e) { /* storage unavailable: undo still works */ }
   };
   useEffect(() => {
@@ -1124,6 +1125,7 @@ export default function QuotePreview({ quote, trip }) {
     if (d.startPoint) setStartPoint(d.startPoint);
     if (d.endPoint) setEndPoint(d.endPoint);
     if (d.editableCost) setEditableCost(d.editableCost);
+    if (typeof d.showPerPerson === "boolean") setShowPerPerson(d.showPerPerson);
     if (d.vehicleType) setVehicleType(d.vehicleType);
     if (d.mealPlan) setMealPlan(d.mealPlan);
     setActiveDay(0); setPickDraft({}); setDraftOffer(null);
@@ -1153,6 +1155,7 @@ export default function QuotePreview({ quote, trip }) {
                     budget_tier: quote?.meta_summary?.budget_tier || "Mid-Range",
                     trip_pace: quote?.meta_summary?.trip_pace || "Moderate",
                     custom_cost: editableCost,
+                    show_per_person: showPerPerson,
                     vehicle_type: vehicleType,
                     meal_plan: mealPlan,
                     return_pdf: true,
@@ -1963,6 +1966,14 @@ export default function QuotePreview({ quote, trip }) {
               onChange={(e) => setEditableCost(e.target.value)}
               className="qp-cost-input"
             />
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.85rem", marginTop: 6, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={showPerPerson}
+                onChange={(e) => setShowPerPerson(e.target.checked)}
+              />
+              Show price per person on PDF
+            </label>
           </div>
 
           <button
