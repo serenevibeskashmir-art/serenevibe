@@ -445,11 +445,15 @@ function fmtINR(n) {
 function HotelCostDashboard({ hotelSelections = {}, timeline = [], onTotalChange, onRowsChange }) {
   const buildRows = (prev = {}) => {
     const next = {};
+    // Nights = number of days this hotel is assigned to (auto), unless typed by hand.
+    const nights = {};
+    Object.values(hotelSelections).forEach((id) => { if (id) nights[id] = (nights[id] || 0) + 1; });
     Object.values(hotelSelections).forEach((hotelId) => {
       if (!hotelId || !ALL_HOTELS_FLAT[hotelId]) return;
-      next[hotelId] = prev[hotelId] || {
-        hotelId, stays: 1, rooms: 1, eb: 0, cnb: 0, roomRate: 0, ebRate: 0,
-      };
+      const old = prev[hotelId];
+      next[hotelId] = old
+        ? (old.stayManual ? old : { ...old, stays: nights[hotelId] })
+        : { hotelId, stays: nights[hotelId], rooms: 1, eb: 0, cnb: 0, roomRate: 0, ebRate: 0 };
     });
     return next;
   };
@@ -470,7 +474,7 @@ function HotelCostDashboard({ hotelSelections = {}, timeline = [], onTotalChange
   React.useEffect(() => { if (onRowsChange) onRowsChange(rows); }, [rows]);
 
   const handleChange = (hotelId, field, value) => {
-    setRows((prev) => ({ ...prev, [hotelId]: { ...prev[hotelId], [field]: value } }));
+    setRows((prev) => ({ ...prev, [hotelId]: { ...prev[hotelId], [field]: value, ...(field === "stays" ? { stayManual: true } : {}) } }));
   };
 
   const hotelDaysMap = {};
