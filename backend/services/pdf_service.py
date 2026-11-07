@@ -3301,8 +3301,9 @@ def _wa_glyph(c, cx, cy, r):
 
 class PriceBand(Flowable):
     """Price per person, validity, 25% start amount and a one-tap WhatsApp confirm button."""
-    def __init__(self, width, total, adults, kids, valid_until, first_amt, ref):
+    def __init__(self, width, total, adults, kids, valid_until, first_amt, ref, show_per_person=False):
         super().__init__()
+        self.show_per_person = bool(show_per_person)
         self.width, self.height = width, 33 * mm
         self.total, self.adults, self.kids = total, adults, kids
         self.valid_until, self.first_amt, self.ref = valid_until, first_amt, ref
@@ -3328,9 +3329,12 @@ class PriceBand(Flowable):
         except (TypeError, ValueError):
             n_adults = 0
         has_total = bool(self.total)
-        per = round(self.total / n_adults) if (has_total and n_adults and not int(self.kids or 0)) else 0
+        n_kids = int(self.kids or 0)
+        # per-person price is OPT-IN (itinerary builder switch); otherwise the headline is the package total
+        per = round(self.total / n_adults) if (self.show_per_person and has_total and n_adults and not n_kids) else 0
+        guests_txt = f"for {n_adults} adult" + ("s" if n_adults != 1 else "") + (f", {n_kids} child" + ("ren" if n_kids != 1 else "") if n_kids else "")
         c.setFillColor(GOLD)
-        _spaced(c, x, h - 7 * mm, "PRICE PER PERSON" if per else "TOTAL TRIP PRICE", "Lato-Bold", 6.4, 1.0)
+        _spaced(c, x, h - 7 * mm, "PRICE PER PERSON" if per else "TOTAL PACKAGE PRICE", "Lato-Bold", 6.4, 1.0)
         amount = per if per else (self.total if has_total else 0)
         if amount:
             c.setFillColor(INK_SOFT); c.setFont("Lato-Bold", 10.5)
@@ -3339,9 +3343,8 @@ class PriceBand(Flowable):
             c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", 28)
             c.drawString(x + iw, h - 16.2 * mm, f"{amount:,}")
             nw = c.stringWidth(f"{amount:,}", "Lato-Bold", 28)
-            if per:
-                c.setFillColor(INK_SOFT); c.setFont("Lato", 8.4)
-                c.drawString(x + iw + nw + 2.4 * mm, h - 16.2 * mm, f"for {n_adults} adults")
+            c.setFillColor(INK_SOFT); c.setFont("Lato", 8.4)
+            c.drawString(x + iw + nw + 2.4 * mm, h - 16.2 * mm, f"for {n_adults} adults" if per else guests_txt)
         else:
             c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", 20)
             c.drawString(x, h - 16 * mm, "Price on request")
@@ -3349,7 +3352,10 @@ class PriceBand(Flowable):
             c.setStrokeColor(colors.HexColor("#efe6d0")); c.setLineWidth(0.5)
             c.line(x, h - 20.2 * mm, lw - 4 * mm, h - 20.2 * mm)
             avail = lw - x - 4 * mm
-            a, b, d = "Trip total ", f"INR {self.total:,}", "  \u00b7  stay, car, driver, meals and taxes included"
+            if per:
+                a, b, d = "Trip total ", f"INR {self.total:,}", "  \u00b7  stay, car, driver, meals and taxes included"
+            else:
+                a, b, d = "All-inclusive: ", "stay, car, driver, meals and taxes", ""
             sz = 7.4
             while sz > 5 and (c.stringWidth(a, "Lato", sz) + c.stringWidth(b, "Lato-Bold", sz) + c.stringWidth(d, "Lato", sz)) > avail:
                 sz -= 0.2
@@ -3881,7 +3887,8 @@ def generate_pdf(itinerary_data: dict) -> str:
     _meal_name   = {"MAP": "Breakfast + dinner", "CP": "Breakfast daily", "EP": "No meals",
                     "AP": "All meals"}.get(str(itinerary_data.get("meal_plan") or "MAP").strip().upper(), "Meals as planned")
     story.append(PriceBand(usable_w, _total_now, adults, kids, _valid_until,
-                           round(_total_now * 0.25) if _total_now else 0, _quote_ref(client_name)))
+                           round(_total_now * 0.25) if _total_now else 0, _quote_ref(client_name),
+                           show_per_person=bool(itinerary_data.get("show_per_person"))))
     story.append(Spacer(1, 3*mm))
     story.append(IncludedStrip(usable_w, [
         (f"Private {clean(str(vehicle_type))}", "pickup to drop"),
