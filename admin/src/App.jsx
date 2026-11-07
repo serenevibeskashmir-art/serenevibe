@@ -5,14 +5,12 @@ import QuotePreview, { loadCustomHotels } from './pages/QuotePreview.jsx';
 import AssistantSettings from './pages/AssistantSettings.jsx';
 import SitePackages from './pages/SitePackages.jsx';
 import WebsitePhotos from './pages/WebsitePhotos.jsx';
-import CostCalculator from './pages/CostCalculator.jsx';
 import WhatsAppLeads from './pages/WhatsAppLeads.jsx';
 import { clearAdminToken, verifyAdminSession } from './api';
 
 const TABS = [
   { id: 'itinerary', label: 'Itinerary Builder'    },
   { id: 'whatsapp',   label: 'WhatsApp Leads'       },
-  { id: 'calculator', label: 'Cost Calculator'     },
   { id: 'packages',  label: 'Packages'             },
   { id: 'photos',    label: 'Website Photos'       },
   { id: 'assistant', label: 'AI Assistant'         },
@@ -104,7 +102,6 @@ export default function App() {
 
       {activeTab === 'whatsapp' && <WhatsAppLeads onUnauthorized={handleLogout} />}
 
-      {activeTab === 'calculator' && <CostCalculator />}
 
 
       {activeTab === 'packages' && (
