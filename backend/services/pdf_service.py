@@ -3401,6 +3401,9 @@ class PriceBand(Flowable):
             c.setFillColor(SAFFRON); c.drawString(tx + c.stringWidth(a, "Lato-Bold", 7.4), ly - 4 * mm, b)
 
 
+_P1_SLACK = 3 * mm      # safety margin so page 1 never spills onto page 2
+
+
 class IncludedStrip(Flowable):
     """Five 'what you get' cells. Each has its own colour: a glossy gradient tile with a soft glow,
     a white pictogram, a bold title and a tinted caption, on a faint tinted cell background."""
@@ -3417,6 +3420,7 @@ class IncludedStrip(Flowable):
     def __init__(self, width, items):
         super().__init__()
         self.width, self.height, self.items = width, 21 * mm, items
+        self.compact = False
 
     # ---- white pictograms, drawn on a tile whose colour is `hole` ----------
     @staticmethod
@@ -3512,7 +3516,7 @@ class IncludedStrip(Flowable):
             c.setFillColor(bot_c); c.rect(x0, h - 0.9 * mm, cw, 0.9 * mm, fill=1, stroke=0)
             c.restoreState()
             # glossy tile with glow
-            t = 9.6 * mm; ty = h - 3.3 * mm - t; tx = cx - t / 2
+            t = (8.4 if self.compact else 9.6) * mm; ty = h - (2.8 if self.compact else 3.3) * mm - t; tx = cx - t / 2
             c.saveState()
             for k in range(4, 0, -1):
                 c.setFillColor(colors.Color(bot_c.red, bot_c.green, bot_c.blue, alpha=0.05))
@@ -3523,15 +3527,15 @@ class IncludedStrip(Flowable):
             c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.55)); c.setLineWidth(0.5)
             c.roundRect(tx + 0.3*mm, ty + 0.3*mm, t - 0.6*mm, t - 0.6*mm, 2.7*mm, fill=0, stroke=1)
             c.restoreState()
-            self._glyph(c, self._KINDS[i % 5], cx, ty + t / 2, 2.6 * mm, bot_c)
+            self._glyph(c, self._KINDS[i % 5], cx, ty + t / 2, (2.3 if self.compact else 2.6) * mm, bot_c)
             # text
             c.setFillColor(NAVY_DEEP)
             head, hfs = _fit_text(c, head, "Lato-Bold", 8.0, cw - 4 * mm, 6.6)
             c.setFont("Lato-Bold", hfs)
-            c.drawCentredString(cx, ty - 4.6 * mm, head)
+            c.drawCentredString(cx, ty - (4.0 if self.compact else 4.6) * mm, head)
             c.setFillColor(cap)
             c.setFont("Lato", _fit_font(c, sub, "Lato", 6.6, cw - 4 * mm))
-            c.drawCentredString(cx, ty - 8.0 * mm, sub)
+            c.drawCentredString(cx, ty - (7.2 if self.compact else 8.0) * mm, sub)
 
 
 class PromiseBox(Flowable):
@@ -3914,7 +3918,26 @@ def generate_pdf(itinerary_data: dict) -> str:
         ref=_quote_ref(client_name))
     story.append(summary_card)
     story.append(Spacer(1, 4*mm))
-    story.append(TrustStrip(usable_w, TRUST_STATS, TRUST_QUOTE, TRUST_QUOTE_BY))
+    _trust = TrustStrip(usable_w, TRUST_STATS, TRUST_QUOTE, TRUST_QUOTE_BY)
+    story.append(_trust)
+    # ── Keep page 1 on ONE page: if it overflows, tighten gaps, then compact cards, then drop the strip
+    def _p1_used():
+        return sum(f.wrap(usable_w, 10000)[1] for f in story)
+    _p1_room = (doc.height - 12) - _P1_SLACK
+    if _p1_used() > _p1_room:
+        for f in story:                                   # 1) tighten the gaps between blocks
+            if isinstance(f, Spacer):
+                f.height = min(f.height, 2 * mm)
+    if _p1_used() > _p1_room:                             # 2) compact the two tall cards
+        for f in story:
+            if isinstance(f, IncludedStrip):
+                f.height = 18 * mm; f.compact = True
+            elif isinstance(f, TripSummary):
+                f.ROW_H = 8.2 * mm; f.height = f.HEAD_H + f.ROW_H * max(len(f.left), len(f.right), 1) + (f.BAR_H if f.cost else 0)
+    if _p1_used() > _p1_room:                             # 3) last resort: drop the proof strip
+        story.remove(_trust)
+        while story and isinstance(story[-1], Spacer):
+            story.pop()
     # NOTE: no trailing Spacer here. If page 1 is nearly full, a spacer that does not fit
     # spills onto page 2 and the PageBreak below then leaves page 2 blank.
     _used = sum(f.wrap(usable_w, 10000)[1] for f in story) + 4 * mm
