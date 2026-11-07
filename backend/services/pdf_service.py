@@ -1873,9 +1873,11 @@ class KashmirRouteMap(Flowable):
         c.setFont("Lato-Bold", 6.3)
         tw = c.stringWidth(text, "Lato-Bold", 6.3)
         w, h = tw + 3.4 * mm, 4.2 * mm
-        c.setFillColor(WHITE); c.setStrokeColor(col); c.setLineWidth(0.9)
+        c.setFillColor(colors.Color(0, 0, 0, alpha=0.25))
+        c.roundRect(cx - w / 2 + 0.4, cy - h / 2 - 0.6, w, h, h / 2, fill=1, stroke=0)
+        c.setFillColor(col); c.setStrokeColor(WHITE); c.setLineWidth(1.0)
         c.roundRect(cx - w / 2, cy - h / 2, w, h, h / 2, fill=1, stroke=1)
-        c.setFillColor(col)
+        c.setFillColor(WHITE)
         c.drawCentredString(cx, cy - 2.1, text)
 
     def _pin(self, c, key, days_txt, sub_txt=None):
@@ -1887,7 +1889,14 @@ class KashmirRouteMap(Flowable):
         c.setFillColor(colors.Color(0, 0, 0, alpha=0.18)); c.circle(px + 0.6, py - 0.9, R, fill=1, stroke=0)
         c.setFillColor(WHITE);  c.circle(px, py, R + 0.9, fill=1, stroke=0)
         c.setFillColor(bright); c.circle(px, py, R, fill=1, stroke=0)
-        c.setFillColor(dark);   c.circle(px, py, R * 0.46, fill=1, stroke=0)
+        c.setFillColor(dark);   c.circle(px, py, R * 0.80, fill=1, stroke=0)
+        import re as _re
+        nums = _re.findall(r"\d+", days_txt)
+        if 0 < len(nums) <= 3:
+            lab = "\u00b7".join(nums)
+            fs = 8.2 if len(lab) == 1 else 6.4 if len(lab) <= 3 else 5.4
+            c.setFillColor(WHITE); c.setFont("Lato-Bold", fs)
+            c.drawCentredString(px, py - fs * 0.35, lab)
 
         name = self.DISPLAY[key]
         lines = [(name, "Lato-Bold", 7.6, dark), (days_txt, "Lato", 6.2, GRAY_600)]
@@ -2199,9 +2208,11 @@ class KashmirRouteMap(Flowable):
             if sat:                                  # soft shadow so the route lifts off the imagery
                 c.setStrokeColor(colors.Color(0, 0, 0, alpha=0.35)); c.setLineWidth(6.2)
                 c.drawPath(self._path(c, pts), fill=0, stroke=1)
-            c.setStrokeColor(WHITE); c.setLineWidth(4.6 if sat else 4.2)
+            c.setStrokeColor(WHITE); c.setLineWidth(5.6 if sat else 5.2)
             c.drawPath(self._path(c, pts), fill=0, stroke=1)
-            c.setStrokeColor(bright); c.setLineWidth(2.1); c.setDash(5, 2.6)
+            c.setStrokeColor(bright); c.setLineWidth(3.2)
+            c.drawPath(self._path(c, pts), fill=0, stroke=1)
+            c.setStrokeColor(WHITE); c.setLineWidth(0.8); c.setDash(0.1, 3.0)   # dotted centre line
             c.drawPath(self._path(c, pts), fill=0, stroke=1)
             c.setDash(); c.setLineCap(0); c.setLineJoin(0)
 
@@ -2349,7 +2360,7 @@ class KashmirRouteMap(Flowable):
         c.restoreState()
 
         # Panel border (outside the clip so it is crisp)
-        c.setStrokeColor(GRAY_200); c.setLineWidth(0.7)
+        c.setStrokeColor(NAVY); c.setLineWidth(1.0)
         c.roundRect(0, y0, w, mh, 3 * mm, fill=0, stroke=1)
 
         # ── Legend table ────────────────────────────────────────────────────
@@ -2358,6 +2369,7 @@ class KashmirRouteMap(Flowable):
         col_x = [sum(col_w[:i]) for i in range(len(col_w))]
         hy = y0 - self.HDR_H
         c.setFillColor(NAVY); c.rect(0, hy, w, self.HDR_H, fill=1, stroke=0)
+        c.setFillColor(colors.HexColor("#f5b82e")); c.rect(0, hy + self.HDR_H - 0.8 * mm, w, 0.8 * mm, fill=1, stroke=0)
         c.setFillColor(WHITE); c.setFont("Lato-Bold", 7)
         for i, hdr in enumerate(headers):
             if i == 0:
