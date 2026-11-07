@@ -725,6 +725,21 @@ export default function QuotePreview({ quote }) {
       setAddBusy(false);
     }
   };
+  // Removes a location the admin added. Refused while a day in this quote still uses it.
+  const removeCustomPlace = async (name) => {
+    const lc = name.toLowerCase();
+    const inUse = timeline.some((d) => [d.overnight_stay, d.transit_route].some((v) => (v || "").toLowerCase().includes(lc)));
+    if (inUse) { setAddNote(`${name} is used in one of your days. Change that day first, then remove it.`); return; }
+    if (!window.confirm(`Remove "${name}" from the location lists?`)) return;
+    try {
+      const res = await apiFetch("/api/admin/places/" + encodeURIComponent(name), { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not remove this location.");
+      await loadCustomPlaces();
+      setPlacesVer((v) => v + 1);
+      setAddNote("");
+    } catch (e) { setAddNote(e.message); }
+  };
   const [startPoint,      setStartPoint]      = useState(quote?.meta_summary?.start_point || DEFAULT_POINT);
   const [endPoint,        setEndPoint]        = useState(quote?.meta_summary?.end_point   || DEFAULT_POINT);
 
@@ -1654,9 +1669,18 @@ export default function QuotePreview({ quote }) {
                   <label className="qp-rl">{step}. {label}{hint && <small>{hint}</small>}</label>
                   <div className="qp-rc">
                     <div className="qp-city-btns">
-                      {options.map((o) => (
-                        <button key={o} type="button" disabled={disabled} onClick={() => onPick(o)} style={chipStyle(value === o, disabled)}>{o}</button>
-                      ))}
+                      {options.map((o) => {
+                        const custom = customNames().includes(o);
+                        return (
+                          <span key={o} style={{ display: "inline-flex", alignItems: "center", gap: "2px" }}>
+                            <button type="button" disabled={disabled} onClick={() => onPick(o)} style={{ ...chipStyle(value === o, disabled), ...(custom && !disabled ? { borderTopRightRadius: 0, borderBottomRightRadius: 0 } : {}) }}>{o}</button>
+                            {custom && !disabled && (
+                              <button type="button" title={`Remove ${o} from the lists`} aria-label={`Remove ${o}`} onClick={() => removeCustomPlace(o)}
+                                style={{ ...chipStyle(false, false), padding: "4px 8px", marginLeft: "-3px", borderTopLeftRadius: 0, borderBottomLeftRadius: 0, color: "#b91c1c", borderColor: "#fecaca" }}>✕</button>
+                            )}
+                          </span>
+                        );
+                      })}
                       {!disabled && addOpen !== step && (
                         <button type="button" onClick={() => { setAddOpen(step); setAddText(""); setAddErr(""); }} style={{ ...chipStyle(false, false), borderStyle: "dashed", color: "#4f46e5", borderColor: "#a5b4fc" }}>+ Place</button>
                       )}
