@@ -1422,13 +1422,23 @@ export default function QuotePreview({ quote }) {
         .qp-ovhot2 label { font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #64748b; display: flex; align-items: center; gap: 6px; }
         .qp-ovhot2 label input { flex: 1; min-width: 0; width: 100%; min-height: 28px; padding: 2px 4px; text-align: center; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; background: #f8fafc; }
         .qp-ovadd { flex: none; width: 100%; min-height: 34px; }
+        .qp-stp { display: flex; align-items: center; gap: 6px; font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #64748b; }
+        .qp-stp span { flex: 1 1 auto; }
+        .qp-stp b { min-width: 22px; text-align: center; font-size: 0.95rem; color: #0f172a; }
+        .qp-stp button { width: 34px; height: 34px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-size: 1.1rem; font-weight: 700; color: #1e293b; cursor: pointer; touch-action: manipulation; }
+        .qp-stp button:disabled { opacity: .35; cursor: not-allowed; }
+        .qp-stp button:active:not(:disabled) { background: #e0e7ff; }
         @media (max-width: 959px) {
           .qp-layout { grid-template-columns: 1fr; }
           .qp-side { position: static; max-height: none; overflow: visible; }
-          .qp-ov { flex-direction: row; overflow-x: auto; }
-          .qp-ovcard { flex: 0 0 220px; }
-          .qp-ovadd { flex: 0 0 70px; width: auto; min-height: 0; }
-          .qp-footer-bar { position: sticky; bottom: 0; z-index: 30; background: #fff; padding: 8px 10px; margin-top: 8px; box-shadow: 0 -4px 12px rgb(0 0 0 / .08); border-radius: 10px 10px 0 0; }
+          .qp-ov { flex-direction: column; overflow: visible; }
+          .qp-ovcard { flex: none; width: auto; }
+          .qp-ovadd { flex: none; width: 100%; min-height: 36px; }
+          .qp-footer-bar { position: sticky; bottom: 0; z-index: 30; background: #fff; padding: 8px 10px; margin-top: 8px; box-shadow: 0 -4px 12px rgb(0 0 0 / .08); border-radius: 10px 10px 0 0; flex-direction: row !important; flex-wrap: nowrap; align-items: center !important; gap: 8px; }
+          .qp-footer-cost { flex-direction: row !important; align-items: center !important; gap: 6px; flex: 0 0 auto; }
+          .qp-footer-cost h3 { font-size: 0.72rem !important; line-height: 1.1; max-width: 62px; }
+          .qp-cost-input { width: 92px !important; min-height: 38px; font-size: 0.95rem; }
+          .qp-save-btn { flex: 1 1 auto; width: auto !important; min-height: 38px; padding: 6px 8px; font-size: 0.8rem; white-space: normal; align-self: center; }
         }
       `}</style>
 
@@ -1579,8 +1589,17 @@ export default function QuotePreview({ quote }) {
                       <option value="">{list.length ? "Choose hotel…" : `No hotels in ${d.overnight_stay || "this place"}`}</option>
                       {list.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
                     </select>
-                    <label>Rooms<input type="number" min="1" value={d.rooms ?? 1} onChange={(e) => setDayField(i, "rooms", e.target.value)} /></label>
-                    <label>EB<input type="number" min="0" value={d.eb ?? 0} onChange={(e) => setDayField(i, "eb", e.target.value)} /></label>
+                    {[["rooms", "Rooms", 1, 1, 20], ["eb", "EB", 0, 0, 20]].map(([f, lbl, def, min, max]) => {
+                      const v = Math.max(min, Math.min(max, Number(d[f] ?? def) || def));
+                      return (
+                        <div key={f} className="qp-stp">
+                          <span>{lbl}</span>
+                          <button type="button" aria-label={`Fewer ${lbl}`} disabled={v <= min} onClick={() => setDayField(i, f, v - 1)}>−</button>
+                          <b>{v}</b>
+                          <button type="button" aria-label={`More ${lbl}`} disabled={v >= max} onClick={() => setDayField(i, f, v + 1)}>+</button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 <div className="qp-ovacts">
