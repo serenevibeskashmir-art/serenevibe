@@ -442,134 +442,6 @@ function fmtINR(n) {
   return "₹" + Math.round(n).toLocaleString("en-IN");
 }
 
-function HotelCostDashboard({ hotelSelections = {}, timeline = [], onTotalChange, onRowsChange }) {
-  const buildRows = (prev = {}) => {
-    const next = {};
-    // Nights = number of days this hotel is assigned to (auto), unless typed by hand.
-    const nights = {};
-    Object.values(hotelSelections).forEach((id) => { if (id) nights[id] = (nights[id] || 0) + 1; });
-    Object.values(hotelSelections).forEach((hotelId) => {
-      if (!hotelId || !ALL_HOTELS_FLAT[hotelId]) return;
-      const old = prev[hotelId];
-      next[hotelId] = old
-        ? (old.stayManual ? old : { ...old, stays: nights[hotelId] })
-        : { hotelId, stays: nights[hotelId], rooms: 1, eb: 0, cnb: 0, roomRate: 0, ebRate: 0 };
-    });
-    return next;
-  };
-
-  const [rows, setRows]       = React.useState(() => buildRows());
-
-  React.useEffect(() => { setRows((prev) => buildRows(prev)); }, [hotelSelections]);
-
-  // Report rooms / extra beds per hotel so the PDF's Hotel Assignments table can show them.
-  React.useEffect(() => { if (onRowsChange) onRowsChange(rows); }, [rows]);
-
-  const handleChange = (hotelId, field, value) => {
-    setRows((prev) => ({ ...prev, [hotelId]: { ...prev[hotelId], [field]: value, ...(field === "stays" ? { stayManual: true } : {}) } }));
-  };
-
-  const hotelDaysMap = {};
-  Object.entries(hotelSelections).forEach(([dayIdx, hotelId]) => {
-    if (!hotelId) return;
-    if (!hotelDaysMap[hotelId]) hotelDaysMap[hotelId] = [];
-    hotelDaysMap[hotelId].push(Number(dayIdx) + 1);
-  });
-
-  const rowList    = Object.values(rows);
-
-  const thStyle = {
-    padding: "5px 8px", backgroundColor: "#f1f5f9", color: "#475569",
-    fontWeight: "700", fontSize: "0.73rem", textTransform: "uppercase",
-    letterSpacing: "0.4px", borderBottom: "1px solid #e2e8f0",
-    whiteSpace: "nowrap", textAlign: "left",
-  };
-  const tdStyle = {
-    padding: "4px 8px", borderBottom: "1px solid #f1f5f9",
-    color: "#0f172a", verticalAlign: "middle",
-  };
-  const numInput = {
-    width: "56px", padding: "3px 6px", border: "1px solid #cbd5e1",
-    borderRadius: "6px", fontSize: "0.82rem", color: "#0f172a",
-    backgroundColor: "#f8fafc", textAlign: "center", minHeight: "30px",
-    boxSizing: "border-box",
-  };
-
-  return (
-    <>
-      <style>{`
-        .hcd-totals {
-          display: flex;
-          justify-content: flex-end;
-          align-items: center;
-          gap: 20px;
-          margin-top: 14px;
-          padding-top: 12px;
-          border-top: 2px solid #e2e8f0;
-          flex-wrap: wrap;
-        }
-        .hcd-divider { width: 1px; height: 24px; background: #e2e8f0; }
-        @media (max-width: 600px) {
-          .hcd-totals { flex-direction: column; align-items: flex-start; gap: 12px; }
-          .hcd-divider { display: none; }
-          .hcd-cab-input { width: 100% !important; box-sizing: border-box; }
-        }
-      `}</style>
-      <div style={{ fontFamily: "system-ui, sans-serif" }}>
-        {rowList.length === 0 ? (
-          <p style={{ textAlign: "center", color: "#94a3b8", fontSize: "0.85rem", padding: "24px 0" }}>
-            No hotels assigned yet. Use the hotel picker above for each day — they will appear here automatically.
-          </p>
-        ) : (
-          <>
-            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", minWidth: "480px" }}>
-                <thead>
-                  <tr>
-                    <th style={thStyle}>Hotel</th>
-                    <th style={thStyle}>Assigned Days</th>
-                    <th style={thStyle}>Nights</th>
-                    <th style={thStyle}>Rooms</th>
-                    <th style={thStyle}>EB</th>
-                    <th style={thStyle}>CNB</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rowList.map((row) => {
-                    const hotel = ALL_HOTELS_FLAT[row.hotelId];
-                    const days  = (hotelDaysMap[row.hotelId] || []).sort((a, b) => a - b);
-                    return (
-                      <tr key={row.hotelId}>
-                        <td style={tdStyle}>
-                          <div style={{ fontWeight: "600", color: "#1e293b" }}>{hotel.name}</div>
-                          <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "1px" }}>📍 {hotel.place}</div>
-                        </td>
-                        <td style={tdStyle}>
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-                            {days.map((d) => (
-                              <span key={d} style={{ padding: "2px 7px", borderRadius: "999px", backgroundColor: "#eff6ff", color: "#1d4ed8", fontSize: "0.72rem", fontWeight: "700" }}>Day {d}</span>
-                            ))}
-                          </div>
-                        </td>
-                        {["stays","rooms","eb","cnb"].map((field) => (
-                          <td key={field} style={tdStyle}>
-                            <input type="number" min="0" style={numInput} value={row[field]} onChange={(e) => handleChange(row.hotelId, field, e.target.value)} />
-                          </td>
-                        ))}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-          </>
-        )}
-      </div>
-    </>
-  );
-}
-
 // ── Hotel Image Manager ────────────────────────────────────────────────────
 function HotelImageManager() {
   const [hotelImages, setHotelImages]   = useState({});
@@ -1082,7 +954,7 @@ export default function QuotePreview({ quote }) {
   })();
   const warnDays = new Set(issues.map((x) => x.day));
   const [showChecks, setShowChecks] = useState(false);
-  const [hotelRows, setHotelRows] = useState({});   // { hotelId: { rooms, eb, ... } } from the price calculator
+  const setDayField = (i, field, value) => setTimeline((prev) => prev.map((d, k) => (k === i ? { ...d, [field]: value } : d)));
   // One click: give every day without a hotel the first suggested hotel for its overnight city.
   const missingHotelDays = timeline.map((d, i) => i).filter((i) => {
     const d = timeline[i];
@@ -1204,7 +1076,7 @@ export default function QuotePreview({ quote }) {
                     hotelSelections,
                     hotel_details: Object.values(hotelSelections).reduce((acc, id) => {
                       const h = ALL_HOTELS_FLAT[id];
-                      if (h) acc[id] = { name: h.name, place: h.place, rooms: Number(hotelRows[id]?.rooms) || 1, eb: Number(hotelRows[id]?.eb) || 0 };
+                      if (h) acc[id] = { name: h.name, place: h.place };
                       return acc;
                     }, {}),
                     start_info: startInfo,
@@ -1515,7 +1387,7 @@ export default function QuotePreview({ quote }) {
         .qp-daypill { padding: 0 18px 0 14px; }
         .qp-daypill .pd { top: 50%; right: 6px; transform: translateY(-50%); }
         .qp-pair { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.4fr); }
-        @media (min-width: 721px) { .qp-daypills { display: none; } }
+        @media (min-width: 960px) { .qp-daypills { display: none; } }
         @media (max-width: 720px) {
           .qp-set-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .qp-act .qp-activity-row { flex-wrap: nowrap; }
@@ -1528,6 +1400,35 @@ export default function QuotePreview({ quote }) {
           .qp-rl { flex: none; padding-top: 4px; }
           .qp-rl small { display: inline; margin-left: 6px; }
           .qp-route-select.qp-preset { max-width: 100%; width: 100%; }
+        }
+
+        /* ===== Two-column layout, hotel + rooms on the day cards ===== */
+        .qp-layout { display: grid; grid-template-columns: minmax(270px, 310px) minmax(0, 1fr); gap: 12px; align-items: start; }
+        .qp-side { position: sticky; top: 56px; max-height: calc(100vh - 68px); overflow-y: auto; padding-right: 2px; }
+        .qp-main { min-width: 0; }
+        .qp-pair.qp-pair1 { grid-template-columns: 1fr; }
+        .qp-ov { flex-direction: column; overflow: visible; gap: 8px; padding: 4px 2px 8px; }
+        .qp-ovcard { flex: none; width: auto; border-left-width: 4px; }
+        .qp-ovcard.ok { border-left-color: #22c55e; }
+        .qp-ovcard.warn { border-left-color: #f59e0b; }
+        .qp-ovcard.on { border-color: #4f46e5; border-left-color: #4f46e5; }
+        .qp-ovmain { min-height: 0; padding: 7px 10px 4px; gap: 2px; }
+        .qp-ovrt { font-size: 0.86rem; }
+        .qp-ovok { color: #16a34a; font-weight: 800; font-size: 0.8rem; }
+        .qp-ovdrop { margin: 2px 10px 8px; font-size: 0.72rem; font-weight: 700; color: #0369a1; background: #e0f2fe; border-radius: 6px; padding: 3px 7px; align-self: flex-start; }
+        .qp-ovhot2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: center; padding: 2px 10px 8px; }
+        .qp-ovhot2 select { grid-column: 1 / -1; min-height: 32px; padding: 3px 6px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1e293b; width: 100%; box-sizing: border-box; }
+        .qp-ovhot2 select.bad { border-color: #fca5a5; background: #fef2f2; color: #991b1b; }
+        .qp-ovhot2 label { font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #64748b; display: flex; align-items: center; gap: 6px; }
+        .qp-ovhot2 label input { flex: 1; min-width: 0; width: 100%; min-height: 28px; padding: 2px 4px; text-align: center; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; background: #f8fafc; }
+        .qp-ovadd { flex: none; width: 100%; min-height: 34px; }
+        @media (max-width: 959px) {
+          .qp-layout { grid-template-columns: 1fr; }
+          .qp-side { position: static; max-height: none; overflow: visible; }
+          .qp-ov { flex-direction: row; overflow-x: auto; }
+          .qp-ovcard { flex: 0 0 220px; }
+          .qp-ovadd { flex: 0 0 70px; width: auto; min-height: 0; }
+          .qp-footer-bar { position: sticky; bottom: 0; z-index: 30; background: #fff; padding: 8px 10px; margin-top: 8px; box-shadow: 0 -4px 12px rgb(0 0 0 / .08); border-radius: 10px 10px 0 0; }
         }
       `}</style>
 
@@ -1633,6 +1534,8 @@ export default function QuotePreview({ quote }) {
           })}
         </div>
 
+        <div className="qp-layout">
+        <div className="qp-side">
         {/* 3. Days strip with the checks summary on the same line */}
         <div className="qp-daysbar">
           <h3>Your days <span>tap a day to edit</span></h3>
@@ -1658,18 +1561,31 @@ export default function QuotePreview({ quote }) {
         <div className="qp-ov">
           {timeline.map((d, i) => {
             const dep = isDepDay(d);
-            const hot = flatHotels[hotelSelections[i]];
+            const warn = warnDays.has(i);
+            const list = HOTEL_KB[getHotelGroup(d.overnight_stay)] || [];
             return (
-              <div key={i} className={"qp-ovcard" + (i === activeDay ? " on" : "")}>
-                <button type="button" className="qp-ovmain" onClick={() => { setActiveDay(i); setTimeout(() => { const el = document.getElementById("qp-editor"); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 0); }} aria-label={`Edit day ${i + 1}`}>
-                  <span className="qp-ovdn"><span>Day {i + 1}</span>{warnDays.has(i) && <span className="qp-ovdot" title="Needs attention" />}</span>
+              <div key={i} className={"qp-ovcard" + (i === activeDay ? " on" : "") + (warn ? " warn" : " ok")}>
+                <button type="button" className="qp-ovmain" onClick={() => { setActiveDay(i); setTimeout(() => { const el = document.getElementById("qp-editor"); if (el && el.scrollIntoView && window.innerWidth < 960) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 0); }} aria-label={`Edit day ${i + 1}`}>
+                  <span className="qp-ovdn"><span>Day {i + 1}</span>{warn ? <span className="qp-ovdot" title="Needs attention" /> : <span className="qp-ovok" title="Complete">✓</span>}</span>
                   <span className="qp-ovrt">{shortRoute(d)}</span>
                   <span className="qp-ovnt">{dep ? "No overnight" : (d.overnight_stay ? `Night in ${d.overnight_stay}` : "—")}</span>
-                  <span className={"qp-ovhot" + (!dep && !hot ? " bad" : "")}>{dep ? "Drop-off" : (hot ? hot.name : "No hotel yet")}</span>
                 </button>
+                {dep ? (
+                  <div className="qp-ovdrop">Drop-off · no hotel</div>
+                ) : (
+                  <div className="qp-ovhot2">
+                    <select aria-label={`Hotel for day ${i + 1}`} className={hotelSelections[i] ? "" : "bad"} value={hotelSelections[i] || ""}
+                      onChange={(e) => setHotelSelections((prev) => ({ ...prev, [i]: e.target.value }))}>
+                      <option value="">{list.length ? "Choose hotel…" : `No hotels in ${d.overnight_stay || "this place"}`}</option>
+                      {list.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                    </select>
+                    <label>Rooms<input type="number" min="1" value={d.rooms ?? 1} onChange={(e) => setDayField(i, "rooms", e.target.value)} /></label>
+                    <label>EB<input type="number" min="0" value={d.eb ?? 0} onChange={(e) => setDayField(i, "eb", e.target.value)} /></label>
+                  </div>
+                )}
                 <div className="qp-ovacts">
-                  <button type="button" onClick={() => moveDay(i, -1)} disabled={i === 0} aria-label="Move day earlier">&#8249;</button>
-                  <button type="button" onClick={() => moveDay(i, 1)} disabled={i === timeline.length - 1} aria-label="Move day later">&#8250;</button>
+                  <button type="button" onClick={() => moveDay(i, -1)} disabled={i === 0} aria-label="Move day earlier" title="Move earlier">&#8249;</button>
+                  <button type="button" onClick={() => moveDay(i, 1)} disabled={i === timeline.length - 1} aria-label="Move day later" title="Move later">&#8250;</button>
                   <button type="button" onClick={() => copyDay(i)} aria-label="Duplicate day" title="Duplicate this day">⧉</button>
                   <button type="button" onClick={() => deleteDay(i)} disabled={timeline.length <= 1} aria-label="Delete day" title="Remove this day">✕</button>
                 </div>
@@ -1679,6 +1595,8 @@ export default function QuotePreview({ quote }) {
           <button type="button" className="qp-ovadd" onClick={addDay}>+ Add day</button>
         </div>
 
+        </div>
+        <div className="qp-main">
         {/* 4. Active day editor */}
         {timeline[activeDay] && (
           <div className="qp-active-day" id="qp-editor">
@@ -1790,31 +1708,7 @@ export default function QuotePreview({ quote }) {
               );
             })()}
 
-            <div className="qp-pair">
-            {!isDepDay(timeline[activeDay]) && (() => {
-              const place = timeline[activeDay].overnight_stay || "";
-              const list = HOTEL_KB[getHotelGroup(place)] || [];
-              return (
-                <div>
-                  <select
-                    className="qp-hotel-select"
-                    value={hotelSelections[activeDay] || ""}
-                    onChange={(e) => setHotelSelections(prev => ({ ...prev, [activeDay]: e.target.value }))}
-                  >
-                    <option value="">{list.length ? "-- Choose Hotel --" : `-- No hotels added for ${place || "this place"} yet --`}</option>
-                    {list.map((hotel) => (
-                      <option key={hotel.id} value={hotel.id}>{hotel.name} — {hotel.place} · B&D Included</option>
-                    ))}
-                  </select>
-                  {!list.length && place && (
-                    <div style={{ color: "#64748b", fontSize: "0.78rem", marginTop: "6px" }}>
-                      Add hotels for {place} in the Hotels tab.
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
+            <div className="qp-pair qp-pair1">
             {/* AI writer */}
             <div className="qp-ai">
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
@@ -1879,13 +1773,8 @@ export default function QuotePreview({ quote }) {
           </div>
         )}
 
-        {/* 5. Hotel cost calculator (collapsed; stays mounted so the total still updates) */}
-        <details className="qp-more">
-          <summary><b>🛏️ Rooms &amp; extra beds</b> <span className="qp-sub">nights auto-fill · printed in the PDF</span></summary>
-          <div style={{ padding: "4px 10px 12px" }}>
-            <HotelCostDashboard hotelSelections={hotelSelections} timeline={timeline} onRowsChange={setHotelRows} />
-          </div>
-        </details>
+        </div>
+        </div>
 
         {/* 6. Hotel photo manager (rarely needed) */}
         <details className="qp-more">
