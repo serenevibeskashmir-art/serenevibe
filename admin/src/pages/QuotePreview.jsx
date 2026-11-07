@@ -1113,6 +1113,17 @@ export default function QuotePreview({ quote }) {
     return out;
   })();
   const warnDays = new Set(issues.map((x) => x.day));
+  const [showChecks, setShowChecks] = useState(false);
+  // One click: give every day without a hotel the first suggested hotel for its overnight city.
+  const missingHotelDays = timeline.map((d, i) => i).filter((i) => {
+    const d = timeline[i];
+    return !isDepDay(d) && d.overnight_stay && !hotelSelections[i] && (HOTEL_KB[getHotelGroup(d.overnight_stay)] || []).length > 0;
+  });
+  const fixAllHotels = () => setHotelSelections((prev) => {
+    const next = { ...prev };
+    missingHotelDays.forEach((i) => { next[i] = HOTEL_KB[getHotelGroup(timeline[i].overnight_stay)][0].id; });
+    return next;
+  });
 
   // Undo / redo: edits are grouped (0.6 s) into history steps; a draft is also kept in this browser.
   const hist = useRef({ past: [], future: [], last: null, restoring: false });
@@ -1209,7 +1220,7 @@ export default function QuotePreview({ quote }) {
                   method: "POST",
                   body: JSON.stringify({
                     client_name: currentClientName,
-                    client_email: quote?.meta_summary?.client_email || "N/A",
+                    client_email: quote?.meta_summary?.client_email || "",
                     days: timeline.length || quote?.meta_summary?.total_days || 5,
                     start_date: quote?.meta_summary?.start_date || quote?.start_date || "Flexible",
                     adults: quote?.meta_summary?.adults || quote?.adults || 2,
@@ -1390,6 +1401,12 @@ export default function QuotePreview({ quote }) {
         .qp-daypill .pd { position: absolute; top: 6px; right: 7px; width: 9px; height: 9px; border-radius: 50%; background: #f59e0b; border: 1px solid #fff; }
         .qp-daypill.plus { background: #fff; border: 2px dashed #94a3b8; color: #334155; }
         .qp-active-day { scroll-margin-top: 12px; }
+        .qp-more { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 14px; box-shadow: ${UI_THEME.shadows.sm}; }
+        .qp-more > summary { cursor: pointer; padding: 14px 18px; font-weight: 700; font-size: 0.92rem; color: #1e293b; list-style: none; min-height: 24px; }
+        .qp-more > summary::-webkit-details-marker { display: none; }
+        .qp-more > summary::after { content: "Show ▾"; float: right; font-weight: 600; font-size: 0.78rem; color: #2563eb; }
+        .qp-more[open] > summary::after { content: "Hide ▴"; }
+        .qp-more .qp-sub { display: block; font-weight: 500; font-size: 0.76rem; color: #64748b; margin-top: 2px; }
         @media (max-width: 640px) {
           .qp-sticky { position: static; padding: 12px 14px; gap: 8px 16px; }
           .qp-sticky .grow { flex-basis: 100%; order: 5; }
@@ -1463,10 +1480,10 @@ export default function QuotePreview({ quote }) {
         {/* 1. Dashboard Header */}
         <div style={{ marginBottom: "24px", paddingBottom: "16px", borderBottom: "1px solid " + UI_THEME.colors.border }}>
           <h2 style={{ fontSize: "clamp(1.3rem, 4vw, 1.75rem)", fontWeight: "800", color: UI_THEME.colors.primary, margin: "0 0 6px 0" }}>
-            ✨ Live Itinerary Preview & Customizer
+            ✨ Build the itinerary
           </h2>
           <p style={{ margin: 0, fontSize: "0.9rem", color: UI_THEME.colors.textLight }}>
-            Review or edit the day-by-day plan details below before saving.
+            Three steps: <b>1</b> pick each day's route &amp; hotel · <b>2</b> check the price · <b>3</b> tap <b>Generate PDF</b>.
           </p>
         </div>
 
@@ -1522,9 +1539,10 @@ export default function QuotePreview({ quote }) {
           </div>
         </div>
 
-        {/* Tour start / end points */}
-        <div style={{ background: "#fff", border: "1px solid " + UI_THEME.colors.border, borderRadius: "12px", padding: "14px 18px", marginBottom: "20px", boxShadow: UI_THEME.shadows.sm }}>
-          <div style={{ fontWeight: "700", color: "#334155", fontSize: "0.9rem", marginBottom: "10px" }}>🧭 Tour Start &amp; End Point</div>
+        {/* Tour start / end points (collapsed: most tours use the Srinagar defaults) */}
+        <details className="qp-more">
+          <summary>🧭 Tour start &amp; end point <span className="qp-sub">{startPoint} → {endPoint} · change only if not Srinagar</span></summary>
+        <div style={{ padding: "4px 18px 14px" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "14px" }}>
             {[["Tour starts from (Day 1 pickup)", startPoint, changeStart, "start"], ["Tour ends at (last-day drop)", endPoint, changeEnd, "end"]].map(([label, val, setter, key]) => {
               const isCustom = !POINT_PRESETS.includes(val);
@@ -1577,10 +1595,11 @@ export default function QuotePreview({ quote }) {
             Updates the pickup / drop days and the PDF. Applies to the days using the “Airport Pickup…” (any overnight city) and “Airport Drop-Departure” routes (their descriptions are regenerated).
           </p>
         </div>
+        </details>
 
         {/* 3. Trip overview strip */}
         <h3 style={{ margin: "0 0 8px 0", fontSize: "1rem", color: "#0f172a" }}>
-          Trip overview <span style={{ fontWeight: 500, fontSize: "0.8rem", color: "#475569" }}>· click a day to edit it; use the buttons under it to move, copy or remove</span>
+          Your days <span style={{ fontWeight: 500, fontSize: "0.8rem", color: "#475569" }}>· tap a day to edit it</span>
         </h3>
         <div className="qp-ov">
           {timeline.map((d, i) => {
@@ -1597,8 +1616,8 @@ export default function QuotePreview({ quote }) {
                 <div className="qp-ovacts">
                   <button type="button" onClick={() => moveDay(i, -1)} disabled={i === 0} aria-label="Move day earlier">&#8249;</button>
                   <button type="button" onClick={() => moveDay(i, 1)} disabled={i === timeline.length - 1} aria-label="Move day later">&#8250;</button>
-                  <button type="button" onClick={() => copyDay(i)} aria-label="Duplicate day">Copy</button>
-                  <button type="button" onClick={() => deleteDay(i)} disabled={timeline.length <= 1} aria-label="Delete day">Del</button>
+                  <button type="button" onClick={() => copyDay(i)} aria-label="Duplicate day" title="Duplicate this day">Copy</button>
+                  <button type="button" onClick={() => deleteDay(i)} disabled={timeline.length <= 1} aria-label="Delete day" title="Remove this day">Remove</button>
                 </div>
               </div>
             );
@@ -1606,17 +1625,24 @@ export default function QuotePreview({ quote }) {
           <button type="button" className="qp-ovadd" onClick={addDay}>+ Add day</button>
         </div>
 
-        {/* Checks */}
+        {/* Checks: one compact bar instead of a long list of warnings */}
         <div className="qp-checks">
-          <div style={{ fontWeight: 800, fontSize: "0.95rem", color: "#0f172a" }}>
-            Checks <span className={"qp-badge" + (issues.length ? "" : " ok")}>{issues.length ? `${issues.length} ${issues.length === 1 ? "issue" : "issues"}` : "Ready"}</span>
-          </div>
-          {issues.length === 0 && (
-            <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "10px", padding: "10px 12px", fontSize: "0.85rem", fontWeight: 600, color: "#14532d" }}>
-              Everything looks consistent. Ready to generate the PDF.
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ fontWeight: 800, fontSize: "0.95rem", color: issues.length ? "#78350f" : "#14532d" }}>
+              {issues.length === 0 ? "✅ All set. Ready to generate the PDF." : `⚠️ ${issues.length} ${issues.length === 1 ? "thing" : "things"} left to finish`}
             </div>
-          )}
-          {issues.map((w, k) => (
+            {issues.length > 0 && (
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                {missingHotelDays.length > 0 && (
+                  <button type="button" className="qp-fix" style={{ background: "#fef3c7" }} onClick={fixAllHotels}>
+                    Pick hotels for {missingHotelDays.length} {missingHotelDays.length === 1 ? "day" : "days"}
+                  </button>
+                )}
+                <button type="button" className="qp-fix" onClick={() => setShowChecks((v) => !v)}>{showChecks ? "Hide list" : "Show list"}</button>
+              </div>
+            )}
+          </div>
+          {issues.length > 0 && showChecks && issues.map((w, k) => (
             <div key={k} className="qp-warn"><span>{w.text}</span><button type="button" className="qp-fix" onClick={w.fix}>{w.btn}</button></div>
           ))}
         </div>
@@ -1717,7 +1743,7 @@ export default function QuotePreview({ quote }) {
               return (
                 <div id="day-route-select">
                   <div style={{ marginBottom: "14px" }}>
-                    <label style={{ fontWeight: "bold", color: "#334155", display: "block", marginBottom: "5px", fontSize: "0.9rem" }}>⚡ Quick preset (optional):</label>
+                    <label style={{ fontWeight: "bold", color: "#334155", display: "block", marginBottom: "5px", fontSize: "0.9rem" }}>⚡ Quick start (optional): pick a ready-made day</label>
                     <select
                       className="qp-route-select"
                       value={TRANSIT_OPTIONS.includes(day.transit_route) ? day.transit_route : ""}
@@ -1727,7 +1753,7 @@ export default function QuotePreview({ quote }) {
                         applyRoute(route);
                       }}
                     >
-                      <option value="">{day.transit_route && !TRANSIT_OPTIONS.includes(day.transit_route) ? `Current: ${routeLabel(day.transit_route, startPoint, endPoint)} (built from steps below)` : `-- Pick a ready-made route for Day ${activeDay + 1}, or use the steps below --`}</option>
+                      <option value="">{day.transit_route && !TRANSIT_OPTIONS.includes(day.transit_route) ? `Current: ${routeLabel(day.transit_route, startPoint, endPoint)} (built from steps below)` : `-- Choose a ready-made route for Day ${activeDay + 1}, or use steps 1–3 below --`}</option>
                       {TRANSIT_OPTIONS.map((route, i) => <option key={i} value={route}>{routeLabel(route, startPoint, endPoint)}</option>)}
                     </select>
                   </div>
@@ -1829,11 +1855,21 @@ export default function QuotePreview({ quote }) {
           </div>
         )}
 
-        {/* 5. Hotel Cost Dashboard */}
-        <HotelCostDashboard hotelSelections={hotelSelections} timeline={timeline} onTotalChange={(total) => setEditableCost(total)} />
+        {/* 5. Hotel cost calculator (collapsed; stays mounted so the total still updates) */}
+        <details className="qp-more">
+          <summary>💰 Price calculator <span className="qp-sub">hotel rates → total · current total {fmtINR(Number(editableCost) || 0)}</span></summary>
+          <div style={{ padding: "4px 10px 12px" }}>
+            <HotelCostDashboard hotelSelections={hotelSelections} timeline={timeline} onTotalChange={(total) => setEditableCost(total)} />
+          </div>
+        </details>
 
-        {/* 6. Hotel Photo Manager */}
-        <HotelImageManager />
+        {/* 6. Hotel photo manager (rarely needed) */}
+        <details className="qp-more">
+          <summary>🖼️ Hotel photos <span className="qp-sub">optional · add or change hotel pictures</span></summary>
+          <div style={{ padding: "4px 10px 12px" }}>
+            <HotelImageManager />
+          </div>
+        </details>
 
         {/* 7. Footer / PDF export */}
         <div className="qp-footer-bar">
