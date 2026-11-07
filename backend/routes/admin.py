@@ -6,7 +6,7 @@ from flask import Blueprint, jsonify, request
 from backend.auth import admin_required, create_admin_token
 from backend.config import Config
 from backend.extensions import db
-from backend.models import CustomHotel, HotelImages
+from backend.models import CustomHotel, CustomPlace, HotelImages
 from backend.services import cloud_media
 from backend.services.custom_hotels import clean_place_name, ensure_place, get_places, place_key
 
@@ -247,3 +247,17 @@ def add_place():
         return jsonify({"error": "Could not save this location. Please try again."}), 500
     place = {"name": row.name, "key": row.key, "lat": row.lat, "lon": row.lon, "builtin": False}
     return jsonify({"ok": True, "place": place}), 201
+
+
+@admin_bp.delete("/places/<key>")
+@admin_required
+def delete_place(key):
+    row = CustomPlace.query.filter_by(key=place_key(key)).first()
+    if row is None:
+        return jsonify({"error": "Location not found (built-in locations cannot be removed)."}), 404
+    used = CustomHotel.query.filter(db.func.lower(CustomHotel.place) == row.name.lower()).count()
+    if used:
+        return jsonify({"error": f"{used} hotel(s) are attached to {row.name}. Delete or move them first."}), 409
+    db.session.delete(row)
+    db.session.commit()
+    return jsonify({"ok": True})
