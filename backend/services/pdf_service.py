@@ -3546,46 +3546,140 @@ class IncludedStrip(Flowable):
 
 
 class PromiseBox(Flowable):
-    """Our promise: four short commitments in two content-sized columns."""
+    """Our promise: up to four commitments as columns. Each has a coloured gradient icon tile,
+    a bold title and a short line of text. Items are (title, text) pairs; plain strings still work."""
+    _PAL = (("#5aa9ff", "#1f63d8"),    # weather / road change - blue
+            ("#2fd0c0", "#0a8f86"),    # driver details        - teal
+            ("#a98bff", "#6a3fd8"),    # support               - violet
+            ("#ffb347", "#e5780b"))    # no hidden charges     - amber
+    _KINDS = ("cloud", "badge", "headset", "shield")
+    HEAD_H = 8.2 * mm
+
     def __init__(self, width, lines):
         super().__init__()
-        self.lines = [str(t) for t in lines[:4]]
         self.width = width
-        self.height = 9.6 * mm + 2 * 6.0 * mm + 1.2 * mm if len(self.lines) > 2 else 9.6 * mm + 6.0 * mm + 1.2 * mm
-        # one font size so that both columns fit on a single line each
-        pad, gutter, badge = 6.5 * mm, 5 * mm, 5.2 * mm
-        size = 7.1
-        while size > 5.8:
-            cols = [self.lines[0::2], self.lines[1::2]]
-            wid = [max((pdfmetrics.stringWidth(t, "Lato", size) for t in col), default=0) for col in cols]
-            if wid[0] + wid[1] + 2 * badge + gutter + 2 * pad <= width:
-                break
-            size -= 0.1
-        self._size, self._colw = size, wid
+        self.items = []
+        for t in list(lines)[:4]:
+            if isinstance(t, (tuple, list)) and len(t) >= 2:
+                self.items.append((str(t[0]), str(t[1])))
+            else:
+                self.items.append(("", str(t)))
+        self.height = 25 * mm
+
+    @staticmethod
+    def _glyph(c, kind, cx, cy, u, hole):
+        W = colors.white
+        c.saveState()
+        c.setFillColor(W); c.setStrokeColor(W); c.setLineCap(1); c.setLineJoin(1)
+        if kind == "cloud":                                   # cloud with a little sun peeking out
+            c.setLineWidth(0.12 * u)
+            for ang in (150, 180, 210):
+                import math
+                dx, dy = math.cos(math.radians(ang)), math.sin(math.radians(ang))
+                c.line(cx - 0.42*u + dx*0.62*u, cy + 0.36*u + dy*0.62*u + 0.2*u, cx - 0.42*u + dx*0.86*u, cy + 0.36*u + dy*0.86*u + 0.2*u)
+            c.circle(cx - 0.42*u, cy + 0.50*u, 0.36*u, fill=1, stroke=0)
+            c.setFillColor(hole); c.circle(cx + 0.10*u, cy - 0.04*u, 0.58*u, fill=1, stroke=0)   # cut-out ring
+            c.setFillColor(W)
+            c.circle(cx - 0.34*u, cy - 0.14*u, 0.34*u, fill=1, stroke=0)
+            c.circle(cx + 0.10*u, cy + 0.02*u, 0.46*u, fill=1, stroke=0)
+            c.circle(cx + 0.52*u, cy - 0.16*u, 0.32*u, fill=1, stroke=0)
+            c.roundRect(cx - 0.68*u, cy - 0.48*u, 1.52*u, 0.36*u, 0.18*u, fill=1, stroke=0)
+        elif kind == "badge":                                 # driver ID card
+            c.roundRect(cx - 0.90*u, cy - 0.62*u, 1.80*u, 1.24*u, 0.20*u, fill=1, stroke=0)
+            c.setFillColor(hole)
+            c.circle(cx - 0.44*u, cy + 0.14*u, 0.22*u, fill=1, stroke=0)
+            sh = c.beginPath(); sh.moveTo(cx - 0.84*u, cy - 0.46*u)
+            sh.curveTo(cx - 0.84*u, cy - 0.14*u, cx - 0.04*u, cy - 0.14*u, cx - 0.04*u, cy - 0.46*u); sh.close()
+            c.drawPath(sh, fill=1, stroke=0)
+            c.setStrokeColor(hole); c.setLineWidth(0.14 * u)
+            c.line(cx + 0.16*u, cy + 0.26*u, cx + 0.70*u, cy + 0.26*u)
+            c.line(cx + 0.16*u, cy - 0.02*u, cx + 0.70*u, cy - 0.02*u)
+            c.line(cx + 0.16*u, cy - 0.30*u, cx + 0.50*u, cy - 0.30*u)
+        elif kind == "headset":
+            c.setLineWidth(0.18 * u)
+            arc = c.beginPath(); arc.arc(cx - 0.72*u, cy - 0.34*u, cx + 0.72*u, cy + 1.02*u, 0, 180)
+            c.drawPath(arc, fill=0, stroke=1)
+            c.roundRect(cx - 0.90*u, cy - 0.38*u, 0.34*u, 0.72*u, 0.14*u, fill=1, stroke=0)
+            c.roundRect(cx + 0.56*u, cy - 0.38*u, 0.34*u, 0.72*u, 0.14*u, fill=1, stroke=0)
+            mic = c.beginPath(); mic.moveTo(cx + 0.74*u, cy - 0.38*u)
+            mic.curveTo(cx + 0.74*u, cy - 0.78*u, cx + 0.30*u, cy - 0.74*u, cx + 0.08*u, cy - 0.74*u)
+            c.drawPath(mic, fill=0, stroke=1)
+            c.circle(cx + 0.02*u, cy - 0.74*u, 0.14*u, fill=1, stroke=0)
+        else:                                                 # shield with tick
+            sh = c.beginPath(); sh.moveTo(cx, cy + 0.84*u)
+            sh.lineTo(cx + 0.74*u, cy + 0.56*u); sh.lineTo(cx + 0.74*u, cy - 0.04*u)
+            sh.curveTo(cx + 0.74*u, cy - 0.48*u, cx + 0.30*u, cy - 0.72*u, cx, cy - 0.86*u)
+            sh.curveTo(cx - 0.30*u, cy - 0.72*u, cx - 0.74*u, cy - 0.48*u, cx - 0.74*u, cy - 0.04*u)
+            sh.lineTo(cx - 0.74*u, cy + 0.56*u); sh.close()
+            c.drawPath(sh, fill=1, stroke=0)
+            c.setStrokeColor(hole); c.setLineWidth(0.20 * u)
+            c.line(cx - 0.32*u, cy - 0.02*u, cx - 0.06*u, cy - 0.30*u)
+            c.line(cx - 0.06*u, cy - 0.30*u, cx + 0.38*u, cy + 0.24*u)
+        c.restoreState()
 
     def draw(self):
+        from reportlab.lib.utils import simpleSplit
         c, w, h = self.canv, self.width, self.height
-        R = 3 * mm
-        _grad_roundrect(c, 0, 0, w, h, R, colors.HexColor("#f1f9f7"), colors.HexColor("#e6f2ef"), "d")
+        R = 3.2 * mm
+        _soft_shadow(c, 0, 0, w, h, R, layers=4, alpha=0.02)
+        _grad_roundrect(c, 0, 0, w, h, R, colors.HexColor("#f3faf8"), colors.HexColor("#e4f1ee"), "d")
         c.setStrokeColor(colors.HexColor("#cfe5e0")); c.setLineWidth(0.6)
         c.roundRect(0, 0, w, h, R, fill=0, stroke=1)
+        # teal-to-gold accent line along the top edge
         c.saveState()
         p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
-        c.setFillColor(TEAL); c.rect(0, 0, 1.5 * mm, h, fill=1, stroke=0)
+        p2 = c.beginPath(); p2.rect(0, h - 1.0 * mm, w, 1.0 * mm); c.clipPath(p2, stroke=0, fill=0)
+        c.linearGradient(0, 0, w, 0, (TEAL, GOLD_MID), extend=True)
         c.restoreState()
+
         x0 = 6.5 * mm
+        _check_badge(c, x0 + 1.7 * mm, h - 6.0 * mm, 1.7 * mm, TEAL)
         c.setFillColor(TEAL)
-        tw = _spaced(c, x0, h - 6 * mm, "OUR PROMISE TO YOU", "Lato-Bold", 6.6, 1.0)
+        tw = _spaced(c, x0 + 5 * mm, h - 7.0 * mm, "OUR PROMISE TO YOU", "Lato-Bold", 6.8, 1.1)
         c.setStrokeColor(colors.HexColor("#bfdcd6")); c.setLineWidth(0.5)
-        c.line(x0 + tw + 3 * mm, h - 5.2 * mm, w - 6.5 * mm, h - 5.2 * mm)
-        badge, gutter = 5.2 * mm, 5 * mm
-        xs = [x0, x0 + badge + self._colw[0] + gutter]
-        for i, t in enumerate(self.lines):
-            col, row = i % 2, i // 2
-            y = h - 12.2 * mm - row * 6.0 * mm
-            _check_badge(c, xs[col] + 1.55 * mm, y + 0.95 * mm, 1.55 * mm, TEAL)
-            c.setFillColor(SLATE); c.setFont("Lato", self._size)
-            c.drawString(xs[col] + badge, y, t)
+        c.line(x0 + 5 * mm + tw + 3 * mm, h - 6.2 * mm, w - 6.5 * mm, h - 6.2 * mm)
+
+        n = max(len(self.items), 1)
+        inner_x, inner_w = 5 * mm, w - 10 * mm
+        cw = inner_w / n
+        tile = 8.6 * mm
+        body_top = h - self.HEAD_H - 2.2 * mm
+        for i, (title, text) in enumerate(self.items):
+            x = inner_x + i * cw
+            if i:
+                c.setStrokeColor(colors.HexColor("#c9e0db")); c.setLineWidth(0.5)
+                c.line(x, 3.2 * mm, x, body_top + 0.5 * mm)
+            top_c, bot_c = (colors.HexColor(v) for v in self._PAL[i % 4])
+            tx = x + 2.2 * mm
+            ty = body_top - tile
+            c.saveState()
+            for k in range(3, 0, -1):
+                c.setFillColor(colors.Color(bot_c.red, bot_c.green, bot_c.blue, alpha=0.06))
+                c.roundRect(tx - k*0.4*mm, ty - k*0.4*mm - 0.5*mm, tile + k*0.8*mm, tile + k*0.8*mm, 2.8*mm + k*0.3*mm, fill=1, stroke=0)
+            c.restoreState()
+            _grad_roundrect(c, tx, ty, tile, tile, 2.6 * mm, top_c, bot_c, "d")
+            c.saveState()
+            c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.5)); c.setLineWidth(0.5)
+            c.roundRect(tx + 0.3*mm, ty + 0.3*mm, tile - 0.6*mm, tile - 0.6*mm, 2.3*mm, fill=0, stroke=1)
+            c.restoreState()
+            self._glyph(c, self._KINDS[i % 4], tx + tile / 2, ty + tile / 2, 2.2 * mm, bot_c)
+            # text
+            txx = tx + tile + 2.6 * mm
+            tw_ = x + cw - 3 * mm - txx
+            y = body_top - 2.4 * mm
+            if title:
+                tsz = _fit_font(c, title, "Lato-Bold", 7.8, tw_)
+                c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", tsz)
+                c.drawString(txx, y, title)
+                y -= 3.7 * mm
+            sz = 6.5
+            lines = simpleSplit(text, "Lato", sz, tw_)
+            while len(lines) > 3 and sz > 5.6:
+                sz -= 0.2; lines = simpleSplit(text, "Lato", sz, tw_)
+            c.setFillColor(SLATE); c.setFont("Lato", sz)
+            for ln in lines[:3]:
+                c.drawString(txx, y, ln)
+                y -= sz * 1.28 / 72 * 25.4 * mm
 
 
 def _ts_icon(c, kind, cx, cy, s, col):
@@ -3900,10 +3994,10 @@ def generate_pdf(itinerary_data: dict) -> str:
     ]))
     story.append(Spacer(1, 3*mm))
     story.append(PromiseBox(usable_w, [
-        "Road or weather change? We rearrange sightseeing at no extra cost.",
-        "Driver name and number shared before you travel.",
-        "24/7 support from our Srinagar team while you travel.",
-        "No hidden charges: inclusions and exclusions are listed clearly.",
+        ("Weather-proof plan", "Road or weather change? We rearrange sightseeing at no extra cost."),
+        ("Your driver, named", "Driver name and number shared before you travel."),
+        ("24/7 local support", "Our Srinagar team is on call throughout your trip."),
+        ("No hidden charges", "Inclusions and exclusions are listed clearly."),
     ]))
     story.append(Spacer(1, 4*mm))
 
