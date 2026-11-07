@@ -1403,7 +1403,15 @@ export default function QuotePreview({ quote }) {
         }
 
         /* ===== Two-column layout, hotel + rooms on the day cards ===== */
-        .qp-layout { display: grid; grid-template-columns: minmax(270px, 310px) minmax(0, 1fr); gap: 12px; align-items: start; }
+        .qp-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
+        .qp-hotline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .qp-hotline select { min-height: 36px; padding: 3px 8px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1e293b; width: 210px; max-width: 100%; box-sizing: border-box; }
+        .qp-hotline select.bad { border-color: #fca5a5; background: #fef2f2; color: #991b1b; }
+        .qp-hotline .qp-stp button { width: 28px; height: 28px; font-size: 1rem; }
+        .qp-dayacts { display: flex; gap: 4px; margin-left: auto; }
+        .qp-dayacts button { width: 30px; height: 30px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1e293b; cursor: pointer; font-weight: 700; }
+        .qp-dayacts button:disabled { opacity: .35; cursor: not-allowed; }
+        .qp-side { position: static !important; max-height: none !important; }
         .qp-side { position: sticky; top: 56px; max-height: calc(100vh - 68px); overflow-y: auto; padding-right: 2px; }
         .qp-main { min-width: 0; }
         .qp-pair.qp-pair1 { grid-template-columns: 1fr; }
@@ -1568,51 +1576,6 @@ export default function QuotePreview({ quote }) {
             ))}
           </div>
         )}
-        <div className="qp-ov">
-          {timeline.map((d, i) => {
-            const dep = isDepDay(d);
-            const warn = warnDays.has(i);
-            const list = HOTEL_KB[getHotelGroup(d.overnight_stay)] || [];
-            return (
-              <div key={i} className={"qp-ovcard" + (i === activeDay ? " on" : "") + (warn ? " warn" : " ok")}>
-                <button type="button" className="qp-ovmain" onClick={() => { setActiveDay(i); setTimeout(() => { const el = document.getElementById("qp-editor"); if (el && el.scrollIntoView && window.innerWidth < 960) el.scrollIntoView({ behavior: "smooth", block: "start" }); }, 0); }} aria-label={`Edit day ${i + 1}`}>
-                  <span className="qp-ovdn"><span>Day {i + 1}</span>{warn ? <span className="qp-ovdot" title="Needs attention" /> : <span className="qp-ovok" title="Complete">✓</span>}</span>
-                  <span className="qp-ovrt">{shortRoute(d)}</span>
-                  <span className="qp-ovnt">{dep ? "No overnight" : (d.overnight_stay ? `Night in ${d.overnight_stay}` : "—")}</span>
-                </button>
-                {dep ? (
-                  <div className="qp-ovdrop">Drop-off · no hotel</div>
-                ) : (
-                  <div className="qp-ovhot2">
-                    <select aria-label={`Hotel for day ${i + 1}`} className={hotelSelections[i] ? "" : "bad"} value={hotelSelections[i] || ""}
-                      onChange={(e) => setHotelSelections((prev) => ({ ...prev, [i]: e.target.value }))}>
-                      <option value="">{list.length ? "Choose hotel…" : `No hotels in ${d.overnight_stay || "this place"}`}</option>
-                      {list.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-                    </select>
-                    {[["rooms", "Rooms", 1, 1, 20], ["eb", "EB", 0, 0, 20]].map(([f, lbl, def, min, max]) => {
-                      const v = Math.max(min, Math.min(max, Number(d[f] ?? def) || def));
-                      return (
-                        <div key={f} className="qp-stp">
-                          <span>{lbl}</span>
-                          <button type="button" aria-label={`Fewer ${lbl}`} disabled={v <= min} onClick={() => setDayField(i, f, v - 1)}>−</button>
-                          <b>{v}</b>
-                          <button type="button" aria-label={`More ${lbl}`} disabled={v >= max} onClick={() => setDayField(i, f, v + 1)}>+</button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                <div className="qp-ovacts">
-                  <button type="button" onClick={() => moveDay(i, -1)} disabled={i === 0} aria-label="Move day earlier" title="Move earlier">&#8249;</button>
-                  <button type="button" onClick={() => moveDay(i, 1)} disabled={i === timeline.length - 1} aria-label="Move day later" title="Move later">&#8250;</button>
-                  <button type="button" onClick={() => copyDay(i)} aria-label="Duplicate day" title="Duplicate this day">⧉</button>
-                  <button type="button" onClick={() => deleteDay(i)} disabled={timeline.length <= 1} aria-label="Delete day" title="Remove this day">✕</button>
-                </div>
-              </div>
-            );
-          })}
-          <button type="button" className="qp-ovadd" onClick={addDay}>+ Add day</button>
-        </div>
 
         </div>
         <div className="qp-main">
@@ -1629,6 +1592,12 @@ export default function QuotePreview({ quote }) {
             </div>
             <div className="qp-daytitle">
               <h3>Day {timeline[activeDay].day}: {timeline[activeDay].title || timeline[activeDay].date}</h3>
+              <div className="qp-dayacts">
+                <button type="button" onClick={() => moveDay(activeDay, -1)} disabled={activeDay === 0} aria-label="Move day earlier" title="Move earlier">&#8249;</button>
+                <button type="button" onClick={() => moveDay(activeDay, 1)} disabled={activeDay === timeline.length - 1} aria-label="Move day later" title="Move later">&#8250;</button>
+                <button type="button" onClick={() => copyDay(activeDay)} aria-label="Duplicate day" title="Duplicate this day">⧉</button>
+                <button type="button" onClick={() => deleteDay(activeDay)} disabled={timeline.length <= 1} aria-label="Delete day" title="Remove this day">✕</button>
+              </div>
               <select
                 className="qp-route-select qp-preset"
                 value={TRANSIT_OPTIONS.includes(timeline[activeDay].transit_route) ? timeline[activeDay].transit_route : ""}
@@ -1731,9 +1700,35 @@ export default function QuotePreview({ quote }) {
             {/* AI writer */}
             <div className="qp-ai">
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                {(() => {
+                  const d = timeline[activeDay];
+                  const i = activeDay;
+                  if (isDepDay(d)) return <span className="qp-ovdrop" style={{ margin: 0 }}>Drop-off · no hotel</span>;
+                  const list = HOTEL_KB[getHotelGroup(d.overnight_stay)] || [];
+                  return (
+                    <div className="qp-hotline">
+                      <select aria-label={`Hotel for day ${i + 1}`} className={hotelSelections[i] ? "" : "bad"} value={hotelSelections[i] || ""}
+                        onChange={(e) => setHotelSelections((prev) => ({ ...prev, [i]: e.target.value }))}>
+                        <option value="">{list.length ? "Choose hotel…" : `No hotels in ${d.overnight_stay || "this place"}`}</option>
+                        {list.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                      </select>
+                      {[["rooms", "Rooms", 1, 1, 20], ["eb", "EB", 0, 0, 20]].map(([f, lbl, def, min, max]) => {
+                        const v = Math.max(min, Math.min(max, Number(d[f] ?? def) || def));
+                        return (
+                          <div key={f} className="qp-stp">
+                            <span>{lbl}</span>
+                            <button type="button" aria-label={`Fewer ${lbl}`} disabled={v <= min} onClick={() => setDayField(i, f, v - 1)}>−</button>
+                            <b>{v}</b>
+                            <button type="button" aria-label={`More ${lbl}`} disabled={v >= max} onClick={() => setDayField(i, f, v + 1)}>+</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
                 <input
                   className="qp-route-select"
-                  style={{ flex: 1, minWidth: "200px", maxWidth: "none" }}
+                  style={{ flex: 1, minWidth: "160px", maxWidth: "none" }}
                   placeholder="AI hints (optional): honeymoon couple, relaxed pace…"
                   maxLength={300}
                   value={aiHints}
