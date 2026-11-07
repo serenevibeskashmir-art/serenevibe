@@ -921,7 +921,7 @@ export default function QuotePreview({ quote }) {
     const last = timeline[timeline.length - 1];
     const n = timeline.length + 1;
     const night = last && !isDepDay(last) && last.overnight_stay ? last.overnight_stay : "Srinagar";
-    setTimeline((prev) => [...prev, { day: n, title: "", date: `Day ${n} Plan`, transit_route: "", overnight_stay: night, schedule: [] }]);
+    setTimeline((prev) => [...prev, { day: n, title: "", date: `Day ${n} Plan`, transit_route: "", overnight_stay: night, schedule: [], ...(last && last.rooms != null ? { rooms: last.rooms } : {}), ...(last && last.eb != null ? { eb: last.eb } : {}) }]);
     setActiveDay(n - 1);
     setPickDraft({});
   };
@@ -970,6 +970,8 @@ export default function QuotePreview({ quote }) {
   const warnDays = new Set(issues.map((x) => x.day));
   const [showChecks, setShowChecks] = useState(false);
   const setDayField = (i, field, value) => setTimeline((prev) => prev.map((d, k) => (k === i ? { ...d, [field]: value } : d)));
+  // Rooms / extra beds: changing a day also sets the same number on every day after it (so Day 1 sets the whole trip).
+  const setRoomField = (i, field, value) => setTimeline((prev) => prev.map((d, k) => (k >= i ? { ...d, [field]: value } : d)));
   // One click: give every day without a hotel the first suggested hotel for its overnight city.
   const missingHotelDays = timeline.map((d, i) => i).filter((i) => {
     const d = timeline[i];
@@ -1742,9 +1744,9 @@ export default function QuotePreview({ quote }) {
                         return (
                           <div key={f} className="qp-stp">
                             <span>{lbl}</span>
-                            <button type="button" aria-label={`Fewer ${lbl}`} disabled={v <= min} onClick={() => setDayField(i, f, v - 1)}>−</button>
+                            <button type="button" aria-label={`Fewer ${lbl}`} disabled={v <= min} onClick={() => setRoomField(i, f, v - 1)}>−</button>
                             <b>{v}</b>
-                            <button type="button" aria-label={`More ${lbl}`} disabled={v >= max} onClick={() => setDayField(i, f, v + 1)}>+</button>
+                            <button type="button" aria-label={`More ${lbl}`} disabled={v >= max} onClick={() => setRoomField(i, f, v + 1)}>+</button>
                           </div>
                         );
                       })}
