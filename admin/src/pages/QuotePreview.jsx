@@ -451,6 +451,45 @@ function HotelImageManager() {
   const [saving,      setSaving]        = useState(false);
   const [loadMsg,     setLoadMsg]       = useState("Loading…");
   const fileInputRef = useRef(null);
+  const [, setHotelVer] = useState(0);            // bumps after adding / deleting a hotel so the list redraws
+  const [newName,  setNewName]  = useState("");
+  const [newPlace, setNewPlace] = useState("Srinagar");
+  const [addBusy,  setAddBusy]  = useState(false);
+  const [addMsg,   setAddMsg]   = useState(null);
+
+  // Add a hotel right here: it is saved on the server, then shows in the day pickers, PDF and this list.
+  const addHotel = async (e) => {
+    e?.preventDefault();
+    const place = cleanPlaceName(newPlace);
+    if (!newName.trim() || !place) return;
+    setAddBusy(true); setAddMsg(null);
+    try {
+      const known = [...KNOWN_PLACES, ...customNames()].some((n) => n.toLowerCase() === place.toLowerCase());
+      const loc = known ? null : await locatePlace(place);
+      const res = await apiFetch("/api/admin/hotels", { method: "POST", body: JSON.stringify({ name: newName.trim(), place, lat: loc?.lat ?? null, lon: loc?.lon ?? null }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not add the hotel.");
+      await loadCustomHotels();
+      setSelectedId(data.hotel.id);
+      setNewName("");
+      setHotelVer((v) => v + 1);
+      setAddMsg({ ok: true, text: `"${data.hotel.name}" added to ${data.hotel.place}. Add its photos below.` });
+    } catch (err) {
+      setAddMsg({ ok: false, text: err.message });
+    } finally { setAddBusy(false); }
+  };
+  const deleteHotel = async () => {
+    const h = ALL_HOTELS_FLAT[selectedId];
+    if (!h?.custom || !window.confirm(`Delete "${h.name}"? Its saved photos are deleted too.`)) return;
+    try {
+      const res = await apiFetch(`/api/admin/hotels/${h.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Delete failed.");
+      await loadCustomHotels();
+      setSelectedId(Object.values(HOTEL_KB).flat()[0]?.id || "");
+      setHotelVer((v) => v + 1);
+      setAddMsg({ ok: true, text: `"${h.name}" deleted.` });
+    } catch (err) { setAddMsg({ ok: false, text: err.message }); }
+  };
 
   useEffect(() => {
     apiFetch("/api/admin/hotel-images")
@@ -536,21 +575,37 @@ function HotelImageManager() {
     }
   };
 
-  const groupLabels = { srinagar: "Srinagar", pahalgam: "Pahalgam", gulmarg: "Gulmarg", sonamarg: "Sonamarg" };
+  const groupLabels = Object.fromEntries(
+    Object.keys(HOTEL_KB).filter((g) => (HOTEL_KB[g] || []).length)
+      .map((g) => [g, HOTEL_KB[g][0]?.place || g.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())])
+  );
+  const allPlaceNames = [...new Set([...KNOWN_PLACES, ...customNames()])];
 
   return (
     <div style={{ marginTop: "40px", backgroundColor: "#fff", border: "1px solid #e2e8f0", borderRadius: "14px", overflow: "hidden", fontFamily: "system-ui, sans-serif" }}>
-      {/* Header */}
-      <div style={{ padding: "18px clamp(14px, 4vw, 24px)", borderBottom: "1px solid #e2e8f0", background: "linear-gradient(135deg, #1e3a4f 0%, #0f2a3a 100%)", color: "#fff" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span style={{ fontSize: "1.35rem" }}>🖼️</span>
-          <div>
-            <p style={{ margin: 0, fontSize: "1rem", fontWeight: "700" }}>Hotel Photo Manager</p>
-            <p style={{ margin: "2px 0 0", fontSize: "0.78rem", opacity: 0.75 }}>
-              Add reference photos for each hotel — these appear in the generated PDF quotation.
-            </p>
+      {/* Header: title + add hotel */}
+      <div style={{ padding: "14px clamp(14px, 4vw, 24px)", borderBottom: "1px solid #e2e8f0", background: "linear-gradient(135deg, #1e3a4f 0%, #0f2a3a 100%)", color: "#fff" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px 16px", flexWrap: "wrap", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ fontSize: "1.35rem" }}>🖼️</span>
+            <div>
+              <p style={{ margin: 0, fontSize: "1rem", fontWeight: "700" }}>Hotels &amp; photos</p>
+              <p style={{ margin: "2px 0 0", fontSize: "0.78rem", opacity: 0.75 }}>Add a hotel, then add its photos for the PDF quotation.</p>
+            </div>
           </div>
+          <form onSubmit={addHotel} style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center", flex: "1 1 360px", justifyContent: "flex-end" }}>
+            <input value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={150} placeholder="New hotel name"
+              style={{ flex: "2 1 170px", minHeight: "38px", padding: "6px 10px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem", boxSizing: "border-box" }} />
+            <input value={newPlace} onChange={(e) => setNewPlace(e.target.value)} list="hpm-places" maxLength={40} placeholder="Place"
+              style={{ flex: "1 1 120px", minHeight: "38px", padding: "6px 10px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.85rem", boxSizing: "border-box" }} />
+            <datalist id="hpm-places">{allPlaceNames.map((n) => <option key={n} value={n} />)}</datalist>
+            <button type="submit" disabled={addBusy || !newName.trim() || !newPlace.trim()}
+              style={{ minHeight: "38px", padding: "6px 16px", borderRadius: "8px", border: "none", background: "#0ea5e9", color: "#fff", fontWeight: 700, cursor: addBusy ? "wait" : "pointer", opacity: (!newName.trim() || !newPlace.trim()) ? 0.6 : 1 }}>
+              {addBusy ? "Saving…" : "+ Add hotel"}
+            </button>
+          </form>
         </div>
+        {addMsg && <p style={{ margin: "8px 0 0", fontSize: "0.8rem", fontWeight: 600, color: addMsg.ok ? "#86efac" : "#fca5a5" }}>{addMsg.text}</p>}
       </div>
 
       <div className="hpm-grid">
@@ -597,9 +652,14 @@ function HotelImageManager() {
           ) : (
             <>
               <div style={{ marginBottom: "18px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                 <h4 style={{ margin: "0 0 4px", fontSize: "1rem", color: "#0f172a", fontWeight: "700" }}>
                   {selectedHotel?.name}
                 </h4>
+                {selectedHotel?.custom && (
+                  <button type="button" onClick={deleteHotel} style={{ padding: "3px 10px", borderRadius: "8px", border: "1px solid #fecaca", background: "#fef2f2", color: "#b91c1c", fontWeight: 600, fontSize: "0.75rem", cursor: "pointer" }}>Delete hotel</button>
+                )}
+                </div>
                 <p style={{ margin: 0, fontSize: "0.78rem", color: "#64748b" }}>
                   📍 {selectedHotel?.place} · {currentImages.length} photo{currentImages.length !== 1 ? "s" : ""} saved
                 </p>
@@ -1806,7 +1866,7 @@ export default function QuotePreview({ quote }) {
 
         {/* 6. Hotel photo manager (rarely needed) */}
         <details className="qp-more">
-          <summary><b>🖼️ Hotel photos</b> <span className="qp-sub">optional</span></summary>
+          <summary><b>🏨 Hotels &amp; photos</b> <span className="qp-sub">add a hotel or its photos</span></summary>
           <div style={{ padding: "4px 10px 12px" }}>
             <HotelImageManager />
           </div>
