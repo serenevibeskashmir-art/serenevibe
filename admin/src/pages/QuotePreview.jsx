@@ -1387,7 +1387,8 @@ export default function QuotePreview({ quote }) {
         .qp-daypill { padding: 0 18px 0 14px; }
         .qp-daypill .pd { top: 50%; right: 6px; transform: translateY(-50%); }
         .qp-pair { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.4fr); }
-        @media (min-width: 960px) { .qp-daypills { display: none; } }
+        .qp-daypills { flex-wrap: wrap; overflow-x: visible; }
+        .qp-daypill { min-height: 32px; }
         @media (max-width: 720px) {
           .qp-set-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .qp-act .qp-activity-row { flex-wrap: nowrap; }
