@@ -30,7 +30,7 @@ export default function LeadForm({ onGenerated }) {
       destination,
       days: parseInt(days) || 5,
       client_name: clientName || "Valued Client",
-      client_email: clientEmail || "N/A",
+      client_email: clientEmail.trim(),   // optional; the PDF shows xxx@gmail.com when blank
       start_date: startDate || "TBD",
       adults: parseInt(adults) || 2,
       trip_pace: tripPace,
@@ -143,8 +143,8 @@ export default function LeadForm({ onGenerated }) {
             <input type="text" placeholder="e.g. John Doe" value={clientName} onChange={(e) => setClientName(e.target.value)} style={inputStyle} required />
           </div>
           <div style={fieldStyle}>
-            <label style={labelStyle}>✉️ Client Email</label>
-            <input type="email" placeholder="client@example.com" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} style={inputStyle} required />
+            <label style={labelStyle}>✉️ Client Email <span style={{ textTransform: "none", fontWeight: 500, color: "#94a3b8" }}>(optional)</span></label>
+            <input type="email" placeholder="Leave blank if not given" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} style={inputStyle} />
           </div>
         </div>
 
