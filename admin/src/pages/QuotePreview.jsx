@@ -146,8 +146,8 @@ const POINT_PRESETS = [
   "Katra Railway Station",
   "Pathankot Railway Station",
 ];
-const VEHICLE_OPTIONS = ["Sedan", "Ertiga/Innova", "Innova Crysta", "Tempo/Traveler", "Tempo Traveler (17 seater)", "Mini Bus"];
-const MEAL_PLANS = [
+export const VEHICLE_OPTIONS = ["Sedan", "Ertiga/Innova", "Innova Crysta", "Tempo/Traveler", "Tempo Traveler (17 seater)", "Mini Bus"];
+export const MEAL_PLANS = [
   { code: "EP",  name: "European Plan",          desc: "Room only. No meals included." },
   { code: "CP",  name: "Continental Plan",       desc: "Room + Breakfast" },
   { code: "MAP", name: "Modified American Plan", desc: "Room + Breakfast + One major meal (Lunch or Dinner)" },
@@ -750,7 +750,7 @@ function HotelImageManager() {
 }
 
 // ── Main QuotePreview export ───────────────────────────────────────────────
-export default function QuotePreview({ quote }) {
+export default function QuotePreview({ quote, trip }) {
   const [timeline,        setTimeline]        = useState(quote?.itinerary_timeline || []);
   const [activeDay,       setActiveDay]       = useState(0);
   const [editableCost,    setEditableCost]    = useState(quote?.financial_summary?.total_payable_inr || 38500);
@@ -805,6 +805,9 @@ export default function QuotePreview({ quote }) {
 
   const [vehicleType, setVehicleType] = useState(quote?.meta_summary?.vehicle_type || quote?.vehicle_type || "Sedan");
   const [mealPlan, setMealPlan] = useState(quote?.meta_summary?.meal_plan || "MAP");   // default MAP
+  // Vehicle and meal plan are set in the trip form at the top; changing them there updates this quote.
+  useEffect(() => { if (trip?.vehicle) setVehicleType(trip.vehicle); }, [trip?.vehicle]);
+  useEffect(() => { if (trip?.meal) setMealPlan(trip.meal); }, [trip?.meal]);
   const [startInfo, setStartInfo] = useState(quote?.meta_summary?.start_info || null);
   const [endInfo,   setEndInfo]   = useState(quote?.meta_summary?.end_info   || null);
   const [locBusy,   setLocBusy]   = useState("");     // "" | "start" | "end"
@@ -1319,6 +1322,7 @@ export default function QuotePreview({ quote }) {
         .qp-daypill .pd { position: absolute; top: 6px; right: 7px; width: 9px; height: 9px; border-radius: 50%; background: #f59e0b; border: 1px solid #fff; }
         .qp-daypill.plus { background: #fff; border: 2px dashed #94a3b8; color: #334155; }
         .qp-active-day { scroll-margin-top: 12px; }
+        .qp-set:empty { display: none; }
         .qp-set { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 14px 12px; margin-bottom: 14px; box-shadow: ${UI_THEME.shadows.sm}; }
         .qp-set-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
         .qp-set-grid label { display: block; font-size: 0.74rem; font-weight: 700; color: #475569; margin-bottom: 3px; }
@@ -1482,7 +1486,26 @@ export default function QuotePreview({ quote }) {
 
         /* ===== Two-column layout, hotel + rooms on the day cards ===== */
         .qp-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
-        .qp-hotline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .qp-hotline { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; width: 100%; }
+        .qp-hotline > input { min-height: 34px; padding: 3px 8px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; }
+        .qp-hotline > select:not(.qp-h-wide) { min-height: 34px; width: auto; max-width: 190px; }
+        .qp-hotline .qp-stp span { flex: none; }
+        @media (max-width: 720px) {
+          .qp-hotline { display: grid; grid-template-columns: 1fr 1fr; }
+          .qp-hotline .qp-h-wide { grid-column: 1 / -1; width: 100%; }
+          .qp-hotline > select:not(.qp-h-wide) { width: 100%; max-width: none; min-width: 0; text-overflow: ellipsis; }
+          .qp-hotline .qp-stp { justify-content: space-between; border: 1px solid #e2e8f0; border-radius: 8px; padding: 2px 4px 2px 8px; }
+          .qp-hotline .qp-stp button { width: 30px; height: 30px; }
+          .qp-ai > div { gap: 6px !important; }
+          .qp-ai input.qp-route-select { min-width: 0 !important; flex: 1 1 120px !important; }
+          .qp-daytitle { gap: 4px 8px; }
+          .qp-daytitle h3 { font-size: 0.92rem; flex: 1 1 100%; }
+          .qp-daytitle .qp-preset { flex: 1 1 0; min-width: 0; }
+          .qp-row { padding: 3px 0; }
+          .qp-city-btns button { min-height: 28px !important; padding: 2px 10px !important; font-size: 0.76rem !important; }
+          .qp-act { padding: 6px; }
+          .qp-act textarea { min-height: 44px; }
+        }
         .qp-hotline select { min-height: 36px; padding: 3px 8px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1e293b; width: 210px; max-width: 100%; box-sizing: border-box; }
         .qp-hotline select.bad { border-color: #fca5a5; background: #fef2f2; color: #991b1b; }
         .qp-hotline .qp-stp button { width: 28px; height: 28px; font-size: 1rem; }
@@ -1561,30 +1584,6 @@ export default function QuotePreview({ quote }) {
 
         {/* Trip settings: vehicle, meal plan, start and end point in one compact row */}
         <div className="qp-set">
-          <div className="qp-set-grid">
-            <div>
-              <label>🚗 Vehicle</label>
-              <select className="qp-route-select"
-                value={VEHICLE_OPTIONS.includes(vehicleType) ? vehicleType : "__custom"}
-                onChange={(e) => setVehicleType(e.target.value === "__custom" ? "" : e.target.value)}>
-                {VEHICLE_OPTIONS.map((v) => <option key={v} value={v}>{v}</option>)}
-                <option value="__custom">Other…</option>
-              </select>
-            </div>
-            <div>
-              <label>🍽️ Meal plan</label>
-              <select className="qp-route-select" title={MEAL_PLANS.find((m) => m.code === mealPlan)?.desc} value={mealPlan} onChange={(e) => setMealPlan(e.target.value)}>
-                {MEAL_PLANS.map((m) => <option key={m.code} value={m.code}>{m.code} – {m.name}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Extra fields only appear when "Other…" is chosen */}
-          {(!VEHICLE_OPTIONS.includes(vehicleType)) && (
-            <input className="qp-route-select" style={{ marginTop: "8px", maxWidth: "340px" }}
-              placeholder="Vehicle name, e.g. Toyota Innova Hycross"
-              value={vehicleType} onChange={(e) => setVehicleType(e.target.value)} />
-          )}
           {[["start", "Start", startPoint, changeStart], ["end", "End", endPoint, changeEnd]].map(([key, label, val, setter]) => {
             const showFind = !isSrinagarPoint(val) && val.trim().length >= 3;
             if (!showFind) return null;
@@ -1777,26 +1776,30 @@ export default function QuotePreview({ quote }) {
                 {(() => {
                   const d = timeline[activeDay];
                   const i = activeDay;
-                  if (isDepDay(d)) return <span className="qp-ovdrop" style={{ margin: 0 }}>Drop-off · no hotel</span>;
-                  const list = HOTEL_KB[getHotelGroup(d.overnight_stay)] || [];
+                  const dep = isDepDay(d);
+                  const list = dep ? [] : (HOTEL_KB[getHotelGroup(d.overnight_stay)] || []);
                   return (
                     <div className="qp-hotline">
-                      <select aria-label={`Hotel for day ${i + 1}`} className={hotelSelections[i] ? "" : "bad"} value={hotelSelections[i] || ""}
-                        onChange={(e) => setHotelSelections((prev) => ({ ...prev, [i]: e.target.value }))}>
-                        <option value="">{list.length ? "Choose hotel…" : `No hotels in ${d.overnight_stay || "this place"}`}</option>
-                        {list.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-                      </select>
-                      {[["rooms", "Rooms", 1, 1, 20], ["eb", "EB", 0, 0, 20]].map(([f, lbl, def, min, max]) => {
-                        const v = Math.max(min, Math.min(max, Number(d[f] ?? def) || def));
-                        return (
-                          <div key={f} className="qp-stp">
-                            <span>{lbl}</span>
-                            <button type="button" aria-label={`Fewer ${lbl}`} disabled={v <= min} onClick={() => setRoomField(i, f, v - 1)}>−</button>
-                            <b>{v}</b>
-                            <button type="button" aria-label={`More ${lbl}`} disabled={v >= max} onClick={() => setRoomField(i, f, v + 1)}>+</button>
-                          </div>
-                        );
-                      })}
+                      {dep ? <span className="qp-ovdrop qp-h-wide" style={{ margin: 0 }}>Drop-off · no hotel</span> : (
+                        <>
+                          <select className={"qp-h-wide" + (hotelSelections[i] ? "" : " bad")} aria-label={`Hotel for day ${i + 1}`} value={hotelSelections[i] || ""}
+                            onChange={(e) => setHotelSelections((prev) => ({ ...prev, [i]: e.target.value }))}>
+                            <option value="">{list.length ? "Choose hotel…" : `No hotels in ${d.overnight_stay || "this place"}`}</option>
+                            {list.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                          </select>
+                          {[["rooms", "Rooms", 1, 1, 20], ["eb", "EB", 0, 0, 20]].map(([f, lbl, def, min, max]) => {
+                            const v = Math.max(min, Math.min(max, Number(d[f] ?? def) || def));
+                            return (
+                              <div key={f} className="qp-stp">
+                                <span>{lbl}</span>
+                                <button type="button" aria-label={`Fewer ${lbl}`} disabled={v <= min} onClick={() => setRoomField(i, f, v - 1)}>−</button>
+                                <b>{v}</b>
+                                <button type="button" aria-label={`More ${lbl}`} disabled={v >= max} onClick={() => setRoomField(i, f, v + 1)}>+</button>
+                              </div>
+                            );
+                          })}
+                        </>
+                      )}
                     </div>
                   );
                 })()}
