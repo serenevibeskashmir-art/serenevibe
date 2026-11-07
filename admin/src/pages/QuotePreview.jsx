@@ -515,14 +515,7 @@ function HotelCostDashboard({ hotelSelections = {}, timeline = [], onTotalChange
           .hcd-cab-input { width: 100% !important; box-sizing: border-box; }
         }
       `}</style>
-      <div style={{ marginTop: "32px", backgroundColor: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "clamp(14px, 4vw, 20px) clamp(14px, 4vw, 24px)", fontFamily: "system-ui, sans-serif" }}>
-        <div style={{ marginBottom: "14px", paddingBottom: "12px", borderBottom: "1px solid #e2e8f0" }}>
-          <p style={{ margin: 0, fontSize: "1rem", fontWeight: "700", color: "#0f172a" }}>🏨 Rooms &amp; Extra Beds</p>
-          <p style={{ margin: "3px 0 0", fontSize: "0.78rem", color: "#64748b" }}>
-            Hotels come from the days above · Nights fill in automatically · Rooms and EB are printed in the PDF
-          </p>
-        </div>
-
+      <div style={{ fontFamily: "system-ui, sans-serif" }}>
         {rowList.length === 0 ? (
           <p style={{ textAlign: "center", color: "#94a3b8", fontSize: "0.85rem", padding: "24px 0" }}>
             No hotels assigned yet. Use the hotel picker above for each day — they will appear here automatically.
@@ -1833,7 +1826,7 @@ export default function QuotePreview({ quote }) {
 
         {/* 5. Hotel cost calculator (collapsed; stays mounted so the total still updates) */}
         <details className="qp-more">
-          <summary>🛏️ Rooms &amp; extra beds <span className="qp-sub">set rooms, EB and nights per hotel (shown in the PDF)</span></summary>
+          <summary>🛏️ Rooms &amp; extra beds <span className="qp-sub">nights fill in automatically · rooms and EB are printed in the PDF</span></summary>
           <div style={{ padding: "4px 10px 12px" }}>
             <HotelCostDashboard hotelSelections={hotelSelections} timeline={timeline} onRowsChange={setHotelRows} />
           </div>
@@ -1857,21 +1850,6 @@ export default function QuotePreview({ quote }) {
               onChange={(e) => setEditableCost(e.target.value)}
               className="qp-cost-input"
             />
-          </div>
-
-          <div className="qp-hotel-assignments">
-            <strong style={{ color: "#0f172a", display: "block", marginBottom: "4px" }}>🏨 Hotel Assignments:</strong>
-            {timeline.map((day, idx) => {
-              const group  = getHotelGroup(day.overnight_stay);
-              const selId  = hotelSelections[idx];
-              const hotel  = HOTEL_KB[group]?.find(h => h.id === selId);
-              return (
-                <div key={idx} style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
-                  <span style={{ color: "#94a3b8" }}>Day {day.day}:</span>
-                  <span style={{ fontWeight: "600", color: hotel ? "#4338ca" : "#94a3b8" }}>{hotel ? hotel.name : "Not assigned"}</span>
-                </div>
-              );
-            })}
           </div>
 
           <button
