@@ -564,19 +564,69 @@ class HeroHeader(Flowable):
 
 class DayBanner(Flowable):
     """Styled banner for each day heading."""
-    def __init__(self, width, day_num, title, overnight="", hotel="", date_label=""):
+    TRAVEL_H = 6.6 * mm      # slim route / distance strip attached under the banner
+
+    def __init__(self, width, day_num, title, overnight="", hotel="", date_label="", travel=None):
         super().__init__()
         self.width    = width
-        self.height   = 11 * mm
+        self.travel   = travel if (travel and travel.get("text")) else None   # {"stops": [...], "text": "80 km · about 2.5 h"}
+        self.height   = 11 * mm + (self.TRAVEL_H if self.travel else 0)
         self.day_num  = day_num
         self.title    = title
         self.overnight = overnight
         self.date_label = date_label
         self.hotel     = hotel      # hotel name for this night (callable or str); shown in the Stay pill
 
+    def _draw_travel(self, c, w, th):
+        """'Srinagar -> Sonamarg  ·  80 km  ·  about 2.5 h' on a pale strip under the banner."""
+        r = 2 * mm
+        c.setFillColor(SKY_LIGHT)
+        c.roundRect(0, 0, w, th + r, r, fill=1, stroke=0)          # square the top edge: it joins the banner
+        c.rect(0, th - 0.5 * mm, w, r + 0.5 * mm, fill=1, stroke=0)
+        c.setFillColor(SKY_MID); c.roundRect(0, 0, 15 * mm, th, r, fill=1, stroke=0)
+        c.rect(0, th - r, 15 * mm, r, fill=1, stroke=0)
+        mid = th / 2
+        # little road icon: two dashes between a start ring and an end dot
+        c.setStrokeColor(WHITE); c.setFillColor(WHITE); c.setLineWidth(0.8)
+        c.circle(4.2 * mm, mid, 0.9 * mm, fill=0, stroke=1)
+        c.setDash(1.1, 1.1); c.line(5.4 * mm, mid, 9.6 * mm, mid); c.setDash()
+        c.circle(10.8 * mm, mid, 0.95 * mm, fill=1, stroke=0)
+
+        names = [_raw(n) for n in self.travel["stops"]]
+        tail = "  \u00b7  " + _raw(self.travel["text"])
+        size, arrow = 7.8, 5.2 * mm
+        avail = w - 17 * mm - 3 * mm
+        while size > 5.6:
+            total = sum(c.stringWidth(n, "Lato-Bold", size) for n in names) + arrow * (len(names) - 1) \
+                    + c.stringWidth(tail, "Lato-Bold", size)
+            if total <= avail:
+                break
+            size -= 0.3
+        x, y = 17 * mm, mid - size * 0.34
+        c.setFont("Lato-Bold", size)
+        for i, n in enumerate(names):
+            if i:                                                    # vector arrow: no font glyph needed
+                ax = x + 0.9 * mm
+                c.setStrokeColor(SKY); c.setFillColor(SKY); c.setLineWidth(0.7)
+                c.line(ax, mid, ax + arrow - 2.6 * mm, mid)
+                hp = c.beginPath(); hp.moveTo(ax + arrow - 1.4 * mm, mid)
+                hp.lineTo(ax + arrow - 2.9 * mm, mid + 0.9 * mm); hp.lineTo(ax + arrow - 2.9 * mm, mid - 0.9 * mm)
+                hp.close(); c.drawPath(hp, fill=1, stroke=0)
+                x += arrow
+            c.setFillColor(NAVY); c.setFont("Lato-Bold", size)
+            c.drawString(x, y, n)
+            x += c.stringWidth(n, "Lato-Bold", size)
+        c.setFillColor(TEAL); c.setFont("Lato-Bold", size)
+        c.drawString(x, y, tail)
+
     def draw(self):
         c = self.canv
-        w, h = self.width, self.height
+        w, h = self.width, 11 * mm
+        tb = self.TRAVEL_H if self.travel else 0
+        if tb:
+            self._draw_travel(c, w, tb)
+            c.saveState()
+            c.translate(0, tb)
 
         # Main bar with slight rounding
         c.setFillColor(NAVY)
@@ -589,10 +639,11 @@ class DayBanner(Flowable):
         c.setFillColor(NAVY)
         c.rect(11*mm, 0, 4*mm, h, fill=1, stroke=0)
 
-        # Thin sky accent rule below the banner
-        c.setStrokeColor(SKY_MID)
-        c.setLineWidth(0.8)
-        c.line(0, -1*mm, w, -1*mm)
+        # Thin sky accent rule below the banner (the travel strip replaces it when present)
+        if not tb:
+            c.setStrokeColor(SKY_MID)
+            c.setLineWidth(0.8)
+            c.line(0, -1*mm, w, -1*mm)
 
         # Day number pill (rounded rect instead of just text)
         pill_x, pill_y = 1.5*mm, h/2 - 3.5*mm
@@ -645,6 +696,8 @@ class DayBanner(Flowable):
             c.setFillColor(WHITE)
             c.setFont("Lato-Bold", 7.5)
             c.drawString(ox + 6.4*mm, oy + 2.25*mm, ov_label)
+        if tb:
+            c.restoreState()
 
 
 class RouteBadge(Flowable):
@@ -766,6 +819,162 @@ class HotelPhotoStrip(Flowable):
         c.setFillColor(GRAY_400)
         c.setFont("Lato-Italic", 8)
         c.drawCentredString(x + self.tile_w / 2, y + self.photo_h / 2 - 2, "Photo unavailable")
+
+
+# ─── Best-photo picker + hotel stay card ─────────────────────────────────────
+_PHOTO_MIN_SCORE = 0.45      # below this a photo is left out ("best photos only")
+_PHOTO_MAX_TRIES = 6         # candidates examined per hotel
+
+
+def _photo_quality(reader):
+    """0..1 quality score for a hotel photo, or None to reject it outright.
+
+    Rewards large, sharp, well-exposed landscape pictures and marks down the
+    things that make a stay look cheap: tiny or blurry files, very dark night
+    shots, blown-out frames and neon / over-saturated colour."""
+    try:
+        from PIL import ImageFilter, ImageStat
+        im = getattr(reader, "_image", None)
+        if im is None:
+            return 0.6
+        iw, ih = im.size
+        if min(iw, ih) < 350:
+            return None
+        t = im.convert("RGB")
+        t.thumbnail((320, 320))
+        hsv = list(t.convert("HSV").getdata())
+        neon = sum(1 for _h, sat, val in hsv if sat > 205 and val > 205) / max(len(hsv), 1)
+        if neon > 0.35:
+            return None
+        grey = t.convert("L")
+        mean, spread = ImageStat.Stat(grey).mean[0], ImageStat.Stat(grey).stddev[0]
+        edges = ImageStat.Stat(grey.filter(ImageFilter.FIND_EDGES)).mean[0]
+        score = 1.0
+        score *= max(0.0, 1.0 - 2.5 * neon)              # neon / garish colour
+        if min(iw, ih) < 500:  score *= 0.6              # small file
+        if ih > iw * 1.05:     score *= 0.6              # portrait: crops badly into a landscape tile
+        if mean < 55:          score *= 0.5              # dark night shot
+        elif mean > 232:       score *= 0.6              # blown out
+        if spread < 25:        score *= 0.7              # flat / washed out
+        if edges < 4:          score *= 0.7              # blurry
+        return score
+    except Exception as exc:
+        print(f"Photo quality check skipped: {exc}")
+        return 0.6
+
+
+def _pick_best_photos(sources, n=2):
+    """Up to `n` ImageReaders: the best-scoring photos of a hotel, best first.
+
+    Photos that fail to load or score too low are dropped, so a hotel with only
+    poor pictures shows none rather than something that looks cheap."""
+    scored = []
+    for order, src in enumerate(list(sources or [])[:_PHOTO_MAX_TRIES]):
+        r = fetch_image_reader(src)
+        if r is None:
+            continue
+        q = _photo_quality(r)
+        if q is not None and q >= _PHOTO_MIN_SCORE:
+            scored.append((-q, order, r))
+    scored.sort(key=lambda x: (round(x[0], 2), x[1]))      # near-ties keep the admin's order
+    return [r for _q, _o, r in scored[:n]]
+
+
+_MEAL_SHORT = {"EP": ("EP", "Room only"), "CP": ("CP", "Breakfast"),
+               "MAP": ("MAP", "Breakfast + dinner"), "AP": ("AP", "All meals")}
+
+
+class HotelStayCard(HotelPhotoStrip):
+    """One stay: hotel name, nights and dates, room type, rooms, meal plan, then its best photos.
+
+    Everything a guest wants to know about a hotel sits in one card, so nothing
+    has to be matched up between a table and a separate photo page."""
+    PAD       = 3 * mm
+    HEAD_H    = 10 * mm
+    INFO_H    = 12.5 * mm
+
+    def __init__(self, width, stay, readers):
+        Flowable.__init__(self)
+        self.width = width
+        self.stay = stay
+        self.readers = readers[:2]
+        self.gap = 3.5 * mm
+        inner = width - 2 * self.PAD
+        if len(self.readers) >= 2:
+            self.tile_w, self.photo_h = (inner - self.gap) / 2, ((inner - self.gap) / 2) * 0.46
+        elif len(self.readers) == 1:
+            self.tile_w, self.photo_h = inner, inner * 0.24
+        else:
+            self.tile_w, self.photo_h = 0, 0
+        photos_h = (self.photo_h + 2 * self.PAD) if self.readers else 0
+        self.height = self.HEAD_H + self.INFO_H + photos_h
+        if not self.readers and stay.get("known"):
+            self.height += 6 * mm                      # room for the "photos on request" line
+
+    def _cell(self, c, x, y, label, value, w):
+        c.setFillColor(GRAY_400); c.setFont("Lato-Bold", 5.8)
+        c.drawString(x, y + 5.3 * mm, label)
+        size = 8.6
+        txt = _raw(value)
+        while c.stringWidth(txt, "Lato-Bold", size) > w - 3 * mm and size > 6.4:
+            size -= 0.3
+        c.setFillColor(NAVY); c.setFont("Lato-Bold", size)
+        c.drawString(x, y + 1.6 * mm, txt)
+
+    def draw(self):
+        c, w, h, st = self.canv, self.width, self.height, self.stay
+        r = 2 * mm
+        # card body + border
+        c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.6)
+        c.roundRect(0, 0, w, h, r, fill=1, stroke=1)
+        # header
+        top = h - self.HEAD_H
+        c.setFillColor(NAVY); c.roundRect(0, top, w, self.HEAD_H, r, fill=1, stroke=0)
+        c.rect(0, top, w, r, fill=1, stroke=0)
+        n0, n1 = st["first"], st["last"]
+        pill = f"NIGHT {n0}" if n0 == n1 else f"NIGHTS {n0}–{n1}"
+        c.setFont("Lato-Bold", 7)
+        pw = c.stringWidth(pill, "Lato-Bold", 7) + 5 * mm
+        c.setFillColor(SKY); c.roundRect(3 * mm, top + 2.5 * mm, pw, 5 * mm, 2.5 * mm, fill=1, stroke=0)
+        c.setFillColor(WHITE); c.drawCentredString(3 * mm + pw / 2, top + 4.2 * mm, pill)
+        place = _raw(st["place"])
+        c.setFont("Lato", 8)
+        plw = c.stringWidth(place, "Lato", 8)
+        name, nx = _raw(st["name"]), 3 * mm + pw + 3 * mm
+        size = 10.5
+        while c.stringWidth(name, "Lato-Bold", size) > w - nx - plw - 8 * mm and size > 7.5:
+            size -= 0.4
+        c.setFillColor(WHITE); c.setFont("Lato-Bold", size)
+        c.drawString(nx, top + 3.4 * mm, name)
+        c.setFillColor(colors.HexColor("#93c5fd")); c.setFont("Lato", 8)
+        c.drawRightString(w - 3.5 * mm, top + 3.5 * mm, place)
+
+        # details row
+        iy = top - self.INFO_H
+        c.setFillColor(GRAY_50); c.rect(0.3, iy, w - 0.6, self.INFO_H, fill=1, stroke=0)
+        c.setStrokeColor(GRAY_200); c.setLineWidth(0.4); c.line(0, iy, w, iy)
+        cw = [0.25, 0.28, 0.19, 0.28]
+        xs = [self.PAD + sum(cw[:i]) * (w - 2 * self.PAD) for i in range(4)]
+        cells = [("STAY", st["stay_txt"]), ("ROOM TYPE", st["room_type"]),
+                 ("ROOMS", st["rooms_txt"]), ("MEAL PLAN", st["meal_txt"])]
+        for i, (lab, val) in enumerate(cells):
+            self._cell(c, xs[i], iy + 1.6 * mm, lab, val, cw[i] * (w - 2 * self.PAD))
+            if i:
+                c.setStrokeColor(GRAY_200); c.line(xs[i] - 2.2 * mm, iy + 2 * mm, xs[i] - 2.2 * mm, iy + self.INFO_H - 2 * mm)
+
+        # photos
+        if not self.readers:
+            if st.get("known"):
+                c.setFillColor(GRAY_400); c.setFont("Lato-Italic", 7.5)
+                c.drawString(self.PAD, 2.2 * mm, "Photos of this property are shared on request.")
+            return
+        y = self.PAD
+        for i, rd in enumerate(self.readers):
+            x = self.PAD + i * (self.tile_w + self.gap)
+            try:
+                self._draw_photo(c, rd, x, y)
+            except Exception:
+                self._placeholder(c, x, y)
 
 
 # ─── Destination background photos (soft, faded, behind each day's activities) ─
@@ -1544,6 +1753,30 @@ def _sharing_text(adults):
 # ─── Kashmir Route Map (Layout 3: map top + legend table below) ──────────────
 DEFAULT_POINT = "Srinagar Airport"   # default tour start / end point
 
+# ─── Road distance and drive time shown on every day header and on the map ───
+# Approximate one-way driving figures from Srinagar by the usual tourist route
+# (km, hours).  Every route in Kashmir runs out of Srinagar, so a leg between two
+# outer places (Gulmarg -> Pahalgam) is the sum of the two spokes.  Edit here to
+# change what clients see.  Places not listed (admin-added ones) get no figure
+# unless the day carries `distance_km` / `drive_hours`.
+ROAD_FROM_SRINAGAR = {
+    "gulmarg":     (50, 2.0),
+    "pahalgam":    (95, 3.0),
+    "sonamarg":    (80, 2.5),
+    "doodhpathri": (45, 2.0),
+}
+SRINAGAR_POINT_ROAD = (15, 0.5)      # Srinagar airport / station <-> the city and Dal Lake area
+
+
+def _round_km(km):
+    return int(round(float(km) / 5.0) * 5) or 5
+
+
+def _fmt_drive_time(hours):
+    """'about 2.5 h' / 'about 30 min' (to the nearest half hour)."""
+    h = max(round(float(hours) * 2) / 2, 0.5)
+    return "about 30 min" if h < 1 else f"about {h:g} h"
+
 
 class KashmirRouteMap(Flowable):
     """
@@ -1842,6 +2075,77 @@ class KashmirRouteMap(Flowable):
             r["origin"] = prev
             night = "" if r["night"] == "-" else _place_key(r["night"])
             prev = "srinagar" if r["is_dep"] else (night or r["key"])
+        self._compute_travel()
+
+    # ── distance and drive time per day ─────────────────────────────────────
+    def _point_road(self, name, info):
+        """(km, hours) from a tour start / end point to Srinagar, or None when unknown."""
+        info = info or {}
+        if info.get("km") is not None:
+            km = float(info["km"])
+            hrs = info.get("hours")
+            return km, (float(hrs) if hrs is not None else km / 40.0)
+        if _is_srinagar_point(name):
+            return SRINAGAR_POINT_ROAD
+        return None
+
+    def _hub_road(self, key):
+        """(km, hours) from Srinagar to a stop key ('start' / 'end' are the tour points)."""
+        if key == "srinagar":
+            return 0.0, 0.0
+        if key == "start":
+            return self._point_road(self.start_point, self.start_info)
+        if key == "end":
+            return self._point_road(self.end_point, self.end_info)
+        return ROAD_FROM_SRINAGAR.get(key)
+
+    def _leg(self, a, b):
+        """(km, hours) for one leg, routed through Srinagar; None when it can't be stated honestly."""
+        ha, hb = self._hub_road(a), self._hub_road(b)
+        if ha is None or hb is None:
+            return None
+        for far, other, h in ((a, b, ha), (b, a, hb)):
+            # a far-away start/end (Jammu, Delhi) heading to anywhere but Srinagar is not routed via Srinagar
+            if far in ("start", "end") and other != "srinagar" and h[0] > 40:
+                return None
+        return ha[0] + hb[0], ha[1] + hb[1]
+
+    def _compute_travel(self):
+        """Fill row['travel'] = {stops, km, hours, text} for every day that moves between places."""
+        for i, r in enumerate(self._rows):
+            day = self.timeline[i] if i < len(self.timeline) else {}
+            nm = lambda k: self.DISPLAY.get(k, str(k).title())
+            origin = ("start", self.start_point) if i == 0 else (r["origin"], nm(r["origin"]))
+            if r["is_dep"]:
+                seq = [origin, ("srinagar", "Srinagar"), ("end", self.end_point)]
+            else:
+                night = _place_key(r["night"]) if r["night"] != "-" else ""
+                seq = [origin] + [(k.strip(), nm(k.strip())) for k in re.split(r"\s+to\s+", str(r["key"]))] \
+                      + ([(night, nm(night) if night in self.DISPLAY else str(r["night"]))] if night else [])
+            stops = []
+            for k, label in seq:
+                if not stops or stops[-1][0] != k:
+                    stops.append((k, label))
+            r["travel"] = None
+            if len(stops) < 2:
+                continue
+            names = [lab for _, lab in stops]
+            km = hours = None
+            try:                                              # a day card can carry its own figures
+                if day.get("distance_km") not in (None, ""):
+                    km = float(day["distance_km"])
+                    hours = float(day["drive_hours"]) if day.get("drive_hours") not in (None, "") else km / 40.0
+            except (TypeError, ValueError):
+                km = hours = None
+            if km is None:
+                legs = [self._leg(a[0], b[0]) for a, b in zip(stops, stops[1:])]
+                if all(legs):
+                    km, hours = sum(x[0] for x in legs), sum(x[1] for x in legs)
+            t = {"stops": names, "km": None, "hours": None, "text": ""}
+            if km is not None and km > 0:
+                t.update(km=_round_km(km), hours=hours,
+                         text=f"{_round_km(km)} km  ·  {_fmt_drive_time(hours)}")
+            r["travel"] = t
 
     # ── projection / primitives ─────────────────────────────────────────────
     def _proj(self, lat, lon):
@@ -2320,6 +2624,9 @@ class KashmirRouteMap(Flowable):
                 arr = _is_srinagar_point(self.start_point)
                 dep = any(r["is_dep"] for r in self._rows) and _is_srinagar_point(self.end_point)
                 sub = "Arrival & departure" if (arr and dep) else "Arrival" if arr else "Departure" if dep else None
+            elif k in ROAD_FROM_SRINAGAR:
+                km_, hr_ = ROAD_FROM_SRINAGAR[k]
+                sub = f"{_round_km(km_)} km \u00b7 {_fmt_drive_time(hr_)} from Srinagar"
             self._pin(c, k, _fmt(days), sub)
 
         for k, days in used.items():
@@ -2391,8 +2698,8 @@ class KashmirRouteMap(Flowable):
         c.roundRect(0, y0, w, mh, 3 * mm, fill=0, stroke=1)
 
         # ── Legend table ────────────────────────────────────────────────────
-        col_w = [w * 0.07, w * 0.19, w * 0.19, w * 0.37, w * 0.18]
-        headers = ["Day", "Location", "GPS", "Activity / Route", "Overnight"]
+        col_w = [w * 0.07, w * 0.18, w * 0.22, w * 0.35, w * 0.18]
+        headers = ["Day", "Location", "Drive (approx.)", "Activity / Route", "Overnight"]
         col_x = [sum(col_w[:i]) for i in range(len(col_w))]
         hy = y0 - self.HDR_H
         c.setFillColor(NAVY); c.rect(0, hy, w, self.HDR_H, fill=1, stroke=0)
@@ -2418,8 +2725,13 @@ class KashmirRouteMap(Flowable):
 
             c.setFillColor(BLACK); c.setFont("Lato-Bold", 7.4)
             c.drawString(col_x[1] + 3 * mm, mid - 2.5, _raw(row["loc"]))
-            c.setFillColor(GRAY_600); c.setFont("Lato", 6.8)
-            c.drawString(col_x[2] + 3 * mm, mid - 2.4, row["gps"])
+            trv = row.get("travel") or {}
+            if trv.get("text"):
+                c.setFillColor(TEAL); c.setFont("Lato-Bold", 6.8)
+                c.drawString(col_x[2] + 3 * mm, mid - 2.4, _raw(trv["text"]).replace("  ", " "))
+            else:
+                c.setFillColor(GRAY_400); c.setFont("Lato", 7)
+                c.drawString(col_x[2] + 3 * mm, mid - 2.4, "\u2014")
 
             act, maxw = _raw(row["activity"]), col_w[3] - 6 * mm
             c.setFont("Lato", 7)
@@ -3455,12 +3767,17 @@ def generate_pdf(itinerary_data: dict) -> str:
             if not info.get("name"):
                 return ""
             return f"{info['name']}, {info['place']}" if info.get("place") else info["name"]
-        block.append(DayBanner(usable_w, idx, banner_title, overnight, _banner_hotel, _day_date(start_date, idx)))
+        _rows = getattr(route_map, "_rows", [])
+        _travel = (_rows[idx - 1].get("travel") if idx - 1 < len(_rows) else None)
+        _has_travel = bool(_travel and _travel.get("text"))
+        block.append(DayBanner(usable_w, idx, banner_title, overnight, _banner_hotel, _day_date(start_date, idx),
+                               travel=_travel))
         block.append(Spacer(1, 2*mm))
 
         # Only show the ROUTE strip when it adds something the banner doesn't say
+        # (the travel strip under the banner already carries the route when distances are known)
         _route_show = route.split(":", 1)[0].strip() if ":" in str(route) else str(route).strip()   # "...: Overnight X" is in the Stay badge
-        if _route_show and _route_show.lower() != str(banner_title).strip().lower():
+        if not _has_travel and _route_show and _route_show.lower() != str(banner_title).strip().lower():
             block.append(RouteBadge(usable_w, _route_show))
             block.append(Spacer(1, 2*mm))
 
@@ -3639,56 +3956,10 @@ def generate_pdf(itinerary_data: dict) -> str:
     except Exception as _e:
         print(f"Warning: direct admin-hotel lookup failed: {_e}")
 
-    # ── 3b. Hotel Reference Photos ─────────────────────────────────────────
-    # Shows 2+ reference photos for every hotel actually selected anywhere
-    # in this itinerary, right below the day-by-day plan.
-    selected_hotel_ids = []
-    for raw_id in hotel_selections.values():
-        hid = raw_id.get("id") if isinstance(raw_id, dict) else raw_id
-        if hid and str(hid) in HOTEL_LOOKUP and str(hid) not in selected_hotel_ids:
-            selected_hotel_ids.append(str(hid))
-
-    photo_flow = None
-    if selected_hotel_ids:
-        # Every photo tile is the same size (see HotelPhotoStrip). Up to 3 hotels
-        # fit on one page and are kept together; with more hotels each one is kept
-        # whole and the list flows onto the next page.
-        title_flow = [SectionTitle(usable_w, "HOTEL REFERENCE PHOTOS", icon=""), Spacer(1, 4*mm)]
-        strips = []
-        for hid in selected_hotel_ids:
-            info = HOTEL_LOOKUP[hid]
-            strips.append(KeepTogether([
-                HotelPhotoStrip(usable_w, info["name"], info["place"], info.get("images", [])),
-                Spacer(1, 3*mm),
-            ]))
-        if len(strips) <= 3:
-            photo_flow = KeepTogether(title_flow + strips)
-        else:
-            photo_flow = [KeepTogether(title_flow + strips[:1])] + strips[1:]
-
-    # ── 4–6. Hotel Assignments + Inclusions/Exclusions + Payment Schedule ───────
-    # Rule 1: These three sections always live on ONE page together.
-    page_block_1 = []   # Hotel Assignments first, flushed below
-    page_block_1.append(SectionTitle(usable_w, "HOTEL ASSIGNMENTS", icon=""))
-    page_block_1.append(Spacer(1, 4*mm))
-
-    # Header row
-    hotel_header = [
-        Paragraph("<b>Day</b>", ParagraphStyle("hh", fontName="Lato-Bold",
-                  fontSize=8.5, textColor=WHITE, alignment=TA_CENTER)),
-        Paragraph("<b>Hotel / Property</b>", ParagraphStyle("hh2", fontName="Lato-Bold",
-                  fontSize=8.5, textColor=WHITE)),
-        Paragraph("<b>Location</b>", ParagraphStyle("hh3", fontName="Lato-Bold",
-                  fontSize=8.5, textColor=WHITE, alignment=TA_CENTER)),
-        Paragraph("<b>Rooms</b>", ParagraphStyle("hh5", fontName="Lato-Bold",
-                  fontSize=8.5, textColor=WHITE, alignment=TA_CENTER)),
-        Paragraph("<b>EB</b>", ParagraphStyle("hh6", fontName="Lato-Bold",
-                  fontSize=8.5, textColor=WHITE, alignment=TA_CENTER)),
-        Paragraph("<b>Meal Plan</b>", ParagraphStyle("hh4", fontName="Lato-Bold",
-                  fontSize=8.5, textColor=WHITE, alignment=TA_CENTER)),
-    ]
-
-    hotel_rows = [hotel_header]
+    # ── 3b. Where you'll stay ──────────────────────────────────────────────
+    # Straight after the day-by-day plan: one card per stay (consecutive nights in the
+    # same hotel and room setup share a card) with room type, rooms, meal plan and the
+    # hotel's best photos together.
     _hd = itinerary_data.get("hotel_details") or {}
 
     def _count(day, hid, key, default):
@@ -3697,111 +3968,81 @@ def generate_pdf(itinerary_data: dict) -> str:
         if v in (None, ""):
             v = (_hd.get(str(hid)) or {}).get(key)
         try:
-            return str(max(0, int(float(v)))) if v not in (None, "") else default
+            return max(0, int(float(v))) if v not in (None, "") else default
         except (TypeError, ValueError):
             return default
 
-    day_place_map = {}
     meal_plan_code = str(itinerary_data.get("meal_plan") or "MAP").strip().upper()
+    _mp_code, _mp_desc = _MEAL_SHORT.get(meal_plan_code, _MEAL_SHORT["MAP"])
+    _start_d = _start_dt(start_date)
 
+    stays = []
     for idx, day_info in enumerate(timeline, start=1):
-        hotel_id   = hotel_selections.get(str(idx - 1))    # 0-based day index, as the itinerary builder stores it
+        hotel_id = hotel_selections.get(str(idx - 1))      # 0-based day index, as the itinerary builder stores it
         if isinstance(hotel_id, dict):
             hotel_id = hotel_id.get("id")
-
         overnight_raw = str(day_info.get("overnight_stay", "") or "").strip()
-        title_raw     = str(day_info.get("title", "") or "").strip()
-        route_raw     = str(day_info.get("transit_route", "") or "").strip()
-        dep_signal    = f"{title_raw} {route_raw}".lower()
+        dep_signal = f"{day_info.get('title', '')} {day_info.get('transit_route', '')}".lower()
+        # A departure day has no hotel night
+        if ("departure" in dep_signal or "airport drop" in dep_signal
+                or not overnight_raw or overnight_raw.lower() == "departure"):
+            continue
+        known = bool(hotel_id) and str(hotel_id) in HOTEL_LOOKUP
+        hid = str(hotel_id) if known else ""
+        rooms = _count(day_info, hid, "rooms", 1) or 1
+        eb = _count(day_info, hid, "eb", 0)
+        room_type = str(day_info.get("room_type") or (_hd.get(hid) or {}).get("room_type") or "").strip()
+        if not room_type and stays and hid and stays[-1]["hid"] == hid and stays[-1]["last"] == idx - 1:
+            room_type = stays[-1]["room_type"]            # same hotel, next night: same room type
+        key = (hid or "tbc:" + overnight_raw.lower(), rooms, eb, room_type)
+        if stays and stays[-1]["key"] == key and stays[-1]["last"] == idx - 1:
+            stays[-1]["last"] = idx
+            continue
+        info = HOTEL_LOOKUP[hid] if known else {}
+        stays.append({
+            "key": key, "hid": hid, "known": known, "first": idx, "last": idx,
+            "name": info.get("name") or "Hotel to be confirmed",
+            "place": info.get("place") or clean(overnight_raw.split(":")[0].strip().title()) or "-",
+            "rooms": rooms, "eb": eb, "room_type": room_type,
+        })
 
-        # A departure day has no hotel night: either explicitly flagged as
-        # "departure" in the title/route, or there is simply no overnight
-        # stay recorded for that day.
-        is_departure_day = (
-            "departure" in dep_signal
-            or "airport drop" in dep_signal
-            or not overnight_raw
-            or overnight_raw.lower() == "departure"
-        )
+    for st in stays:
+        n = st["last"] - st["first"] + 1
+        st["nights"] = n
+        stay_txt = f"{n} night" + ("s" if n != 1 else "")
+        if _start_d:
+            d_in = _start_d + datetime.timedelta(days=st["first"] - 1)
+            d_out = _start_d + datetime.timedelta(days=st["last"])
+            stay_txt += f"  ·  {d_in.strftime('%d %b')} – {d_out.strftime('%d %b')}"
+        st["stay_txt"] = stay_txt
+        st["room_type"] = st["room_type"] or "On confirmation"
+        st["rooms_txt"] = f"{st['rooms']} room" + ("s" if st["rooms"] != 1 else "") \
+            + (f" + {st['eb']} extra bed" + ("s" if st["eb"] != 1 else "") if st["eb"] else "")
+        st["meal_txt"] = f"{_mp_code}  ·  {_mp_desc}"
 
-        if hotel_id and str(hotel_id) in HOTEL_LOOKUP:
-            match = HOTEL_LOOKUP[str(hotel_id)]
-            hotel_name  = match["name"]
-            hotel_place = match["place"]
-        elif is_departure_day:
-            hotel_name  = "Departure"
-            hotel_place = "-"
-        else:
-            hotel_name  = "To be confirmed"
-            hotel_place = clean(str(overnight_raw)) if overnight_raw else "-"
+    _photo_cache = {}
+    def _stay_photos(st):
+        if not st["known"]:
+            return []
+        if st["hid"] not in _photo_cache:
+            _photo_cache[st["hid"]] = _pick_best_photos(HOTEL_LOOKUP[st["hid"]].get("images", []), 2)
+        return _photo_cache[st["hid"]]
 
-        meal_plan = "-" if is_departure_day else _MEAL_PLAN_LABELS.get(meal_plan_code, "MAP (B&amp;D)")
-        _has_hotel = bool(hotel_id) and not is_departure_day
-        rooms_txt = _count(day_info, hotel_id, "rooms", "1") if _has_hotel else "-"
-        eb_txt    = _count(day_info, hotel_id, "eb", "0") if _has_hotel else "-"
-        if eb_txt == "0":
-            eb_txt = "-"     # no extra bed
+    if stays:
+        _title = [SectionTitle(usable_w, "WHERE YOU'LL STAY", icon=""), Spacer(1, 4*mm)]
+        _cards = [HotelStayCard(usable_w, st, _stay_photos(st)) for st in stays]
+        story.append(KeepTogether(_title + [_cards[0], Spacer(1, 3.5*mm)]))
+        for _card in _cards[1:]:
+            story.append(KeepTogether([_card, Spacer(1, 3.5*mm)]))
 
-        hotel_rows.append([
-            Paragraph(f"<b>Day {idx}</b>", ParagraphStyle("dc", fontName="Lato-Bold",
-                      fontSize=8.5, textColor=NAVY, alignment=TA_CENTER)),
-            Paragraph(clean(hotel_name), styles["hotel_cell_bold"]),
-            Paragraph(clean(hotel_place), ParagraphStyle("hp", fontName="Lato",
-                      fontSize=8, textColor=GRAY_600, alignment=TA_CENTER)),
-            Paragraph(rooms_txt, ParagraphStyle("rm", fontName="Lato-Bold",
-                      fontSize=8.5, textColor=NAVY, alignment=TA_CENTER)),
-            Paragraph(eb_txt, ParagraphStyle("eb", fontName="Lato-Bold",
-                      fontSize=8.5, textColor=NAVY, alignment=TA_CENTER)),
-            Paragraph(meal_plan, ParagraphStyle("mp", fontName="Lato",
-                      fontSize=8, textColor=TEAL, alignment=TA_CENTER)),
-        ])
-
-    hotel_col_w = [usable_w*0.09, usable_w*0.33, usable_w*0.17, usable_w*0.10, usable_w*0.09, usable_w*0.22]
-    hotel_table = Table(hotel_rows, colWidths=hotel_col_w, hAlign="LEFT", repeatRows=1)
-    hotel_table.setStyle(TableStyle([
-        # Header
-        ("BACKGROUND",    (0, 0), (-1, 0), NAVY_DEEP),
-        ("BACKGROUND",    (0, 0), (0, 0), SKY),
-        ("TEXTCOLOR",     (0, 0), (-1, 0), WHITE),
-        # Alternating rows
-        ("ROWBACKGROUNDS",(0, 1), (-1, -1), [WHITE, GRAY_50]),
-        # Borders
-        ("BOX",           (0, 0), (-1, -1), 0.5, GRAY_200),
-        ("INNERGRID",     (0, 0), (-1, -1), 0.3, GRAY_200),
-        ("LINEBEFORE",    (0, 0), (0, -1), 2.5, SKY),
-        # Padding
-        ("TOPPADDING",    (0, 0), (-1, -1), 7),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-        # Left accent column
-        ("BACKGROUND",    (0, 1), (0, -1), SKY_LIGHT),
-    ]))
-    page_block_1.append(hotel_table)
-    page_block_1.append(Spacer(1, 5*mm))
-    _segs = _stay_segments(timeline, hotel_selections, HOTEL_LOOKUP)
-    if _segs:
-        page_block_1.append(StayRouteStrip(usable_w, start_point, end_point, _segs))
-        page_block_1.append(Spacer(1, 5*mm))
-        # Only for compact itineraries, so the Hotel Assignments page never overflows.
-        _exp = SignatureExperiences(usable_w, _segs)
-        if _exp.items and len(timeline) <= 6 and len(_segs) <= 4:
-            page_block_1.append(_exp)
-            page_block_1.append(Spacer(1, 4*mm))
-    # Hotel Assignments sit right after the itinerary; the reference photos
-    # follow them (on their own page if they don't fit), then Inclusions/Payment.
-    # Hotel Assignments ALWAYS start on a fresh page (no-op when already at the top of one)
-    # and are kept together so the table is never split.
-    story.append(CondPageBreak(doc.height - 24))
-    story.append(KeepTogether(page_block_1))
+        _segs = _stay_segments(timeline, hotel_selections, HOTEL_LOOKUP)
+        if _segs:
+            story.append(KeepTogether([StayRouteStrip(usable_w, start_point, end_point, _segs), Spacer(1, 5*mm)]))
+            # Only for compact itineraries, so the page never overflows.
+            _exp = SignatureExperiences(usable_w, _segs)
+            if _exp.items and len(timeline) <= 6 and len(_segs) <= 4:
+                story.append(KeepTogether([_exp, Spacer(1, 4*mm)]))
     story.append(TravelEssentials(usable_w))   # only drawn when it fits in the leftover space
-    if photo_flow is not None:
-        if isinstance(photo_flow, list):
-            story.extend(photo_flow)
-        else:
-            story.append(photo_flow)
-        story.append(Spacer(1, 4*mm))
     page_block_1 = []
 
     # ── 5. Inclusions / Exclusions ────────────────────────────────────────────
@@ -3878,6 +4119,10 @@ def generate_pdf(itinerary_data: dict) -> str:
     page_block_1.append(inc_header)
     page_block_1.append(inc_body)
     page_block_1.append(Spacer(1, 5*mm))
+
+    # Inclusions and Payment are separate blocks so either can fill the space left by the hotel cards
+    story.append(KeepTogether(page_block_1))
+    page_block_1 = []
 
     # ── 6. Payment Schedule ───────────────────────────────────────────────────
     page_block_1.append(SectionTitle(usable_w, "PAYMENT SCHEDULE", icon=""))
@@ -4039,6 +4284,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     page_block_2.append(Spacer(1, 5*mm))
 
     # ── 8. Important Travel Notes ─────────────────────────────────────────────
+    story.append(KeepTogether(page_block_2)); page_block_2 = []
     page_block_2.append(SectionTitle(usable_w, "IMPORTANT TRAVEL NOTES", icon=""))
     page_block_2.append(Spacer(1, 4*mm))
 
@@ -4115,6 +4361,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     page_block_2.append(Spacer(1, 5*mm))
 
     # ── 9. Contact Card ───────────────────────────────────────────────────────
+    story.append(KeepTogether(page_block_2)); page_block_2 = []
     page_block_2.append(SectionTitle(usable_w, "GET IN TOUCH WITH US", icon=""))
     page_block_2.append(Spacer(1, 3*mm))
 
@@ -4174,7 +4421,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     story.append(KeepTogether(page_block_2))
 
     # ── 10. Terms & Conditions — always on its own page (Rule 3) ──────────────
-    story.append(PageBreak())
+    story.append(CondPageBreak(70 * mm))      # start Terms on the leftover space when there is room
     story.append(SectionTitle(usable_w, "TERMS & CONDITIONS", icon=""))
     story.append(Spacer(1, 5*mm))
 
