@@ -6,6 +6,7 @@ import AssistantSettings from './pages/AssistantSettings.jsx';
 import SitePackages from './pages/SitePackages.jsx';
 import WebsitePhotos from './pages/WebsitePhotos.jsx';
 import WhatsAppLeads from './pages/WhatsAppLeads.jsx';
+import ScrollDownButton from './components/ScrollDownButton.jsx';
 import { clearAdminToken, verifyAdminSession } from './api';
 
 const TABS = [
@@ -125,6 +126,8 @@ export default function App() {
           onUnauthorized={handleLogout}
         />
       )}
+
+      <ScrollDownButton />
     </div>
   );
 }
