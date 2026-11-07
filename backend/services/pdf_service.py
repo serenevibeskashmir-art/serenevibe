@@ -2832,6 +2832,191 @@ def _register_custom_map_places():
                           for t in (0.0, 0.25, 0.5, 0.75, 1.0)]
 
 
+# ─── Page 1 decision blocks ──────────────────────────────────────────────────
+SVK_WA_NUMBER = "919419766510"
+# Same figures as the website (index.html). Edit here when the website numbers change.
+TRUST_STATS = ["4.9/5 on Google, 200+ reviews", "5,000+ guests served", "15+ years in Kashmir",
+               "J&K Tourism registered operator", "24/7 support on your trip"]
+TRUST_QUOTE = ("Transfers were punctual, hotels were exactly as described, and our guide in "
+               "Gulmarg was exceptional.")
+TRUST_QUOTE_BY = "Arjun K., Grand Kashmir Circuit"
+WA_GREEN = colors.HexColor("#1faa59")
+SAFFRON  = colors.HexColor("#f5b82e")
+
+
+def _fit_font(c, text, font, size, max_w):
+    while size > 5 and c.stringWidth(text, font, size) > max_w:
+        size -= 0.2
+    return size
+
+
+class PriceBand(Flowable):
+    """Price per person, validity, 25% start amount and a one-tap WhatsApp confirm button."""
+    def __init__(self, width, total, adults, kids, valid_until, first_amt, ref):
+        super().__init__()
+        self.width, self.height = width, 29 * mm
+        self.total, self.adults, self.kids = total, adults, kids
+        self.valid_until, self.first_amt, self.ref = valid_until, first_amt, ref
+
+    def draw(self):
+        c, w, h = self.canv, self.width, self.height
+        lw = w * 0.60
+        c.setFillColor(colors.HexColor("#fffaf0")); c.setStrokeColor(GRAY_200); c.setLineWidth(0.6)
+        c.roundRect(0, 0, w, h, 2.5 * mm, fill=1, stroke=1)
+        c.setFillColor(SAFFRON); c.rect(0, 2.5 * mm, 1.4 * mm, h - 5 * mm, fill=1, stroke=0)
+        x = 6 * mm
+        try:
+            n_adults = int(self.adults)
+        except (TypeError, ValueError):
+            n_adults = 0
+        has_total = bool(self.total)
+        per = round(self.total / n_adults) if (has_total and n_adults and not int(self.kids or 0)) else 0
+        c.setFillColor(GRAY_600); c.setFont("Lato-Bold", 6.6)
+        c.drawString(x, h - 6 * mm, "PRICE PER PERSON" if per else "TOTAL TRIP PRICE")
+        c.setFillColor(BLACK); c.setFont("Lato-Bold", 20)
+        big = f"INR {per:,}" if per else (f"INR {self.total:,}" if has_total else "Price on request")
+        c.drawString(x, h - 15 * mm, big)
+        if per:
+            bw = c.stringWidth(big, "Lato-Bold", 20)
+            c.setFillColor(GRAY_600); c.setFont("Lato", 8)
+            c.drawString(x + bw + 2 * mm, h - 15 * mm, f"for {n_adults} adults")
+        if has_total:
+            c.setFillColor(SLATE); c.setFont("Lato", 7.4)
+            line = f"Trip total INR {self.total:,}: stay, car, driver, meals and taxes included"
+            c.setFont("Lato", _fit_font(c, line, "Lato", 7.4, lw - x - 3 * mm))
+            c.drawString(x, h - 20.5 * mm, line)
+        if self.valid_until:
+            txt = f"Price held until {self.valid_until}"
+            c.setFont("Lato-Bold", 6.8)
+            tw = c.stringWidth(txt, "Lato-Bold", 6.8) + 4 * mm
+            c.setFillColor(GOLD_LITE); c.roundRect(x, 2.4 * mm, tw, 4.4 * mm, 1.4 * mm, fill=1, stroke=0)
+            c.setFillColor(GOLD); c.drawString(x + 2 * mm, 3.9 * mm, txt)
+        # WhatsApp button
+        bx, bw_, bh = lw + 3 * mm, w - lw - 8 * mm, 10.5 * mm
+        by = h - 6 * mm - bh + 1 * mm
+        c.setFillColor(colors.Color(0, 0, 0, alpha=0.15)); c.roundRect(bx + 0.4, by - 0.7, bw_, bh, 2.4 * mm, fill=1, stroke=0)
+        c.setFillColor(WA_GREEN); c.roundRect(bx, by, bw_, bh, 2.4 * mm, fill=1, stroke=0)
+        c.setFillColor(WHITE); c.setFont("Lato-Bold", 9.5)
+        c.drawCentredString(bx + bw_ / 2, by + bh / 2 - 3.3, "Confirm on WhatsApp")
+        import urllib.parse as _up
+        msg = _up.quote(f"Hi, I would like to confirm my Kashmir trip, quote {self.ref}")
+        c.linkURL(f"https://wa.me/{SVK_WA_NUMBER}?text={msg}", (bx, by, bx + bw_, by + bh), relative=1, thickness=0)
+        c.setFillColor(GRAY_600); c.setFont("Lato", 6.8)
+        c.drawCentredString(bx + bw_ / 2, by - 4 * mm, "Opens a chat with your quote number typed in")
+        if self.first_amt:
+            t = f"Start with just 25% (INR {self.first_amt:,})"
+            c.setFillColor(BLACK); c.setFont("Lato-Bold", 7.4)
+            c.drawCentredString(bx + bw_ / 2, 3 * mm, t)
+
+
+class IncludedStrip(Flowable):
+    """Five 'what you get' cells."""
+    def __init__(self, width, items):
+        super().__init__()
+        self.width, self.height, self.items = width, 13.5 * mm, items
+
+    def draw(self):
+        c, w, h = self.canv, self.width, self.height
+        c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.6)
+        c.roundRect(0, 0, w, h, 2.5 * mm, fill=1, stroke=1)
+        n = len(self.items)
+        cw = w / n
+        for i, (head, sub) in enumerate(self.items):
+            cx = cw * i + cw / 2
+            if i:
+                c.setStrokeColor(GRAY_200); c.line(cw * i, 2 * mm, cw * i, h - 2 * mm)
+            c.setFillColor(TEAL); c.circle(cx, h - 3.4 * mm, 1.1 * mm, fill=1, stroke=0)
+            c.setFillColor(BLACK)
+            c.setFont("Lato-Bold", _fit_font(c, head, "Lato-Bold", 7.4, cw - 3 * mm))
+            c.drawCentredString(cx, h - 7.6 * mm, head)
+            c.setFillColor(GRAY_600)
+            c.setFont("Lato", _fit_font(c, sub, "Lato", 6.4, cw - 3 * mm))
+            c.drawCentredString(cx, h - 11 * mm, sub)
+
+
+class PromiseBox(Flowable):
+    """Our promise: four short commitments in two columns."""
+    def __init__(self, width, lines):
+        super().__init__()
+        self.width, self.height, self.lines = width, 21 * mm, lines
+
+    def draw(self):
+        c, w, h = self.canv, self.width, self.height
+        c.setFillColor(colors.HexColor("#eef6f5")); c.roundRect(0, 0, w, h, 2.5 * mm, fill=1, stroke=0)
+        c.setFillColor(TEAL); c.rect(0, 2.5 * mm, 1.4 * mm, h - 5 * mm, fill=1, stroke=0)
+        c.setFillColor(BLACK); c.setFont("Lato-Bold", 8.6)
+        c.drawString(6 * mm, h - 5.6 * mm, "Our promise to you")
+        colw = (w - 10 * mm) / 2
+        for i, t in enumerate(self.lines[:4]):
+            col, row = i % 2, i // 2
+            x = 6 * mm + col * colw
+            y = h - 10.6 * mm - row * 5.2 * mm
+            c.setStrokeColor(TEAL); c.setLineWidth(1.2)
+            c.line(x, y + 1.2, x + 1.0 * mm, y); c.line(x + 1.0 * mm, y, x + 2.4 * mm, y + 2.2)
+            c.setFillColor(SLATE)
+            c.setFont("Lato", _fit_font(c, t, "Lato", 7.2, colw - 7 * mm))
+            c.drawString(x + 4 * mm, y, t)
+
+
+class TrustStrip(Flowable):
+    """Facts taken from the website, plus one guest quote."""
+    def __init__(self, width, stats, quote, by):
+        super().__init__()
+        self.width, self.height, self.stats, self.quote, self.by = width, 15 * mm, stats, quote, by
+
+    def draw(self):
+        c, w, h = self.canv, self.width, self.height
+        c.setFillColor(NAVY); c.roundRect(0, 0, w, h, 2.5 * mm, fill=1, stroke=0)
+        size = 7.2
+        gap = 5 * mm
+        while size > 5 and sum(c.stringWidth(t, "Lato-Bold", size) for t in self.stats) + gap * (len(self.stats) - 1) > w - 8 * mm:
+            size -= 0.2
+        total = sum(c.stringWidth(t, "Lato-Bold", size) for t in self.stats) + gap * (len(self.stats) - 1)
+        x = (w - total) / 2
+        c.setFont("Lato-Bold", size)
+        for i, t in enumerate(self.stats):
+            c.setFillColor(SAFFRON if i == 0 else WHITE)
+            c.drawString(x, h - 5.4 * mm, t)
+            x += c.stringWidth(t, "Lato-Bold", size) + gap
+        q = f"\u201c{self.quote}\u201d  {self.by}"
+        c.setFillColor(colors.HexColor("#cbd5e1"))
+        c.setFont("Lato-Italic", _fit_font(c, q, "Lato-Italic", 6.8, w - 8 * mm))
+        c.drawCentredString(w / 2, 3.6 * mm, q)
+
+
+class NextSteps(Flowable):
+    """What happens after the client says yes."""
+    def __init__(self, width, steps):
+        super().__init__()
+        self.width, self.height, self.steps = width, 24 * mm, steps
+
+    def draw(self):
+        c, w, h = self.canv, self.width, self.height
+        c.setFillColor(BLACK); c.setFont("Lato-Bold", 8.6)
+        c.drawString(0, h - 4 * mm, "What happens next")
+        n = len(self.steps); gap = 3 * mm; cw = (w - gap * (n - 1)) / n
+        for i, (head, sub) in enumerate(self.steps):
+            x = i * (cw + gap)
+            c.setFillColor(GRAY_50); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+            c.roundRect(x, 0, cw, h - 7 * mm, 2 * mm, fill=1, stroke=1)
+            c.setFillColor(SKY); c.circle(x + 5 * mm, h - 7 * mm - 6 * mm, 2.4 * mm, fill=1, stroke=0)
+            c.setFillColor(WHITE); c.setFont("Lato-Bold", 8)
+            c.drawCentredString(x + 5 * mm, h - 7 * mm - 7.2 * mm, str(i + 1))
+            c.setFillColor(BLACK); c.setFont("Lato-Bold", 7.8)
+            c.drawString(x + 9.5 * mm, h - 7 * mm - 5 * mm, head)
+            c.setFillColor(GRAY_600)
+            c.setFont("Lato", _fit_font(c, sub, "Lato", 6.8, cw - 6 * mm))
+            c.drawString(x + 3 * mm, 3.2 * mm, sub)
+
+
+def _trip_story(timeline):
+    blob = " ".join(str(d.get("transit_route") or "") + " " + str(d.get("title") or "") for d in (timeline or [])).lower()
+    n = sum(1 for k in ("sonamarg", "gulmarg", "pahalgam", "doodhpathri") if k in blob)
+    if n >= 2:
+        return f"{n} valleys, 1 shikara ride, and a driver who looks after everything"
+    return "A Kashmir trip planned around you, with a driver who looks after everything"
+
+
 def generate_pdf(itinerary_data: dict) -> str:
     import os as _os; _out = _os.environ.get("OUTPUT_DIR", "/tmp/output"); Path(_out).mkdir(exist_ok=True)
     client_name = str(itinerary_data.get("client_name", "Client"))
@@ -2875,7 +3060,36 @@ def generate_pdf(itinerary_data: dict) -> str:
         budget_tier, vehicle_type, custom_cost, bg_reader=_load_hero_photo(),
         ref=_quote_ref(client_name), route=_route_text(itinerary_data.get("timeline", []), start_point, end_point)
     ))
-    story.append(Spacer(1, 6*mm))
+    story.append(Spacer(1, 3*mm))
+    story.append(Paragraph(clean(_trip_story(itinerary_data.get("timeline", []))),
+                           ParagraphStyle("story", fontName="Lato-Italic", fontSize=10.5, leading=13,
+                                          textColor=NAVY, alignment=TA_CENTER)))
+    story.append(Spacer(1, 3*mm))
+
+    # Decision block: price per person, WhatsApp confirm, what is included, our promise
+    _total_now   = _amount_int(custom_cost)
+    _valid_until = (datetime.datetime.now(IST) + datetime.timedelta(days=7)).strftime("%d %b %Y")
+    _nights      = max(int(days) - 1, 1)
+    _meal_name   = {"MAP": "Breakfast + dinner", "CP": "Breakfast daily", "EP": "No meals",
+                    "AP": "All meals"}.get(str(itinerary_data.get("meal_plan") or "MAP").strip().upper(), "Meals as planned")
+    story.append(PriceBand(usable_w, _total_now, adults, kids, _valid_until,
+                           round(_total_now * 0.25) if _total_now else 0, _quote_ref(client_name)))
+    story.append(Spacer(1, 3*mm))
+    story.append(IncludedStrip(usable_w, [
+        (f"Private {clean(str(vehicle_type))}", "pickup to drop"),
+        (f"{_nights} nights stay", "hotels as listed"),
+        (_meal_name, "as per your meal plan"),
+        ("Shikara ride", "1 hour, on us"),
+        ("All taxes", "toll, fuel, parking"),
+    ]))
+    story.append(Spacer(1, 3*mm))
+    story.append(PromiseBox(usable_w, [
+        "Road or weather change? We rearrange sightseeing at no extra cost.",
+        "Driver name and number shared before you travel.",
+        "24/7 support from our Srinagar team while you travel.",
+        "No hidden charges: inclusions and exclusions are listed clearly.",
+    ]))
+    story.append(Spacer(1, 4*mm))
 
     # ── 2. Quick-summary grid ─────────────────────────────────────────────────
     summary_rows = [
@@ -2935,7 +3149,18 @@ def generate_pdf(itinerary_data: dict) -> str:
         ("ROUNDEDCORNERS", [3]),
     ]))
     story.append(summary_table)
-    story.append(Spacer(1, 7*mm))
+    story.append(Spacer(1, 4*mm))
+    story.append(TrustStrip(usable_w, TRUST_STATS, TRUST_QUOTE, TRUST_QUOTE_BY))
+    story.append(Spacer(1, 4*mm))
+    _used = sum(f.wrap(usable_w, 10000)[1] for f in story)
+    _steps = NextSteps(usable_w, [
+        ("Review and sign", "Check itinerary, hotels and terms."),
+        ("Pay the first 25%", "NEFT / UPI / Cheque confirms it."),
+        ("Receive vouchers", "Hotel and transfer details before travel."),
+    ])
+    if (doc.height - 12) - _used > _steps.height + 6 * mm:      # only when it fits on page 1
+        story.append(_steps)
+    story.append(PageBreak())
 
     # ── 2b. Tour Route Map - ALWAYS the lower part of page 1 ──────────────────
     # Measure what is already on page 1 (hero + summary), give the map block the
@@ -2943,19 +3168,15 @@ def generate_pdf(itinerary_data: dict) -> str:
     # and push the block to the bottom of the page with a spacer.  A PageBreak
     # follows so the Day-by-Day section starts cleanly on page 2.
     timeline_for_map = itinerary_data.get("timeline", [])
-    used_h = sum(f.wrap(usable_w, 10000)[1] for f in story)
-    avail  = (doc.height - 12) - used_h - 4 * mm          # frame has 6pt padding top+bottom
+    avail  = min((doc.height - 12) - 4 * mm, 152 * mm)     # map block opens page 2; Day-by-day follows
     map_title = SectionTitle(usable_w, "TOUR ROUTE MAP", icon="")
     gap_h  = 3 * mm
     route_map = KashmirRouteMap(usable_w, timeline_for_map,
                                 max_height=avail - map_title.height - gap_h,
                                 start_point=start_point, end_point=end_point,
                                 start_info=itinerary_data.get("start_info"), end_info=itinerary_data.get("end_info"))
-    spare = avail - (map_title.height + gap_h + route_map.height)
-    if spare > 1 * mm:
-        story.append(Spacer(1, spare))
     story.append(KeepTogether([map_title, Spacer(1, gap_h), route_map]))
-    story.append(PageBreak())
+    story.append(Spacer(1, 6*mm))
 
     # ── 3. Day-by-day itinerary ───────────────────────────────────────────────
     story.append(SectionTitle(usable_w, "DAY-BY-DAY ITINERARY", icon=""))
@@ -3786,17 +4007,20 @@ def generate_pdf(itinerary_data: dict) -> str:
     # General terms as a compact bulleted block
     _flights_in_quote = bool(itinerary_data.get("include_flights") or itinerary_data.get("flights_included"))
     general_bullets = [
-        *(["All flight tickets are booked on minimum available fare.",
-           "Please reach the airport 3 hours prior to scheduled departure."] if _flights_in_quote else []),
+        "All flight tickets are booked on minimum available fare.",
+        "Please reach the airport 3 hours prior to scheduled departure.",
         "Government-issued IDs are required to process reservations.",
         "Carry a confirmed hotel voucher at the time of check-in.",
         "Number of meals corresponds to number of nights booked; breakfast not provided on day of arrival.",
         "The hotel has the right to claim damages incurred by guests.",
         "Mini-bar (if available) is on a chargeable basis.",
         "Cost of additional services outside the package must be settled directly at the hotel.",
-        *(["Face mask / cover is mandatory during boarding and travel on airlines.",
-           "No seat is provided to infants on airlines."] if _flights_in_quote else []),
+        "Face mask / cover is mandatory during boarding and travel on airlines.",
+        "No seat is provided to infants on airlines.",
     ]
+    if not _flights_in_quote:      # road-only tour: drop the airline lines (list above stays plain text)
+        general_bullets = [b for b in general_bullets
+                           if not re.search(r"flight|airport|airlines", b, re.I)]
 
     # Render in 2-column grid for compactness
     col_w = (usable_w - 5*mm) / 2
