@@ -2835,13 +2835,18 @@ def _register_custom_map_places():
 # ─── Page 1 decision blocks ──────────────────────────────────────────────────
 SVK_WA_NUMBER = "919419766510"
 # Same figures as the website (index.html). Edit here when the website numbers change.
-TRUST_STATS = ["4.9/5 on Google, 200+ reviews", "5,000+ guests served", "15+ years in Kashmir",
-               "J&K Tourism registered operator", "24/7 support on your trip"]
+# (headline figure, small caption) - shown as five columns in the trust band.
+TRUST_STATS = [("4.9/5", "GOOGLE  \u00b7  200+ REVIEWS"), ("5,000+", "GUESTS SERVED"),
+               ("15+", "YEARS IN KASHMIR"), ("J&K", "TOURISM REGISTERED"),
+               ("24/7", "SUPPORT ON YOUR TRIP")]
 TRUST_QUOTE = ("Transfers were punctual, hotels were exactly as described, and our guide in "
                "Gulmarg was exceptional.")
 TRUST_QUOTE_BY = "Arjun K., Grand Kashmir Circuit"
 WA_GREEN = colors.HexColor("#1faa59")
+WA_GREEN_DK = colors.HexColor("#168a47")
 SAFFRON  = colors.HexColor("#f5b82e")
+INK_SOFT = colors.HexColor("#64748b")
+HAIR     = colors.HexColor("#e6eaf0")
 
 
 def _fit_font(c, text, font, size, max_w):
@@ -2850,163 +2855,444 @@ def _fit_font(c, text, font, size, max_w):
     return size
 
 
+def _fit_text(c, text, font, size, max_w, min_size=7.0):
+    """Shrink to min_size, then cut with an ellipsis: long names never get tiny or overflow."""
+    text = str(text)
+    while size > min_size and c.stringWidth(text, font, size) > max_w:
+        size -= 0.2
+    if c.stringWidth(text, font, size) > max_w:
+        while len(text) > 1 and c.stringWidth(text + "\u2026", font, size) > max_w:
+            text = text[:-1]
+        text = text.rstrip() + "\u2026"
+    return text, size
+
+
+def _spaced(c, x, y, text, font, size, space=0.6, align="l"):
+    """Letter-spaced text (small-caps eyebrows). Returns the drawn width."""
+    w = c.stringWidth(text, font, size) + space * max(len(text) - 1, 0)
+    if align == "c":
+        x -= w / 2
+    elif align == "r":
+        x -= w
+    t = c.beginText(x, y)
+    t.setFont(font, size); t.setCharSpace(space); t.textOut(text); t.setCharSpace(0)
+    c.drawText(t)
+    return w
+
+
+def _soft_shadow(c, x, y, w, h, r, layers=5, alpha=0.028, step=0.28 * mm):
+    """Layered, very low-alpha rounded rects: a soft ambient shadow, no image needed."""
+    c.saveState()
+    c.setFillColor(colors.Color(0.06, 0.09, 0.16, alpha))
+    for i in range(layers, 0, -1):
+        g = i * step
+        c.roundRect(x - g * 0.6, y - g * 1.25, w + g * 1.2, h + g * 0.9, r + g * 0.6, fill=1, stroke=0)
+    c.restoreState()
+
+
+def _grad_roundrect(c, x, y, w, h, r, c0, c1, angle="v"):
+    """Rounded rectangle filled with a two-stop linear gradient (v = top to bottom, d = diagonal)."""
+    c.saveState()
+    p = c.beginPath(); p.roundRect(x, y, w, h, r)
+    c.clipPath(p, stroke=0, fill=0)
+    if angle == "d":
+        c.linearGradient(x, y + h, x + w, y, (c0, c1), extend=True)
+    elif angle == "h":
+        c.linearGradient(x, y, x + w, y, (c0, c1), extend=True)
+    else:
+        c.linearGradient(x, y + h, x, y, (c0, c1), extend=True)
+    c.restoreState()
+
+
+def _check_badge(c, cx, cy, r, fill, tick=WHITE):
+    c.saveState()
+    c.setFillColor(fill); c.circle(cx, cy, r, fill=1, stroke=0)
+    c.setStrokeColor(tick); c.setLineWidth(r * 0.42); c.setLineCap(1); c.setLineJoin(1)
+    p = c.beginPath()
+    p.moveTo(cx - r * 0.42, cy - r * 0.02); p.lineTo(cx - r * 0.1, cy - r * 0.36); p.lineTo(cx + r * 0.46, cy + r * 0.34)
+    c.drawPath(p, fill=0, stroke=1)
+    c.restoreState()
+
+
+def _star(c, cx, cy, r, fill):
+    import math
+    p = c.beginPath()
+    for i in range(10):
+        ang = math.pi / 2 + i * math.pi / 5
+        rr = r if i % 2 == 0 else r * 0.42
+        px, py = cx + rr * math.cos(ang), cy + rr * math.sin(ang)
+        (p.moveTo if i == 0 else p.lineTo)(px, py)
+    p.close(); c.setFillColor(fill); c.drawPath(p, fill=1, stroke=0)
+
+
+def _clock_icon(c, cx, cy, r, col):
+    c.setStrokeColor(col); c.setLineWidth(0.7); c.setLineCap(1)
+    c.circle(cx, cy, r, fill=0, stroke=1)
+    c.line(cx, cy, cx, cy + r * 0.62); c.line(cx, cy, cx + r * 0.5, cy - r * 0.1)
+
+
+def _line_icon(c, kind, cx, cy, s, col):
+    """Small stroked icons drawn from paths (no font or image dependency). s = half size."""
+    c.saveState()
+    c.setStrokeColor(col); c.setFillColor(col); c.setLineWidth(0.85); c.setLineCap(1); c.setLineJoin(1)
+    if kind == "car":
+        p = c.beginPath()
+        p.moveTo(cx - s, cy - s * 0.35); p.lineTo(cx - s, cy + s * 0.05)
+        p.lineTo(cx - s * 0.62, cy + s * 0.12); p.lineTo(cx - s * 0.36, cy + s * 0.58)
+        p.lineTo(cx + s * 0.38, cy + s * 0.58); p.lineTo(cx + s * 0.66, cy + s * 0.12)
+        p.lineTo(cx + s, cy + s * 0.05); p.lineTo(cx + s, cy - s * 0.35); p.close()
+        c.drawPath(p, fill=0, stroke=1)
+        c.line(cx - s * 0.62, cy + s * 0.12, cx + s * 0.66, cy + s * 0.12)
+        c.setFillColor(WHITE)
+        for dx in (-0.55, 0.55):
+            c.circle(cx + s * dx, cy - s * 0.38, s * 0.24, fill=1, stroke=1)
+    elif kind == "bed":
+        c.line(cx - s, cy - s * 0.5, cx - s, cy + s * 0.55)
+        c.line(cx - s, cy - s * 0.18, cx + s, cy - s * 0.18); c.line(cx + s, cy - s * 0.5, cx + s, cy - s * 0.18)
+        c.roundRect(cx - s * 0.82, cy - s * 0.02, s * 0.6, s * 0.32, s * 0.12, fill=0, stroke=1)
+        p = c.beginPath(); p.moveTo(cx - s * 0.05, cy - s * 0.18); p.lineTo(cx - s * 0.05, cy + s * 0.2)
+        p.lineTo(cx + s * 0.78, cy + s * 0.2); p.lineTo(cx + s, cy - s * 0.18)
+        c.drawPath(p, fill=0, stroke=1)
+    elif kind == "meal":
+        c.circle(cx, cy, s * 0.62, fill=0, stroke=1); c.circle(cx, cy, s * 0.3, fill=0, stroke=1)
+        c.line(cx - s * 1.0, cy - s * 0.7, cx - s * 1.0, cy + s * 0.7)
+        c.line(cx + s * 1.0, cy - s * 0.7, cx + s * 1.0, cy + s * 0.7)
+    elif kind == "boat":
+        p = c.beginPath(); p.moveTo(cx - s, cy - s * 0.12)
+        p.curveTo(cx - s * 0.7, cy - s * 0.62, cx + s * 0.7, cy - s * 0.62, cx + s, cy - s * 0.12)
+        p.lineTo(cx - s, cy - s * 0.12); c.drawPath(p, fill=0, stroke=1)
+        q = c.beginPath(); q.moveTo(cx - s * 0.6, cy - s * 0.12); q.curveTo(cx - s * 0.55, cy + s * 0.62, cx + s * 0.55, cy + s * 0.62, cx + s * 0.6, cy - s * 0.12)
+        c.drawPath(q, fill=0, stroke=1)
+        c.line(cx - s * 0.2, cy + s * 0.08, cx - s * 0.2, cy - s * 0.12); c.line(cx + s * 0.2, cy + s * 0.08, cx + s * 0.2, cy - s * 0.12)
+        c.line(cx - s * 0.9, cy - s * 0.8, cx + s * 0.9, cy - s * 0.8)
+    elif kind == "tax":
+        p = c.beginPath(); p.moveTo(cx - s * 0.62, cy + s * 0.9); p.lineTo(cx + s * 0.62, cy + s * 0.9)
+        p.lineTo(cx + s * 0.62, cy - s * 0.9)
+        for i, dx in enumerate((0.62 - 0.41, 0.62 - 0.83, 0.62 - 1.24)):
+            p.lineTo(cx + s * dx, cy - s * (0.62 if i % 2 == 0 else 0.9))
+        p.close(); c.drawPath(p, fill=0, stroke=1)
+        for dy in (0.42, 0.04):
+            c.line(cx - s * 0.3, cy + s * dy, cx + s * 0.3, cy + s * dy)
+    c.restoreState()
+
+
+def _wa_glyph(c, cx, cy, r):
+    """White chat-bubble mark for the WhatsApp button."""
+    c.setFillColor(WHITE); c.circle(cx, cy, r, fill=1, stroke=0)
+    p = c.beginPath(); p.moveTo(cx - r * 0.95, cy - r * 1.0); p.lineTo(cx - r * 0.2, cy - r * 0.85); p.lineTo(cx - r * 0.85, cy - r * 0.2); p.close()
+    c.drawPath(p, fill=1, stroke=0)
+    c.setStrokeColor(WA_GREEN); c.setLineWidth(r * 0.3); c.setLineCap(1)
+    ph = c.beginPath(); ph.moveTo(cx - r * 0.42, cy + r * 0.3)
+    ph.curveTo(cx - r * 0.5, cy - r * 0.2, cx + r * 0.1, cy - r * 0.55, cx + r * 0.42, cy - r * 0.38)
+    c.drawPath(ph, fill=0, stroke=1)
+
+
 class PriceBand(Flowable):
     """Price per person, validity, 25% start amount and a one-tap WhatsApp confirm button."""
     def __init__(self, width, total, adults, kids, valid_until, first_amt, ref):
         super().__init__()
-        self.width, self.height = width, 29 * mm
+        self.width, self.height = width, 33 * mm
         self.total, self.adults, self.kids = total, adults, kids
         self.valid_until, self.first_amt, self.ref = valid_until, first_amt, ref
 
     def draw(self):
+        import urllib.parse as _up
         c, w, h = self.canv, self.width, self.height
-        lw = w * 0.60
-        c.setFillColor(colors.HexColor("#fffaf0")); c.setStrokeColor(GRAY_200); c.setLineWidth(0.6)
-        c.roundRect(0, 0, w, h, 2.5 * mm, fill=1, stroke=1)
-        c.setFillColor(SAFFRON); c.rect(0, 2.5 * mm, 1.4 * mm, h - 5 * mm, fill=1, stroke=0)
-        x = 6 * mm
+        lw = w * 0.585
+        R = 3 * mm
+        _soft_shadow(c, 0, 0, w, h, R)
+        c.setFillColor(colors.HexColor("#fffdf8")); c.setStrokeColor(colors.HexColor("#ecdfc2")); c.setLineWidth(0.6)
+        c.roundRect(0, 0, w, h, R, fill=1, stroke=1)
+        # gold edge: gradient clipped to the card's rounded corner and a 1.5 mm strip
+        c.saveState()
+        p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
+        p2 = c.beginPath(); p2.rect(0, 0, 1.5 * mm, h); c.clipPath(p2, stroke=0, fill=0)
+        c.linearGradient(0, h, 0, 0, (SAFFRON, GOLD_MID), extend=True)
+        c.restoreState()
+
+        x = 7 * mm
         try:
             n_adults = int(self.adults)
         except (TypeError, ValueError):
             n_adults = 0
         has_total = bool(self.total)
         per = round(self.total / n_adults) if (has_total and n_adults and not int(self.kids or 0)) else 0
-        c.setFillColor(GRAY_600); c.setFont("Lato-Bold", 6.6)
-        c.drawString(x, h - 6 * mm, "PRICE PER PERSON" if per else "TOTAL TRIP PRICE")
-        c.setFillColor(BLACK); c.setFont("Lato-Bold", 20)
-        big = f"INR {per:,}" if per else (f"INR {self.total:,}" if has_total else "Price on request")
-        c.drawString(x, h - 15 * mm, big)
-        if per:
-            bw = c.stringWidth(big, "Lato-Bold", 20)
-            c.setFillColor(GRAY_600); c.setFont("Lato", 8)
-            c.drawString(x + bw + 2 * mm, h - 15 * mm, f"for {n_adults} adults")
+        c.setFillColor(GOLD)
+        _spaced(c, x, h - 7 * mm, "PRICE PER PERSON" if per else "TOTAL TRIP PRICE", "Lato-Bold", 6.4, 1.0)
+        amount = per if per else (self.total if has_total else 0)
+        if amount:
+            c.setFillColor(INK_SOFT); c.setFont("Lato-Bold", 10.5)
+            c.drawString(x, h - 16.2 * mm, "INR")
+            iw = c.stringWidth("INR", "Lato-Bold", 10.5) + 1.6 * mm
+            c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", 28)
+            c.drawString(x + iw, h - 16.2 * mm, f"{amount:,}")
+            nw = c.stringWidth(f"{amount:,}", "Lato-Bold", 28)
+            if per:
+                c.setFillColor(INK_SOFT); c.setFont("Lato", 8.4)
+                c.drawString(x + iw + nw + 2.4 * mm, h - 16.2 * mm, f"for {n_adults} adults")
+        else:
+            c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", 20)
+            c.drawString(x, h - 16 * mm, "Price on request")
         if has_total:
-            c.setFillColor(SLATE); c.setFont("Lato", 7.4)
-            line = f"Trip total INR {self.total:,}: stay, car, driver, meals and taxes included"
-            c.setFont("Lato", _fit_font(c, line, "Lato", 7.4, lw - x - 3 * mm))
-            c.drawString(x, h - 20.5 * mm, line)
+            c.setStrokeColor(colors.HexColor("#efe6d0")); c.setLineWidth(0.5)
+            c.line(x, h - 20.2 * mm, lw - 4 * mm, h - 20.2 * mm)
+            avail = lw - x - 4 * mm
+            a, b, d = "Trip total ", f"INR {self.total:,}", "  \u00b7  stay, car, driver, meals and taxes included"
+            sz = 7.4
+            while sz > 5 and (c.stringWidth(a, "Lato", sz) + c.stringWidth(b, "Lato-Bold", sz) + c.stringWidth(d, "Lato", sz)) > avail:
+                sz -= 0.2
+            yy = h - 24.4 * mm; cx_ = x
+            c.setFillColor(SLATE); c.setFont("Lato", sz); c.drawString(cx_, yy, a); cx_ += c.stringWidth(a, "Lato", sz)
+            c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", sz); c.drawString(cx_, yy, b); cx_ += c.stringWidth(b, "Lato-Bold", sz)
+            c.setFillColor(SLATE); c.setFont("Lato", sz); c.drawString(cx_, yy, d)
         if self.valid_until:
             txt = f"Price held until {self.valid_until}"
             c.setFont("Lato-Bold", 6.8)
-            tw = c.stringWidth(txt, "Lato-Bold", 6.8) + 4 * mm
-            c.setFillColor(GOLD_LITE); c.roundRect(x, 2.4 * mm, tw, 4.4 * mm, 1.4 * mm, fill=1, stroke=0)
-            c.setFillColor(GOLD); c.drawString(x + 2 * mm, 3.9 * mm, txt)
-        # WhatsApp button
-        bx, bw_, bh = lw + 3 * mm, w - lw - 8 * mm, 10.5 * mm
-        by = h - 6 * mm - bh + 1 * mm
-        c.setFillColor(colors.Color(0, 0, 0, alpha=0.15)); c.roundRect(bx + 0.4, by - 0.7, bw_, bh, 2.4 * mm, fill=1, stroke=0)
-        c.setFillColor(WA_GREEN); c.roundRect(bx, by, bw_, bh, 2.4 * mm, fill=1, stroke=0)
-        c.setFillColor(WHITE); c.setFont("Lato-Bold", 9.5)
-        c.drawCentredString(bx + bw_ / 2, by + bh / 2 - 3.3, "Confirm on WhatsApp")
-        import urllib.parse as _up
+            tw = c.stringWidth(txt, "Lato-Bold", 6.8) + 8.4 * mm
+            c.setFillColor(GOLD_LITE); c.setStrokeColor(colors.HexColor("#f6dfa0")); c.setLineWidth(0.5)
+            c.roundRect(x, 3 * mm, tw, 5 * mm, 2.5 * mm, fill=1, stroke=1)
+            _clock_icon(c, x + 3.1 * mm, 5.5 * mm, 1.15 * mm, GOLD)
+            c.setFillColor(GOLD); c.setFont("Lato-Bold", 6.8)
+            c.drawString(x + 5.6 * mm, 5.5 * mm - 2.3, txt)
+
+        # right: deep navy action panel
+        px, py, pw, ph = lw, 2.2 * mm, w - lw - 2.2 * mm, h - 4.4 * mm
+        _grad_roundrect(c, px, py, pw, ph, 2.3 * mm, colors.HexColor("#14213d"), NAVY_DEEP, "d")
+        c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.08)); c.setLineWidth(0.5)
+        c.roundRect(px, py, pw, ph, 2.3 * mm, fill=0, stroke=1)
+        bx, bw_, bh = px + 5 * mm, pw - 10 * mm, 10.6 * mm
+        has_first = bool(self.first_amt)
+        by = py + ph - 5 * mm - bh if has_first else py + (ph - bh) / 2 + 2.5 * mm
+        c.setFillColor(colors.Color(0, 0, 0, alpha=0.28)); c.roundRect(bx, by - 0.8, bw_, bh, 2.4 * mm, fill=1, stroke=0)
+        _grad_roundrect(c, bx, by, bw_, bh, 2.4 * mm, colors.HexColor("#2ac46d"), WA_GREEN_DK, "v")
+        c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.28)); c.setLineWidth(0.4)
+        c.roundRect(bx, by, bw_, bh, 2.4 * mm, fill=0, stroke=1)
+        label = "Confirm on WhatsApp"
+        c.setFont("Lato-Bold", 9.4)
+        gw = 4.6 * mm; tw_ = c.stringWidth(label, "Lato-Bold", 9.4)
+        sx = bx + (bw_ - (gw + 2.2 * mm + tw_)) / 2
+        _wa_glyph(c, sx + gw / 2, by + bh / 2 + 0.2, gw / 2)
+        c.setFillColor(WHITE); c.setFont("Lato-Bold", 9.4)
+        c.drawString(sx + gw + 2.2 * mm, by + bh / 2 - 3.2, label)
         msg = _up.quote(f"Hi, I would like to confirm my Kashmir trip, quote {self.ref}")
         c.linkURL(f"https://wa.me/{SVK_WA_NUMBER}?text={msg}", (bx, by, bx + bw_, by + bh), relative=1, thickness=0)
-        c.setFillColor(GRAY_600); c.setFont("Lato", 6.8)
-        c.drawCentredString(bx + bw_ / 2, by - 4 * mm, "Opens a chat with your quote number typed in")
-        if self.first_amt:
-            t = f"Start with just 25% (INR {self.first_amt:,})"
-            c.setFillColor(BLACK); c.setFont("Lato-Bold", 7.4)
-            c.drawCentredString(bx + bw_ / 2, 3 * mm, t)
+        c.setFillColor(colors.HexColor("#9fb0c8")); c.setFont("Lato", 6.4)
+        c.drawCentredString(px + pw / 2, by - 3.6 * mm, "Opens a chat with your quote number typed in")
+        if has_first:
+            ly = by - 6.6 * mm
+            c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.14)); c.setLineWidth(0.4)
+            c.line(px + 6 * mm, ly, px + pw - 6 * mm, ly)
+            a, b = "Start with just 25%  \u00b7  ", f"INR {self.first_amt:,}"
+            tw2 = c.stringWidth(a, "Lato-Bold", 7.4) + c.stringWidth(b, "Lato-Bold", 7.4)
+            tx = px + (pw - tw2) / 2
+            c.setFillColor(WHITE); c.setFont("Lato-Bold", 7.4); c.drawString(tx, ly - 4 * mm, a)
+            c.setFillColor(SAFFRON); c.drawString(tx + c.stringWidth(a, "Lato-Bold", 7.4), ly - 4 * mm, b)
 
 
 class IncludedStrip(Flowable):
-    """Five 'what you get' cells."""
+    """Five 'what you get' cells, each with a line icon."""
+    _ICONS = ("car", "bed", "meal", "boat", "tax")
+
     def __init__(self, width, items):
         super().__init__()
-        self.width, self.height, self.items = width, 13.5 * mm, items
+        self.width, self.height, self.items = width, 17.5 * mm, items
 
     def draw(self):
         c, w, h = self.canv, self.width, self.height
+        R = 3 * mm
+        _soft_shadow(c, 0, 0, w, h, R, layers=4, alpha=0.022)
         c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.6)
-        c.roundRect(0, 0, w, h, 2.5 * mm, fill=1, stroke=1)
-        n = len(self.items)
-        cw = w / n
+        c.roundRect(0, 0, w, h, R, fill=1, stroke=1)
+        n = len(self.items); cw = w / n
         for i, (head, sub) in enumerate(self.items):
             cx = cw * i + cw / 2
             if i:
-                c.setStrokeColor(GRAY_200); c.line(cw * i, 2 * mm, cw * i, h - 2 * mm)
-            c.setFillColor(TEAL); c.circle(cx, h - 3.4 * mm, 1.1 * mm, fill=1, stroke=0)
-            c.setFillColor(BLACK)
-            c.setFont("Lato-Bold", _fit_font(c, head, "Lato-Bold", 7.4, cw - 3 * mm))
-            c.drawCentredString(cx, h - 7.6 * mm, head)
-            c.setFillColor(GRAY_600)
-            c.setFont("Lato", _fit_font(c, sub, "Lato", 6.4, cw - 3 * mm))
-            c.drawCentredString(cx, h - 11 * mm, sub)
+                c.setStrokeColor(HAIR); c.setLineWidth(0.5); c.line(cw * i, 3 * mm, cw * i, h - 3 * mm)
+            icy = h - 5.6 * mm
+            c.setFillColor(colors.HexColor("#e7f5f3")); c.circle(cx, icy, 3.3 * mm, fill=1, stroke=0)
+            c.setStrokeColor(colors.HexColor("#c4e6e1")); c.setLineWidth(0.4); c.circle(cx, icy, 3.3 * mm, fill=0, stroke=1)
+            _line_icon(c, self._ICONS[i % 5], cx, icy, 1.65 * mm, TEAL)
+            c.setFillColor(NAVY_DEEP)
+            head, hfs = _fit_text(c, head, "Lato-Bold", 7.6, cw - 4 * mm, 6.6)
+            c.setFont("Lato-Bold", hfs)
+            c.drawCentredString(cx, h - 12.4 * mm, head)
+            c.setFillColor(INK_SOFT)
+            c.setFont("Lato", _fit_font(c, sub, "Lato", 6.4, cw - 4 * mm))
+            c.drawCentredString(cx, h - 15.6 * mm, sub)
 
 
 class PromiseBox(Flowable):
-    """Our promise: four short commitments in two columns."""
+    """Our promise: four short commitments in two content-sized columns."""
     def __init__(self, width, lines):
         super().__init__()
-        self.width, self.height, self.lines = width, 21 * mm, lines
+        self.lines = [str(t) for t in lines[:4]]
+        self.width = width
+        self.height = 9.6 * mm + 2 * 6.0 * mm + 1.2 * mm if len(self.lines) > 2 else 9.6 * mm + 6.0 * mm + 1.2 * mm
+        # one font size so that both columns fit on a single line each
+        pad, gutter, badge = 6.5 * mm, 5 * mm, 5.2 * mm
+        size = 7.1
+        while size > 5.8:
+            cols = [self.lines[0::2], self.lines[1::2]]
+            wid = [max((pdfmetrics.stringWidth(t, "Lato", size) for t in col), default=0) for col in cols]
+            if wid[0] + wid[1] + 2 * badge + gutter + 2 * pad <= width:
+                break
+            size -= 0.1
+        self._size, self._colw = size, wid
 
     def draw(self):
         c, w, h = self.canv, self.width, self.height
-        c.setFillColor(colors.HexColor("#eef6f5")); c.roundRect(0, 0, w, h, 2.5 * mm, fill=1, stroke=0)
-        c.setFillColor(TEAL); c.rect(0, 2.5 * mm, 1.4 * mm, h - 5 * mm, fill=1, stroke=0)
-        c.setFillColor(BLACK); c.setFont("Lato-Bold", 8.6)
-        c.drawString(6 * mm, h - 5.6 * mm, "Our promise to you")
-        colw = (w - 10 * mm) / 2
-        for i, t in enumerate(self.lines[:4]):
+        R = 3 * mm
+        _grad_roundrect(c, 0, 0, w, h, R, colors.HexColor("#f1f9f7"), colors.HexColor("#e6f2ef"), "d")
+        c.setStrokeColor(colors.HexColor("#cfe5e0")); c.setLineWidth(0.6)
+        c.roundRect(0, 0, w, h, R, fill=0, stroke=1)
+        c.saveState()
+        p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
+        c.setFillColor(TEAL); c.rect(0, 0, 1.5 * mm, h, fill=1, stroke=0)
+        c.restoreState()
+        x0 = 6.5 * mm
+        c.setFillColor(TEAL)
+        tw = _spaced(c, x0, h - 6 * mm, "OUR PROMISE TO YOU", "Lato-Bold", 6.6, 1.0)
+        c.setStrokeColor(colors.HexColor("#bfdcd6")); c.setLineWidth(0.5)
+        c.line(x0 + tw + 3 * mm, h - 5.2 * mm, w - 6.5 * mm, h - 5.2 * mm)
+        badge, gutter = 5.2 * mm, 5 * mm
+        xs = [x0, x0 + badge + self._colw[0] + gutter]
+        for i, t in enumerate(self.lines):
             col, row = i % 2, i // 2
-            x = 6 * mm + col * colw
-            y = h - 10.6 * mm - row * 5.2 * mm
-            c.setStrokeColor(TEAL); c.setLineWidth(1.2)
-            c.line(x, y + 1.2, x + 1.0 * mm, y); c.line(x + 1.0 * mm, y, x + 2.4 * mm, y + 2.2)
-            c.setFillColor(SLATE)
-            c.setFont("Lato", _fit_font(c, t, "Lato", 7.2, colw - 7 * mm))
-            c.drawString(x + 4 * mm, y, t)
+            y = h - 12.2 * mm - row * 6.0 * mm
+            _check_badge(c, xs[col] + 1.55 * mm, y + 0.95 * mm, 1.55 * mm, TEAL)
+            c.setFillColor(SLATE); c.setFont("Lato", self._size)
+            c.drawString(xs[col] + badge, y, t)
+
+
+class TripSummary(Flowable):
+    """Two-column trip facts card (replaces the old grey grid)."""
+    ROW_H = 6.9 * mm
+    HEAD_H = 6.4 * mm
+
+    def __init__(self, width, left, right, ref=""):
+        super().__init__()
+        self.width, self.left, self.right, self.ref = width, left, right, ref
+        self.height = self.HEAD_H + self.ROW_H * max(len(left), len(right))
+
+    def draw(self):
+        c, w, h = self.canv, self.width, self.height
+        R = 3 * mm
+        _soft_shadow(c, 0, 0, w, h, R, layers=4, alpha=0.022)
+        c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.6)
+        c.roundRect(0, 0, w, h, R, fill=1, stroke=1)
+        # header band
+        c.saveState()
+        p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
+        c.setFillColor(GRAY_50); c.rect(0, h - self.HEAD_H, w, self.HEAD_H, fill=1, stroke=0)
+        c.setStrokeColor(GRAY_200); c.setLineWidth(0.5); c.line(0, h - self.HEAD_H, w, h - self.HEAD_H)
+        c.restoreState()
+        c.setFillColor(NAVY)
+        _spaced(c, 6 * mm, h - 4.3 * mm, "TRIP SUMMARY", "Lato-Bold", 6.6, 1.0)
+        if self.ref:
+            c.setFillColor(INK_SOFT)
+            _spaced(c, w - 6 * mm, h - 4.3 * mm, "QUOTE  " + _raw(self.ref), "Lato", 6.4, 0.6, "r")
+        half = w / 2
+        c.setStrokeColor(HAIR); c.setLineWidth(0.5); c.line(half, 2 * mm, half, h - self.HEAD_H - 2 * mm)
+        for col, rows, accent in ((0, self.left, SKY), (1, self.right, TEAL)):
+            x0 = col * half
+            lab_x, val_x = x0 + 6 * mm, x0 + 6 * mm + 31 * mm
+            vmax = half - 31 * mm - 10 * mm
+            for r, (label, value, hot) in enumerate(rows):
+                top = h - self.HEAD_H - r * self.ROW_H
+                mid = top - self.ROW_H / 2
+                if r:
+                    c.setStrokeColor(HAIR); c.setLineWidth(0.4)
+                    c.line(x0 + 6 * mm, top, x0 + half - 6 * mm, top)
+                c.setFillColor(accent); c.circle(x0 + 3.6 * mm, mid, 0.55 * mm, fill=1, stroke=0)
+                c.setFillColor(INK_SOFT)
+                _spaced(c, lab_x, mid - 1.2 * mm, label, "Lato-Bold", 6.1, 0.7)
+                value = _raw(value)
+                if hot:
+                    fs = 10
+                    c.setFont("Lato-Bold", fs)
+                    tw = c.stringWidth(value, "Lato-Bold", fs) + 5 * mm
+                    c.setFillColor(EMERALD_LITE); c.roundRect(val_x - 2.2 * mm, mid - 2.9 * mm, tw, 5.8 * mm, 2.2 * mm, fill=1, stroke=0)
+                    c.setFillColor(colors.HexColor("#047857")); c.drawString(val_x, mid - 1.3 * mm, value)
+                else:
+                    value, fs = _fit_text(c, value, "Lato-Bold", 8.6, vmax, 7.2)
+                    c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", fs)
+                    c.drawString(val_x, mid - 1.2 * mm, value)
 
 
 class TrustStrip(Flowable):
-    """Facts taken from the website, plus one guest quote."""
+    """Five proof points in columns, plus one guest quote with a star rating."""
     def __init__(self, width, stats, quote, by):
         super().__init__()
-        self.width, self.height, self.stats, self.quote, self.by = width, 15 * mm, stats, quote, by
+        self.width, self.height, self.stats, self.quote, self.by = width, 20 * mm, stats, quote, by
 
     def draw(self):
         c, w, h = self.canv, self.width, self.height
-        c.setFillColor(NAVY); c.roundRect(0, 0, w, h, 2.5 * mm, fill=1, stroke=0)
-        size = 7.2
-        gap = 5 * mm
-        while size > 5 and sum(c.stringWidth(t, "Lato-Bold", size) for t in self.stats) + gap * (len(self.stats) - 1) > w - 8 * mm:
-            size -= 0.2
-        total = sum(c.stringWidth(t, "Lato-Bold", size) for t in self.stats) + gap * (len(self.stats) - 1)
-        x = (w - total) / 2
-        c.setFont("Lato-Bold", size)
-        for i, t in enumerate(self.stats):
+        R = 3 * mm
+        _grad_roundrect(c, 0, 0, w, h, R, colors.HexColor("#17233b"), colors.HexColor("#0b1222"), "d")
+        c.saveState()
+        p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
+        p2 = c.beginPath(); p2.rect(0, h - 0.7 * mm, w, 0.7 * mm); c.clipPath(p2, stroke=0, fill=0)
+        c.linearGradient(0, 0, w, 0, (colors.HexColor("#17233b"), SAFFRON, colors.HexColor("#17233b")), (0, 0.5, 1), extend=False)
+        c.restoreState()
+        n = len(self.stats); cw = (w - 8 * mm) / n
+        for i, (val, cap) in enumerate(self.stats):
+            cx = 4 * mm + cw * i + cw / 2
+            if i:
+                c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.12)); c.setLineWidth(0.5)
+                c.line(4 * mm + cw * i, h - 11.4 * mm, 4 * mm + cw * i, h - 3.6 * mm)
             c.setFillColor(SAFFRON if i == 0 else WHITE)
-            c.drawString(x, h - 5.4 * mm, t)
-            x += c.stringWidth(t, "Lato-Bold", size) + gap
-        q = f"\u201c{self.quote}\u201d  {self.by}"
-        c.setFillColor(colors.HexColor("#cbd5e1"))
-        c.setFont("Lato-Italic", _fit_font(c, q, "Lato-Italic", 6.8, w - 8 * mm))
-        c.drawCentredString(w / 2, 3.6 * mm, q)
+            c.setFont("Lato-Bold", 12.4)
+            c.drawCentredString(cx, h - 7.6 * mm, val)
+            c.setFillColor(colors.HexColor("#94a3b8"))
+            fs = 5.4
+            while c.stringWidth(cap, "Lato-Bold", fs) + 0.45 * (len(cap) - 1) > cw - 3 * mm and fs > 4.2:
+                fs -= 0.1
+            _spaced(c, cx, h - 11 * mm, cap, "Lato-Bold", fs, 0.45, "c")
+        c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.10)); c.setLineWidth(0.5)
+        c.line(8 * mm, h - 13.4 * mm, w - 8 * mm, h - 13.4 * mm)
+        # quote row: stars + italic quote, centred as one unit
+        q = f"\u201c{self.quote}\u201d"
+        by = f"  {self.by}"
+        sz = 6.8
+        stars_w = 5 * 2.5 * mm + 2 * mm
+        while stars_w + c.stringWidth(q, "Lato-Italic", sz) + c.stringWidth(by, "Lato-Bold", sz - 0.4) > w - 12 * mm and sz > 5:
+            sz -= 0.2
+        total = stars_w + c.stringWidth(q, "Lato-Italic", sz) + c.stringWidth(by, "Lato-Bold", sz - 0.4)
+        x = (w - total) / 2; y = 4.2 * mm
+        for k in range(5):
+            _star(c, x + 1.1 * mm + k * 2.5 * mm, y + 0.9 * mm, 1.15 * mm, SAFFRON)
+        x += stars_w
+        c.setFillColor(colors.HexColor("#dbe3ee")); c.setFont("Lato-Italic", sz); c.drawString(x, y, q)
+        x += c.stringWidth(q, "Lato-Italic", sz)
+        c.setFillColor(colors.HexColor("#94a3b8")); c.setFont("Lato-Bold", sz - 0.4); c.drawString(x, y, by)
 
 
 class NextSteps(Flowable):
-    """What happens after the client says yes."""
+    """What happens after the client says yes: a compact three-step line."""
     def __init__(self, width, steps):
         super().__init__()
-        self.width, self.height, self.steps = width, 24 * mm, steps
+        self.width, self.height, self.steps = width, 15 * mm, steps
 
     def draw(self):
         c, w, h = self.canv, self.width, self.height
-        c.setFillColor(BLACK); c.setFont("Lato-Bold", 8.6)
-        c.drawString(0, h - 4 * mm, "What happens next")
-        n = len(self.steps); gap = 3 * mm; cw = (w - gap * (n - 1)) / n
+        c.setFillColor(NAVY)
+        tw = _spaced(c, 0, h - 3.2 * mm, "WHAT HAPPENS NEXT", "Lato-Bold", 6.6, 1.0)
+        c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+        c.line(tw + 3 * mm, h - 2.4 * mm, w, h - 2.4 * mm)
+        n = len(self.steps); cw = w / n; r = 2.7 * mm; cy = h - 9.6 * mm
         for i, (head, sub) in enumerate(self.steps):
-            x = i * (cw + gap)
-            c.setFillColor(GRAY_50); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
-            c.roundRect(x, 0, cw, h - 7 * mm, 2 * mm, fill=1, stroke=1)
-            c.setFillColor(SKY); c.circle(x + 5 * mm, h - 7 * mm - 6 * mm, 2.4 * mm, fill=1, stroke=0)
+            x = i * cw
+            if i < n - 1:                                   # connector to the next step
+                c.setStrokeColor(colors.HexColor("#bcd9ec")); c.setLineWidth(0.7); c.setDash(1, 1.6)
+                c.line(x + cw - 6 * mm, cy, x + cw - 1 * mm, cy); c.setDash()
+            _grad_roundrect(c, x, cy - r, 2 * r, 2 * r, r, SKY_MID, SKY, "v")
             c.setFillColor(WHITE); c.setFont("Lato-Bold", 8)
-            c.drawCentredString(x + 5 * mm, h - 7 * mm - 7.2 * mm, str(i + 1))
-            c.setFillColor(BLACK); c.setFont("Lato-Bold", 7.8)
-            c.drawString(x + 9.5 * mm, h - 7 * mm - 5 * mm, head)
-            c.setFillColor(GRAY_600)
-            c.setFont("Lato", _fit_font(c, sub, "Lato", 6.8, cw - 6 * mm))
-            c.drawString(x + 3 * mm, 3.2 * mm, sub)
+            c.drawCentredString(x + r, cy - 2.8, str(i + 1))
+            c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", 7.8)
+            c.drawString(x + 2 * r + 2.4 * mm, cy + 0.9 * mm, head)
+            c.setFillColor(INK_SOFT)
+            c.setFont("Lato", _fit_font(c, sub, "Lato", 6.6, cw - 2 * r - 9 * mm))
+            c.drawString(x + 2 * r + 2.4 * mm, cy - 2.7 * mm, sub)
 
 
 def _trip_story(timeline):
@@ -3092,63 +3378,23 @@ def generate_pdf(itinerary_data: dict) -> str:
     story.append(Spacer(1, 4*mm))
 
     # ── 2. Quick-summary grid ─────────────────────────────────────────────────
-    summary_rows = [
-        [
-            Paragraph("CLIENT NAME", styles["summary_label"]),
-            Paragraph(clean(client_name), styles["summary_value"]),
-            Paragraph("EMAIL" if client_email else "QUOTE VALID UNTIL", styles["summary_label"]),
-            Paragraph(clean(str(client_email)) if client_email else
-                      (datetime.datetime.now(IST) + datetime.timedelta(days=7)).strftime("%d %b %Y"),
-                      styles["summary_value"]),
-        ],
-        [
-            Paragraph("TOUR DURATION", styles["summary_label"]),
-            Paragraph(f"{days} Days", styles["summary_value"]),
-            Paragraph("TRAVEL DATE", styles["summary_label"]),
-            Paragraph(clean(str(start_date)), styles["summary_value"]),
-        ],
-        [
-            Paragraph("GUESTS", styles["summary_label"]),
-            Paragraph(f"{adults} Adults" + (f", {kids} Kids" if int(kids or 0) else ""), styles["summary_value"]),
-            Paragraph("VEHICLE", styles["summary_label"]),
-            Paragraph(clean(str(vehicle_type)), styles["summary_value"]),
-        ],
-        [
-            Paragraph("START POINT", styles["summary_label"]),
-            Paragraph(clean(start_point), styles["summary_value"]),
-            Paragraph("END POINT", styles["summary_label"]),
-            Paragraph(clean(end_point), styles["summary_value"]),
-        ],
-        [
-            Paragraph("BUDGET TIER", styles["summary_label"]),
-            Paragraph(clean(str(budget_tier)), styles["summary_value"]),
-            Paragraph("ESTIMATED COST", styles["summary_label"]),
-            Paragraph(
-                f"<b><font color='#059669'>INR {_amount_int(custom_cost):,}</font></b>"
-                if _is_amount(custom_cost)
-                else "TBD",
-                ParagraphStyle("cv", fontName="Lato-Bold", fontSize=9, textColor=EMERALD)
-            ),
-        ],
-    ]
-
-    summary_col_w = [usable_w * 0.19, usable_w * 0.31, usable_w * 0.21, usable_w * 0.29]
-    summary_table = Table(summary_rows, colWidths=summary_col_w, hAlign="LEFT")
-    summary_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), GRAY_50),
-        ("BACKGROUND", (0, 0), (0, -1), GRAY_100),
-        ("BACKGROUND", (2, 0), (2, -1), GRAY_100),
-        ("BOX",        (0, 0), (-1, -1), 0.5, GRAY_200),
-        ("INNERGRID",  (0, 0), (-1, -1), 0.3, GRAY_200),
-        ("LINEBEFORE", (0, 0), (0, -1), 2.5, SKY),
-        ("LINEBEFORE", (2, 0), (2, -1), 2.5, TEAL),
-        ("LEFTPADDING",  (0, 0), (-1, -1), 10),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
-        ("TOPPADDING",   (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
-        ("ROUNDEDCORNERS", [3]),
-    ]))
-    story.append(summary_table)
+    _cost_txt = f"INR {_amount_int(custom_cost):,}" if _is_amount(custom_cost) else "TBD"
+    _valid_txt = (datetime.datetime.now(IST) + datetime.timedelta(days=7)).strftime("%d %b %Y")
+    _guests_txt = f"{adults} Adults" + (f", {kids} Kids" if int(kids or 0) else "")
+    summary_card = TripSummary(
+        usable_w,
+        [("CLIENT NAME", client_name, False),
+         ("TOUR DURATION", f"{days} Days", False),
+         ("GUESTS", _guests_txt, False),
+         ("START POINT", start_point, False),
+         ("BUDGET TIER", str(budget_tier), False)],
+        [("EMAIL" if client_email else "QUOTE VALID UNTIL", client_email if client_email else _valid_txt, False),
+         ("TRAVEL DATE", str(start_date), False),
+         ("VEHICLE", str(vehicle_type), False),
+         ("END POINT", end_point, False),
+         ("ESTIMATED COST", _cost_txt, _is_amount(custom_cost))],
+        ref=_quote_ref(client_name))
+    story.append(summary_card)
     story.append(Spacer(1, 4*mm))
     story.append(TrustStrip(usable_w, TRUST_STATS, TRUST_QUOTE, TRUST_QUOTE_BY))
     story.append(Spacer(1, 4*mm))
