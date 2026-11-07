@@ -189,7 +189,7 @@ def generate_custom_itinerary():
     os.makedirs(output_dir, exist_ok=True)
 
     client_name = data.get("client_name", "Valued Client")
-    client_email = data.get("client_email", "N/A")
+    client_email = str(data.get("client_email") or "").strip()
     days = int(data.get("days", 5))
     budget_tier = data.get("budget_tier", "Mid-Range")
     trip_pace = data.get("trip_pace", "Moderate")
