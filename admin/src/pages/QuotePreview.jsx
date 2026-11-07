@@ -442,7 +442,7 @@ function fmtINR(n) {
   return "₹" + Math.round(n).toLocaleString("en-IN");
 }
 
-function HotelCostDashboard({ hotelSelections = {}, timeline = [], onTotalChange }) {
+function HotelCostDashboard({ hotelSelections = {}, timeline = [], onTotalChange, onRowsChange }) {
   const buildRows = (prev = {}) => {
     const next = {};
     Object.values(hotelSelections).forEach((hotelId) => {
@@ -465,6 +465,9 @@ function HotelCostDashboard({ hotelSelections = {}, timeline = [], onTotalChange
       onTotalChange(hotelTotal + (Number(cabCost) || 0));
     }
   }, [rows, cabCost]);
+
+  // Report rooms / extra beds per hotel so the PDF's Hotel Assignments table can show them.
+  React.useEffect(() => { if (onRowsChange) onRowsChange(rows); }, [rows]);
 
   const handleChange = (hotelId, field, value) => {
     setRows((prev) => ({ ...prev, [hotelId]: { ...prev[hotelId], [field]: value } }));
@@ -1114,6 +1117,7 @@ export default function QuotePreview({ quote }) {
   })();
   const warnDays = new Set(issues.map((x) => x.day));
   const [showChecks, setShowChecks] = useState(false);
+  const [hotelRows, setHotelRows] = useState({});   // { hotelId: { rooms, eb, ... } } from the price calculator
   // One click: give every day without a hotel the first suggested hotel for its overnight city.
   const missingHotelDays = timeline.map((d, i) => i).filter((i) => {
     const d = timeline[i];
@@ -1235,7 +1239,7 @@ export default function QuotePreview({ quote }) {
                     hotelSelections,
                     hotel_details: Object.values(hotelSelections).reduce((acc, id) => {
                       const h = ALL_HOTELS_FLAT[id];
-                      if (h) acc[id] = { name: h.name, place: h.place };
+                      if (h) acc[id] = { name: h.name, place: h.place, rooms: Number(hotelRows[id]?.rooms) || 1, eb: Number(hotelRows[id]?.eb) || 0 };
                       return acc;
                     }, {}),
                     start_info: startInfo,
@@ -1857,9 +1861,9 @@ export default function QuotePreview({ quote }) {
 
         {/* 5. Hotel cost calculator (collapsed; stays mounted so the total still updates) */}
         <details className="qp-more">
-          <summary>💰 Price calculator <span className="qp-sub">hotel rates → total · current total {fmtINR(Number(editableCost) || 0)}</span></summary>
+          <summary>💰 Price calculator <span className="qp-sub">rooms, extra beds &amp; hotel rates → total · current total {fmtINR(Number(editableCost) || 0)}</span></summary>
           <div style={{ padding: "4px 10px 12px" }}>
-            <HotelCostDashboard hotelSelections={hotelSelections} timeline={timeline} onTotalChange={(total) => setEditableCost(total)} />
+            <HotelCostDashboard hotelSelections={hotelSelections} timeline={timeline} onTotalChange={(total) => setEditableCost(total)} onRowsChange={setHotelRows} />
           </div>
         </details>
 
