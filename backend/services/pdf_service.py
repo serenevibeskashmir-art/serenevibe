@@ -3476,59 +3476,131 @@ class PromiseBox(Flowable):
             c.drawString(xs[col] + badge, y, t)
 
 
+def _ts_icon(c, kind, cx, cy, s, col):
+    """Tiny stroked glyphs for the Trip Summary badges (s = half size)."""
+    c.saveState()
+    c.setStrokeColor(col); c.setFillColor(col); c.setLineWidth(0.9); c.setLineCap(1); c.setLineJoin(1)
+    if kind == "user":
+        c.circle(cx, cy + s * 0.38, s * 0.34, fill=0, stroke=1)
+        p = c.beginPath(); p.moveTo(cx - s * 0.7, cy - s * 0.75)
+        p.curveTo(cx - s * 0.7, cy - s * 0.1, cx + s * 0.7, cy - s * 0.1, cx + s * 0.7, cy - s * 0.75)
+        c.drawPath(p, fill=0, stroke=1)
+    elif kind == "users":
+        c.circle(cx - s * 0.32, cy + s * 0.38, s * 0.27, fill=0, stroke=1)
+        c.circle(cx + s * 0.45, cy + s * 0.3, s * 0.22, fill=0, stroke=1)
+        p = c.beginPath(); p.moveTo(cx - s * 0.95, cy - s * 0.7)
+        p.curveTo(cx - s * 0.95, cy - s * 0.05, cx + s * 0.3, cy - s * 0.05, cx + s * 0.3, cy - s * 0.7)
+        c.drawPath(p, fill=0, stroke=1)
+    elif kind == "clock":
+        c.circle(cx, cy, s * 0.82, fill=0, stroke=1)
+        c.line(cx, cy, cx, cy + s * 0.5); c.line(cx, cy, cx + s * 0.38, cy - s * 0.1)
+    elif kind == "pin":
+        p = c.beginPath(); p.moveTo(cx, cy - s * 0.95)
+        p.curveTo(cx - s * 1.0, cy + s * 0.1, cx - s * 0.7, cy + s * 0.9, cx, cy + s * 0.9)
+        p.curveTo(cx + s * 0.7, cy + s * 0.9, cx + s * 1.0, cy + s * 0.1, cx, cy - s * 0.95)
+        c.drawPath(p, fill=0, stroke=1); c.circle(cx, cy + s * 0.2, s * 0.26, fill=1, stroke=0)
+    elif kind == "flag":
+        c.line(cx - s * 0.6, cy - s * 0.9, cx - s * 0.6, cy + s * 0.9)
+        p = c.beginPath(); p.moveTo(cx - s * 0.6, cy + s * 0.85); p.lineTo(cx + s * 0.8, cy + s * 0.85)
+        p.lineTo(cx + s * 0.4, cy + s * 0.4); p.lineTo(cx + s * 0.8, cy - s * 0.05); p.lineTo(cx - s * 0.6, cy - s * 0.05)
+        c.drawPath(p, fill=0, stroke=1)
+    elif kind == "tag":
+        p = c.beginPath(); p.moveTo(cx - s * 0.85, cy + s * 0.1); p.lineTo(cx + s * 0.1, cy + s * 0.95)
+        p.lineTo(cx + s * 0.9, cy + s * 0.95); p.lineTo(cx + s * 0.9, cy + s * 0.15); p.lineTo(cx + s * 0.05, cy - s * 0.85); p.close()
+        c.drawPath(p, fill=0, stroke=1); c.circle(cx + s * 0.5, cy + s * 0.55, s * 0.14, fill=1, stroke=0)
+    elif kind == "calendar":
+        c.roundRect(cx - s * 0.85, cy - s * 0.8, s * 1.7, s * 1.55, s * 0.18, fill=0, stroke=1)
+        c.line(cx - s * 0.85, cy + s * 0.25, cx + s * 0.85, cy + s * 0.25)
+        c.line(cx - s * 0.4, cy + s * 0.6, cx - s * 0.4, cy + s * 1.0); c.line(cx + s * 0.4, cy + s * 0.6, cx + s * 0.4, cy + s * 1.0)
+    elif kind == "mail":
+        c.roundRect(cx - s * 0.9, cy - s * 0.6, s * 1.8, s * 1.2, s * 0.15, fill=0, stroke=1)
+        c.line(cx - s * 0.9, cy + s * 0.55, cx, cy - s * 0.1); c.line(cx + s * 0.9, cy + s * 0.55, cx, cy - s * 0.1)
+    elif kind == "car":
+        c.restoreState(); _line_icon(c, "car", cx, cy, s, col); return
+    elif kind == "coin":
+        c.circle(cx, cy, s * 0.85, fill=0, stroke=1)
+        c.line(cx - s * 0.35, cy + s * 0.38, cx + s * 0.35, cy + s * 0.38); c.line(cx - s * 0.35, cy + s * 0.08, cx + s * 0.35, cy + s * 0.08)
+        c.line(cx - s * 0.35, cy + s * 0.38, cx + s * 0.1, cy - s * 0.45)
+    c.restoreState()
+
+
+_TS_ICONS = {"CLIENT NAME": "user", "TOUR DURATION": "clock", "GUESTS": "users", "START POINT": "pin",
+             "BUDGET TIER": "tag", "QUOTE VALID UNTIL": "calendar", "EMAIL": "mail", "TRAVEL DATE": "calendar",
+             "VEHICLE": "car", "END POINT": "flag", "ESTIMATED COST": "coin"}
+
+
 class TripSummary(Flowable):
-    """Two-column trip facts card (replaces the old grey grid)."""
-    ROW_H = 6.9 * mm
-    HEAD_H = 6.4 * mm
+    """Two-column trip facts card: navy gradient header, icon badges, label over a large bold value,
+    and the estimated cost as a highlighted emerald pill."""
+    ROW_H = 9.6 * mm
+    HEAD_H = 9 * mm
+    PAD_B = 1.5 * mm
 
     def __init__(self, width, left, right, ref=""):
         super().__init__()
         self.width, self.left, self.right, self.ref = width, left, right, ref
-        self.height = self.HEAD_H + self.ROW_H * max(len(left), len(right))
+        self.height = self.HEAD_H + self.ROW_H * max(len(left), len(right)) + self.PAD_B
 
     def draw(self):
         c, w, h = self.canv, self.width, self.height
-        R = 3 * mm
-        _soft_shadow(c, 0, 0, w, h, R, layers=4, alpha=0.022)
+        R = 3.5 * mm
+        _soft_shadow(c, 0, 0, w, h, R, layers=5, alpha=0.03)
         c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.6)
         c.roundRect(0, 0, w, h, R, fill=1, stroke=1)
-        # header band
+        half = w / 2
+        # soft tinted columns
         c.saveState()
         p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
-        c.setFillColor(GRAY_50); c.rect(0, h - self.HEAD_H, w, self.HEAD_H, fill=1, stroke=0)
-        c.setStrokeColor(GRAY_200); c.setLineWidth(0.5); c.line(0, h - self.HEAD_H, w, h - self.HEAD_H)
+        c.setFillColor(colors.HexColor("#f4f9fd")); c.rect(0, 0, half, h - self.HEAD_H, fill=1, stroke=0)
+        c.setFillColor(colors.HexColor("#f3faf8")); c.rect(half, 0, half, h - self.HEAD_H, fill=1, stroke=0)
         c.restoreState()
-        c.setFillColor(NAVY)
-        _spaced(c, 6 * mm, h - 4.3 * mm, "TRIP SUMMARY", "Lato-Bold", 6.6, 1.0)
+        # header band: gradient clipped to the card's rounded top, square along its lower edge
+        c.saveState()
+        p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
+        p2 = c.beginPath(); p2.rect(0, h - self.HEAD_H, w, self.HEAD_H); c.clipPath(p2, stroke=0, fill=0)
+        c.linearGradient(0, 0, w, 0, (NAVY_DEEP, NAVY_MID), extend=True)
+        c.restoreState()
+        c.setFillColor(GOLD_MID); c.rect(0, h - self.HEAD_H - 0.5 * mm, w, 0.9 * mm, fill=1, stroke=0)
+        _diamond(c, 7 * mm, h - self.HEAD_H / 2, 1.5 * mm, colors.HexColor("#f5b82e"))
+        c.setFillColor(WHITE)
+        _spaced(c, 11.5 * mm, h - self.HEAD_H / 2 - 1.1 * mm, "TRIP SUMMARY", "Lato-Bold", 9, 1.6)
         if self.ref:
-            c.setFillColor(INK_SOFT)
-            _spaced(c, w - 6 * mm, h - 4.3 * mm, "QUOTE  " + _raw(self.ref), "Lato", 6.4, 0.6, "r")
-        half = w / 2
-        c.setStrokeColor(HAIR); c.setLineWidth(0.5); c.line(half, 2 * mm, half, h - self.HEAD_H - 2 * mm)
-        for col, rows, accent in ((0, self.left, SKY), (1, self.right, TEAL)):
+            c.setFillColor(colors.HexColor("#93c5fd"))
+            _spaced(c, w - 6 * mm, h - self.HEAD_H / 2 - 1.0 * mm, "QUOTE  " + _raw(self.ref), "Lato-Bold", 7.4, 0.8, "r")
+        # centre divider
+        c.setStrokeColor(GRAY_200); c.setLineWidth(0.6)
+        c.line(half, 2.5 * mm, half, h - self.HEAD_H - 2.5 * mm)
+
+        for col, rows, accent, lite in ((0, self.left, SKY, SKY_LIGHT), (1, self.right, TEAL, TEAL_LITE)):
             x0 = col * half
-            lab_x, val_x = x0 + 6 * mm, x0 + 6 * mm + 31 * mm
-            vmax = half - 31 * mm - 10 * mm
+            icon_x, txt_x = x0 + 9 * mm, x0 + 16 * mm
+            vmax = half - 16 * mm - 6 * mm
             for r, (label, value, hot) in enumerate(rows):
                 top = h - self.HEAD_H - r * self.ROW_H
                 mid = top - self.ROW_H / 2
                 if r:
-                    c.setStrokeColor(HAIR); c.setLineWidth(0.4)
-                    c.line(x0 + 6 * mm, top, x0 + half - 6 * mm, top)
-                c.setFillColor(accent); c.circle(x0 + 3.6 * mm, mid, 0.55 * mm, fill=1, stroke=0)
+                    c.setStrokeColor(GRAY_200); c.setLineWidth(0.4); c.setDash(0.9, 1.5)
+                    c.line(x0 + 6 * mm, top, x0 + half - 6 * mm, top); c.setDash()
+                # icon badge
+                c.setFillColor(lite); c.setStrokeColor(accent); c.setLineWidth(0.5)
+                c.circle(icon_x, mid, 3.3 * mm, fill=1, stroke=1)
+                _ts_icon(c, _TS_ICONS.get(label, "tag"), icon_x, mid, 1.9 * mm, accent)
+                # label above, value below
                 c.setFillColor(INK_SOFT)
-                _spaced(c, lab_x, mid - 1.2 * mm, label, "Lato-Bold", 6.1, 0.7)
+                _spaced(c, txt_x, mid + 1.5 * mm, label, "Lato-Bold", 6.9, 0.9)
                 value = _raw(value)
                 if hot:
-                    fs = 10
+                    fs = 12
                     c.setFont("Lato-Bold", fs)
-                    tw = c.stringWidth(value, "Lato-Bold", fs) + 5 * mm
-                    c.setFillColor(EMERALD_LITE); c.roundRect(val_x - 2.2 * mm, mid - 2.9 * mm, tw, 5.8 * mm, 2.2 * mm, fill=1, stroke=0)
-                    c.setFillColor(colors.HexColor("#047857")); c.drawString(val_x, mid - 1.3 * mm, value)
+                    tw = c.stringWidth(value, "Lato-Bold", fs) + 6 * mm
+                    _grad_roundrect(c, txt_x - 1.4 * mm, mid - 5.3 * mm, tw, 6.4 * mm, 3.2 * mm,
+                                    colors.HexColor("#10b981"), colors.HexColor("#047857"), "h")
+                    c.setFillColor(WHITE); c.setFont("Lato-Bold", fs)
+                    c.drawString(txt_x + 1.6 * mm, mid - 3.4 * mm, value)
                 else:
-                    value, fs = _fit_text(c, value, "Lato-Bold", 8.6, vmax, 7.2)
+                    value, fs = _fit_text(c, value, "Lato-Bold", 11.2, vmax, 8)
                     c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", fs)
-                    c.drawString(val_x, mid - 1.2 * mm, value)
+                    c.drawString(txt_x, mid - 3.6 * mm, value)
 
 
 class TrustStrip(Flowable):
