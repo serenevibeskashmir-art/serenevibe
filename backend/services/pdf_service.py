@@ -2820,7 +2820,9 @@ def generate_pdf(itinerary_data: dict) -> str:
     kids         = itinerary_data.get("kids", 0)
     budget_tier  = itinerary_data.get("budget_tier", "Mid-Range")
     vehicle_type = itinerary_data.get("vehicle_type", "Sedan")
-    client_email = itinerary_data.get("client_email", "N/A")
+    client_email = str(itinerary_data.get("client_email") or "").strip()
+    if client_email.lower() in ("", "n/a", "na", "none", "null", "-", "tbd"):
+        client_email = "xxx@gmail.com"   # email is optional; show a placeholder in the PDF
     start_point  = str(itinerary_data.get("start_point") or "").strip() or DEFAULT_POINT
     end_point    = str(itinerary_data.get("end_point") or "").strip() or DEFAULT_POINT
     itinerary_data = dict(itinerary_data)
