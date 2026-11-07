@@ -3530,77 +3530,110 @@ _TS_ICONS = {"CLIENT NAME": "user", "TOUR DURATION": "clock", "GUESTS": "users",
 
 
 class TripSummary(Flowable):
-    """Two-column trip facts card: navy gradient header, icon badges, label over a large bold value,
-    and the estimated cost as a highlighted emerald pill."""
-    ROW_H = 9.6 * mm
+    """Trip facts card: navy header (budget tier chip + quote no.), two-column zebra grid with the
+    label over a bold value, and the estimated cost as a full-width emerald total bar."""
     HEAD_H = 9 * mm
-    PAD_B = 1.5 * mm
+    ROW_H = 9.2 * mm
+    BAR_H = 11.8 * mm
 
     def __init__(self, width, left, right, ref=""):
         super().__init__()
-        self.width, self.left, self.right, self.ref = width, left, right, ref
-        self.height = self.HEAD_H + self.ROW_H * max(len(left), len(right)) + self.PAD_B
+        self.width, self.ref = width, ref
+        self.tier, self.cost = "", None
+        self.left = []
+        for label, value, hot in left:
+            if label == "BUDGET TIER":
+                self.tier = str(value)
+            else:
+                self.left.append((label, value))
+        self.right = []
+        for label, value, hot in right:
+            if hot:
+                self.cost = str(value)
+            else:
+                self.right.append((label, value))
+        rows = max(len(self.left), len(self.right), 1)
+        self.height = self.HEAD_H + self.ROW_H * rows + (self.BAR_H if self.cost else 0)
 
     def draw(self):
         c, w, h = self.canv, self.width, self.height
         R = 3.5 * mm
+        half = w / 2
+        rows = max(len(self.left), len(self.right), 1)
+        body_top = h - self.HEAD_H
+        body_bot = h - self.HEAD_H - self.ROW_H * rows
+
         _soft_shadow(c, 0, 0, w, h, R, layers=5, alpha=0.03)
         c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.6)
         c.roundRect(0, 0, w, h, R, fill=1, stroke=1)
-        half = w / 2
-        # soft tinted columns
+
         c.saveState()
         p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
-        c.setFillColor(colors.HexColor("#f4f9fd")); c.rect(0, 0, half, h - self.HEAD_H, fill=1, stroke=0)
-        c.setFillColor(colors.HexColor("#f3faf8")); c.rect(half, 0, half, h - self.HEAD_H, fill=1, stroke=0)
+        # zebra rows
+        for r in range(rows):
+            if r % 2 == 0:
+                c.setFillColor(colors.HexColor("#f4f8fc"))
+                c.rect(0, body_top - (r + 1) * self.ROW_H, w, self.ROW_H, fill=1, stroke=0)
         c.restoreState()
-        # header band: gradient clipped to the card's rounded top, square along its lower edge
+
+        # header band
         c.saveState()
         p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
-        p2 = c.beginPath(); p2.rect(0, h - self.HEAD_H, w, self.HEAD_H); c.clipPath(p2, stroke=0, fill=0)
+        p2 = c.beginPath(); p2.rect(0, body_top, w, self.HEAD_H); c.clipPath(p2, stroke=0, fill=0)
         c.linearGradient(0, 0, w, 0, (NAVY_DEEP, NAVY_MID), extend=True)
         c.restoreState()
-        c.setFillColor(GOLD_MID); c.rect(0, h - self.HEAD_H - 0.5 * mm, w, 0.9 * mm, fill=1, stroke=0)
+        c.setFillColor(GOLD_MID); c.rect(0, body_top - 0.5 * mm, w, 0.9 * mm, fill=1, stroke=0)
         _diamond(c, 7 * mm, h - self.HEAD_H / 2, 1.5 * mm, colors.HexColor("#f5b82e"))
         c.setFillColor(WHITE)
         _spaced(c, 11.5 * mm, h - self.HEAD_H / 2 - 1.1 * mm, "TRIP SUMMARY", "Lato-Bold", 9, 1.6)
+        rx = w - 6 * mm
         if self.ref:
             c.setFillColor(colors.HexColor("#93c5fd"))
-            _spaced(c, w - 6 * mm, h - self.HEAD_H / 2 - 1.0 * mm, "QUOTE  " + _raw(self.ref), "Lato-Bold", 7.4, 0.8, "r")
+            ref_txt = "QUOTE  " + _raw(self.ref)
+            _spaced(c, rx, h - self.HEAD_H / 2 - 1.0 * mm, ref_txt, "Lato-Bold", 7.4, 0.8, "r")
+            rx -= c.stringWidth(ref_txt, "Lato-Bold", 7.4) + len(ref_txt) * 0.8 + 4 * mm
+        if self.tier:
+            t = _raw(self.tier).upper()
+            c.setFont("Lato-Bold", 7)
+            tw = c.stringWidth(t, "Lato-Bold", 7) + len(t) * 0.5 + 5 * mm
+            c.setFillColor(colors.HexColor("#f5b82e"))
+            c.roundRect(rx - tw, h - self.HEAD_H / 2 - 2.6 * mm, tw, 5.2 * mm, 2.6 * mm, fill=1, stroke=0)
+            c.setFillColor(NAVY_DEEP)
+            _spaced(c, rx - tw / 2, h - self.HEAD_H / 2 - 0.9 * mm, t, "Lato-Bold", 7, 0.5, "c")
+
         # centre divider
         c.setStrokeColor(GRAY_200); c.setLineWidth(0.6)
-        c.line(half, 2.5 * mm, half, h - self.HEAD_H - 2.5 * mm)
+        c.line(half, body_bot + 2 * mm, half, body_top - 2 * mm)
 
-        for col, rows, accent, lite in ((0, self.left, SKY, SKY_LIGHT), (1, self.right, TEAL, TEAL_LITE)):
+        # facts
+        for col, items, accent in ((0, self.left, SKY), (1, self.right, TEAL)):
             x0 = col * half
-            icon_x, txt_x = x0 + 9 * mm, x0 + 16 * mm
-            vmax = half - 16 * mm - 6 * mm
-            for r, (label, value, hot) in enumerate(rows):
-                top = h - self.HEAD_H - r * self.ROW_H
-                mid = top - self.ROW_H / 2
-                if r:
-                    c.setStrokeColor(GRAY_200); c.setLineWidth(0.4); c.setDash(0.9, 1.5)
-                    c.line(x0 + 6 * mm, top, x0 + half - 6 * mm, top); c.setDash()
-                # icon badge
-                c.setFillColor(lite); c.setStrokeColor(accent); c.setLineWidth(0.5)
-                c.circle(icon_x, mid, 3.3 * mm, fill=1, stroke=1)
-                _ts_icon(c, _TS_ICONS.get(label, "tag"), icon_x, mid, 1.9 * mm, accent)
-                # label above, value below
+            tx = x0 + 8 * mm
+            vmax = half - 14 * mm
+            for r, (label, value) in enumerate(items):
+                top = body_top - r * self.ROW_H
+                c.setFillColor(accent)
+                c.roundRect(x0 + 4.5 * mm, top - self.ROW_H + 2 * mm, 0.9 * mm, self.ROW_H - 4 * mm,
+                            0.45 * mm, fill=1, stroke=0)
                 c.setFillColor(INK_SOFT)
-                _spaced(c, txt_x, mid + 1.5 * mm, label, "Lato-Bold", 6.9, 0.9)
-                value = _raw(value)
-                if hot:
-                    fs = 12
-                    c.setFont("Lato-Bold", fs)
-                    tw = c.stringWidth(value, "Lato-Bold", fs) + 6 * mm
-                    _grad_roundrect(c, txt_x - 1.4 * mm, mid - 5.3 * mm, tw, 6.4 * mm, 3.2 * mm,
-                                    colors.HexColor("#10b981"), colors.HexColor("#047857"), "h")
-                    c.setFillColor(WHITE); c.setFont("Lato-Bold", fs)
-                    c.drawString(txt_x + 1.6 * mm, mid - 3.4 * mm, value)
-                else:
-                    value, fs = _fit_text(c, value, "Lato-Bold", 11.2, vmax, 8)
-                    c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", fs)
-                    c.drawString(txt_x, mid - 3.6 * mm, value)
+                _spaced(c, tx, top - 3.3 * mm, label, "Lato-Bold", 6.6, 0.9)
+                v, fs = _fit_text(c, _raw(value), "Lato-Bold", 11, vmax, 8)
+                c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", fs)
+                c.drawString(tx, top - 7.6 * mm, v)
+
+        # total bar
+        if self.cost:
+            c.saveState()
+            p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
+            p2 = c.beginPath(); p2.rect(0, 0, w, self.BAR_H); c.clipPath(p2, stroke=0, fill=0)
+            c.linearGradient(0, 0, w, 0, (colors.HexColor("#10b981"), colors.HexColor("#047857")), extend=True)
+            c.restoreState()
+            my = self.BAR_H / 2
+            c.setFillColor(colors.HexColor("#d1fae5"))
+            _spaced(c, 8 * mm, my - 1.1 * mm, "ESTIMATED TOTAL COST", "Lato-Bold", 7.4, 1.2)
+            c.setFillColor(WHITE)
+            c.setFont("Lato-Bold", 15)
+            c.drawRightString(w - 8 * mm, my - 2.0 * mm, _raw(self.cost))
 
 
 class TrustStrip(Flowable):
@@ -3781,14 +3814,16 @@ def generate_pdf(itinerary_data: dict) -> str:
     story.append(summary_card)
     story.append(Spacer(1, 4*mm))
     story.append(TrustStrip(usable_w, TRUST_STATS, TRUST_QUOTE, TRUST_QUOTE_BY))
-    story.append(Spacer(1, 4*mm))
-    _used = sum(f.wrap(usable_w, 10000)[1] for f in story)
+    # NOTE: no trailing Spacer here. If page 1 is nearly full, a spacer that does not fit
+    # spills onto page 2 and the PageBreak below then leaves page 2 blank.
+    _used = sum(f.wrap(usable_w, 10000)[1] for f in story) + 4 * mm
     _steps = NextSteps(usable_w, [
         ("Review and sign", "Check itinerary, hotels and terms."),
         ("Pay the first 25%", "NEFT / UPI / Cheque confirms it."),
         ("Receive vouchers", "Hotel and transfer details before travel."),
     ])
     if (doc.height - 12) - _used > _steps.height + 6 * mm:      # only when it fits on page 1
+        story.append(Spacer(1, 4*mm))
         story.append(_steps)
     story.append(PageBreak())
 
