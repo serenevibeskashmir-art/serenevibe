@@ -3737,8 +3737,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     story.append(Spacer(1, 6*mm))
 
     # ── 3. Day-by-day itinerary ───────────────────────────────────────────────
-    story.append(SectionTitle(usable_w, "DAY-BY-DAY ITINERARY", icon=""))
-    story.append(Spacer(1, 4*mm))
+    _day_title = [SectionTitle(usable_w, "DAY-BY-DAY ITINERARY", icon=""), Spacer(1, 4*mm)]   # kept with Day 1
 
     timeline = itinerary_data.get("timeline", [])
     dest_bgs = _load_destination_backgrounds()
@@ -3844,6 +3843,8 @@ def generate_pdf(itinerary_data: dict) -> str:
             ))
 
         block.append(Spacer(1, 5*mm))
+        if idx == 1:
+            block = _day_title + block          # the heading never sits alone at the foot of a page
         story.append(KeepTogether(block))
 
     # Sections now flow straight on after the last day card (no forced page
