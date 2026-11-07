@@ -459,16 +459,8 @@ function HotelCostDashboard({ hotelSelections = {}, timeline = [], onTotalChange
   };
 
   const [rows, setRows]       = React.useState(() => buildRows());
-  const [cabCost, setCabCost] = React.useState(0);
 
   React.useEffect(() => { setRows((prev) => buildRows(prev)); }, [hotelSelections]);
-
-  React.useEffect(() => {
-    if (onTotalChange) {
-      const hotelTotal = Object.values(rows).reduce((sum, r) => sum + calcRowTotal(r), 0);
-      onTotalChange(hotelTotal + (Number(cabCost) || 0));
-    }
-  }, [rows, cabCost]);
 
   // Report rooms / extra beds per hotel so the PDF's Hotel Assignments table can show them.
   React.useEffect(() => { if (onRowsChange) onRowsChange(rows); }, [rows]);
@@ -485,8 +477,6 @@ function HotelCostDashboard({ hotelSelections = {}, timeline = [], onTotalChange
   });
 
   const rowList    = Object.values(rows);
-  const hotelTotal = rowList.reduce((sum, r) => sum + calcRowTotal(r), 0);
-  const grandTotal = hotelTotal + (Number(cabCost) || 0);
 
   const thStyle = {
     padding: "8px 10px", backgroundColor: "#f1f5f9", color: "#475569",
@@ -527,9 +517,9 @@ function HotelCostDashboard({ hotelSelections = {}, timeline = [], onTotalChange
       `}</style>
       <div style={{ marginTop: "32px", backgroundColor: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "clamp(14px, 4vw, 20px) clamp(14px, 4vw, 24px)", fontFamily: "system-ui, sans-serif" }}>
         <div style={{ marginBottom: "14px", paddingBottom: "12px", borderBottom: "1px solid #e2e8f0" }}>
-          <p style={{ margin: 0, fontSize: "1rem", fontWeight: "700", color: "#0f172a" }}>🏨 Hotel Cost Breakdown</p>
+          <p style={{ margin: 0, fontSize: "1rem", fontWeight: "700", color: "#0f172a" }}>🏨 Rooms &amp; Extra Beds</p>
           <p style={{ margin: "3px 0 0", fontSize: "0.78rem", color: "#64748b" }}>
-            Hotels auto-fetched from assignments above · Formula: (Nights × Rooms × Room Rate) + (Nights × EB × EB Rate) + Trip Cab Cost
+            Hotels come from the days above · Nights fill in automatically · Rooms and EB are printed in the PDF
           </p>
         </div>
 
@@ -540,7 +530,7 @@ function HotelCostDashboard({ hotelSelections = {}, timeline = [], onTotalChange
         ) : (
           <>
             <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", minWidth: "560px" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.82rem", minWidth: "480px" }}>
                 <thead>
                   <tr>
                     <th style={thStyle}>Hotel</th>
@@ -549,9 +539,6 @@ function HotelCostDashboard({ hotelSelections = {}, timeline = [], onTotalChange
                     <th style={thStyle}>Rooms</th>
                     <th style={thStyle}>EB</th>
                     <th style={thStyle}>CNB</th>
-                    <th style={thStyle}>Room Rate/Night (₹)</th>
-                    <th style={thStyle}>EB Rate/Night (₹)</th>
-                    <th style={{ ...thStyle, textAlign: "right" }}>Total (₹)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -571,14 +558,11 @@ function HotelCostDashboard({ hotelSelections = {}, timeline = [], onTotalChange
                             ))}
                           </div>
                         </td>
-                        {["stays","rooms","eb","cnb","roomRate","ebRate"].map((field) => (
+                        {["stays","rooms","eb","cnb"].map((field) => (
                           <td key={field} style={tdStyle}>
                             <input type="number" min="0" style={numInput} value={row[field]} onChange={(e) => handleChange(row.hotelId, field, e.target.value)} />
                           </td>
                         ))}
-                        <td style={{ ...tdStyle, textAlign: "right", fontWeight: "700", color: "#0284c7" }}>
-                          {fmtINR(calcRowTotal(row))}
-                        </td>
                       </tr>
                     );
                   })}
@@ -586,22 +570,6 @@ function HotelCostDashboard({ hotelSelections = {}, timeline = [], onTotalChange
               </table>
             </div>
 
-            <div className="hcd-totals">
-              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                <span style={{ fontSize: "0.82rem", color: "#475569", fontWeight: "600" }}>🏨 Hotel Subtotal:</span>
-                <span style={{ fontSize: "1rem", fontWeight: "700", color: "#0284c7" }}>{fmtINR(hotelTotal)}</span>
-              </div>
-              <div className="hcd-divider" />
-              <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-                <label style={{ fontSize: "0.82rem", color: "#854d0e", fontWeight: "600", whiteSpace: "nowrap" }}>🚗 Cab Cost – Full Trip (₹):</label>
-                <input type="number" min="0" value={cabCost} onChange={(e) => setCabCost(e.target.value)} className="hcd-cab-input" style={{ width: "110px", padding: "6px 8px", border: "1px solid #fde047", borderRadius: "6px", fontSize: "0.88rem", color: "#854d0e", backgroundColor: "#fef9c3", textAlign: "center", fontWeight: "600", minHeight: "36px" }} />
-              </div>
-              <div className="hcd-divider" />
-              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                <span style={{ fontSize: "0.9rem", color: "#0f172a", fontWeight: "700" }}>Grand Total:</span>
-                <span style={{ fontSize: "1.25rem", fontWeight: "800", color: "#10b981" }}>{fmtINR(grandTotal)}</span>
-              </div>
-            </div>
           </>
         )}
       </div>
@@ -1865,9 +1833,9 @@ export default function QuotePreview({ quote }) {
 
         {/* 5. Hotel cost calculator (collapsed; stays mounted so the total still updates) */}
         <details className="qp-more">
-          <summary>💰 Price calculator <span className="qp-sub">rooms, extra beds &amp; hotel rates → total · current total {fmtINR(Number(editableCost) || 0)}</span></summary>
+          <summary>🛏️ Rooms &amp; extra beds <span className="qp-sub">set rooms, EB and nights per hotel (shown in the PDF)</span></summary>
           <div style={{ padding: "4px 10px 12px" }}>
-            <HotelCostDashboard hotelSelections={hotelSelections} timeline={timeline} onTotalChange={(total) => setEditableCost(total)} onRowsChange={setHotelRows} />
+            <HotelCostDashboard hotelSelections={hotelSelections} timeline={timeline} onRowsChange={setHotelRows} />
           </div>
         </details>
 
