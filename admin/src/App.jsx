@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import AdminLogin from './components/AdminLogin.jsx';
 import LeadForm from './components/LeadForm.jsx';
 import QuotePreview, { loadCustomHotels } from './pages/QuotePreview.jsx';
-import HotelsManager from './pages/HotelsManager.jsx';
 import AssistantSettings from './pages/AssistantSettings.jsx';
 import SitePackages from './pages/SitePackages.jsx';
 import WebsitePhotos from './pages/WebsitePhotos.jsx';
@@ -14,7 +13,6 @@ const TABS = [
   { id: 'itinerary', label: 'Itinerary Builder'    },
   { id: 'whatsapp',   label: 'WhatsApp Leads'       },
   { id: 'calculator', label: 'Cost Calculator'     },
-  { id: 'hotels',    label: 'Hotels'               },
   { id: 'packages',  label: 'Packages'             },
   { id: 'photos',    label: 'Website Photos'       },
   { id: 'assistant', label: 'AI Assistant'         },
@@ -108,7 +106,6 @@ export default function App() {
 
       {activeTab === 'calculator' && <CostCalculator />}
 
-      {activeTab === 'hotels' && <HotelsManager onChanged={loadCustomHotels} onUnauthorized={handleLogout} />}
 
       {activeTab === 'packages' && (
         <SitePackages
