@@ -222,6 +222,7 @@ def generate_custom_itinerary():
         "selected_hotels": selected_hotels,
         "hotel_details": data.get("hotel_details") if isinstance(data.get("hotel_details"), dict) else {},
         "custom_cost": custom_cost,
+        "show_per_person": bool(data.get("show_per_person", False)),
         "meta_summary": {
             "client_name": client_name,
             "client_email": client_email,
