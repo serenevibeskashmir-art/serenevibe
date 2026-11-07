@@ -479,19 +479,19 @@ function HotelCostDashboard({ hotelSelections = {}, timeline = [], onTotalChange
   const rowList    = Object.values(rows);
 
   const thStyle = {
-    padding: "8px 10px", backgroundColor: "#f1f5f9", color: "#475569",
+    padding: "5px 8px", backgroundColor: "#f1f5f9", color: "#475569",
     fontWeight: "700", fontSize: "0.73rem", textTransform: "uppercase",
     letterSpacing: "0.4px", borderBottom: "1px solid #e2e8f0",
     whiteSpace: "nowrap", textAlign: "left",
   };
   const tdStyle = {
-    padding: "8px 10px", borderBottom: "1px solid #f1f5f9",
+    padding: "4px 8px", borderBottom: "1px solid #f1f5f9",
     color: "#0f172a", verticalAlign: "middle",
   };
   const numInput = {
-    width: "64px", padding: "5px 6px", border: "1px solid #cbd5e1",
+    width: "56px", padding: "3px 6px", border: "1px solid #cbd5e1",
     borderRadius: "6px", fontSize: "0.82rem", color: "#0f172a",
-    backgroundColor: "#f8fafc", textAlign: "center", minHeight: "36px",
+    backgroundColor: "#f8fafc", textAlign: "center", minHeight: "30px",
     boxSizing: "border-box",
   };
 
@@ -1445,21 +1445,97 @@ export default function QuotePreview({ quote }) {
           .qp-route-select, .qp-hotel-select { max-width: 100%; }
           .qp-time-input { width: 80px; }
         }
-        @media (max-width: 420px) {
-          .qp-activity-row { flex-direction: column; align-items: stretch; }
-          .qp-time-input, .qp-title-input { width: 100%; }
+        
+
+        /* ===== Compact design layer ===== */
+        .qp-wrap { padding: 12px clamp(10px, 3vw, 20px) 20px; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+        .qp-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 0 0 8px; }
+        .qp-head h2 { margin: 0; font-size: 1.15rem; font-weight: 800; letter-spacing: -.01em; color: #0f172a; }
+        .qp-head span { font-size: 0.78rem; color: #64748b; }
+        .qp-sticky { padding: 7px 12px; border-radius: 10px; margin-bottom: 8px; gap: 4px 18px; background: #111827; }
+        .qp-sticky .k { font-size: 0.6rem; }
+        .qp-sticky .v { font-size: 0.85rem; }
+        .qp-sticky .grow { font-size: 0.74rem; }
+        .qp-ghost, .qp-gen { min-height: 32px; font-size: 0.8rem; padding: 0 12px; border-radius: 8px; }
+        .qp-gen { background: #4f46e5; }
+        .qp-badge { font-size: 0.66rem; padding: 1px 7px; margin-left: 6px; }
+        .qp-set { padding: 8px 10px; margin-bottom: 8px; border-radius: 10px; }
+        .qp-set-grid { gap: 6px 10px; }
+        .qp-set-grid label { font-size: 0.66rem; text-transform: uppercase; letter-spacing: .05em; color: #64748b; margin-bottom: 2px; }
+        .qp-set-grid .qp-route-select { min-height: 32px; padding: 3px 8px; font-size: 0.82rem; border-radius: 8px; }
+        .qp-daysbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin: 4px 0 2px; }
+        .qp-daysbar h3 { margin: 0; font-size: 0.95rem; font-weight: 800; color: #0f172a; }
+        .qp-daysbar h3 span { font-size: 0.72rem; font-weight: 500; color: #64748b; margin-left: 6px; }
+        .qp-chk { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+        .qp-chk-ok { font-size: 0.78rem; font-weight: 700; color: #166534; background: #dcfce7; border-radius: 999px; padding: 3px 10px; }
+        .qp-chk-warn { font-size: 0.78rem; font-weight: 800; color: #92400e; background: #fef3c7; border-radius: 999px; padding: 3px 10px; }
+        .qp-fix { min-height: 28px; padding: 0 10px; font-size: 0.74rem; border-radius: 999px; border-color: #d6d3d1; color: #44403c; }
+        .qp-checks { padding: 8px; margin: 4px 0 6px; gap: 6px; border-radius: 10px; }
+        .qp-warn { padding: 4px 8px; border-radius: 8px; }
+        .qp-warn span { font-size: 0.8rem; }
+        .qp-ov { gap: 8px; padding: 4px 2px 8px; margin-bottom: 4px; }
+        .qp-ovcard { flex: 0 0 142px; border-width: 1.5px; border-radius: 10px; }
+        .qp-ovcard.on { border-color: #4f46e5; box-shadow: 0 0 0 3px #e0e7ff; }
+        .qp-ovmain { padding: 8px 10px; gap: 3px; min-height: 84px; }
+        .qp-ovdn { font-size: 0.64rem; }
+        .qp-ovrt { font-size: 0.82rem; line-height: 1.2; }
+        .qp-ovnt { font-size: 0.72rem; color: #475569; }
+        .qp-ovhot { font-size: 0.68rem; padding: 2px 6px; max-width: 100%; box-sizing: border-box; }
+        .qp-ovacts button { min-height: 30px; font-size: 0.85rem; }
+        .qp-ovadd { flex: 0 0 64px; min-height: 0; font-size: 0.78rem; border-radius: 10px; }
+        .qp-active-day { padding: 10px 12px 12px; background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgb(0 0 0 / .04); }
+        .qp-daypills { gap: 6px; padding: 0 0 8px; margin-bottom: 4px; background: #fff; }
+        .qp-daypill { min-height: 32px; padding: 0 14px; font-size: 0.8rem; }
+        .qp-daypill.on { background: #4f46e5; }
+        .qp-daytitle { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-bottom: 8px; }
+        .qp-daytitle h3 { margin: 0; font-size: 1rem; font-weight: 800; color: #0f172a; }
+        .qp-route-select.qp-preset { max-width: 320px; min-height: 32px; padding: 3px 8px; font-size: 0.8rem; border-radius: 8px; }
+        .qp-row { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; border-top: 1px solid #f1f5f9; }
+        .qp-rl { flex: 0 0 76px; padding-top: 6px; font-size: 0.74rem; font-weight: 800; color: #334155; text-transform: uppercase; letter-spacing: .04em; }
+        .qp-rl small { display: block; font-size: 0.64rem; font-weight: 500; color: #94a3b8; text-transform: none; letter-spacing: 0; line-height: 1.2; }
+        .qp-rc { flex: 1 1 auto; min-width: 0; }
+        .qp-city-btns { margin-top: 0; gap: 6px; }
+        .qp-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 8px; align-items: start; margin: 6px 0 2px; padding-top: 8px; border-top: 1px solid #f1f5f9; }
+        .qp-pair .qp-hotel-select { max-width: 100%; min-height: 34px; padding: 4px 8px; border-radius: 8px; }
+        .qp-ai { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+        .qp-ai input { flex: 1; min-width: 140px; max-width: none; min-height: 34px; padding: 4px 8px; font-size: 0.8rem; border-radius: 8px; }
+        .qp-ai button { padding: 0 12px; border-radius: 8px; border: none; background: #4f46e5; color: #fff; font-weight: 700; font-size: 0.8rem; min-height: 34px; cursor: pointer; }
+        .qp-act { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; }
+        .qp-act .qp-activity-row { margin-bottom: 6px; gap: 6px; }
+        .qp-time-input, .qp-title-input { min-height: 32px; font-size: 0.82rem; border-radius: 6px; }
+        .qp-title-input { font-weight: 700; }
+        .qp-time-input { width: 84px; }
+        .qp-more { margin-bottom: 8px; border-radius: 10px; }
+        .qp-more > summary { display: flex; align-items: center; gap: 8px; padding: 9px 14px; font-size: 0.85rem; }
+        .qp-more > summary::after { margin-left: auto; float: none; font-size: 0.72rem; }
+        .qp-more .qp-sub { display: inline; margin: 0; font-size: 0.72rem; }
+        .qp-footer-bar { margin-top: 10px; padding-top: 10px; align-items: center; }
+        .qp-save-btn { background: #4f46e5; min-height: 40px; padding: 8px 16px; border-radius: 8px; font-size: 0.88rem; }
+        .qp-cost-input { min-height: 36px; font-size: 1rem; border-radius: 8px; }
+        .qp-daypill { padding: 0 18px 0 14px; }
+        .qp-daypill .pd { top: 50%; right: 6px; transform: translateY(-50%); }
+        .qp-pair { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.4fr); }
+        @media (min-width: 721px) { .qp-daypills { display: none; } }
+        @media (max-width: 720px) {
+          .qp-set-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .qp-act .qp-activity-row { flex-wrap: nowrap; }
+          .qp-act .qp-time-input { width: 78px; }
+          .qp-act .qp-title-input { width: auto; min-width: 0; flex: 1; }
+        }
+        @media (max-width: 720px) {
+          .qp-pair { grid-template-columns: 1fr; }
+          .qp-row { flex-direction: column; gap: 2px; }
+          .qp-rl { flex: none; padding-top: 4px; }
+          .qp-rl small { display: inline; margin-left: 6px; }
+          .qp-route-select.qp-preset { max-width: 100%; width: 100%; }
         }
       `}</style>
 
       <div className="qp-wrap">
-        {/* 1. Dashboard Header */}
-        <div style={{ marginBottom: "24px", paddingBottom: "16px", borderBottom: "1px solid " + UI_THEME.colors.border }}>
-          <h2 style={{ fontSize: "clamp(1.3rem, 4vw, 1.75rem)", fontWeight: "800", color: UI_THEME.colors.primary, margin: "0 0 6px 0" }}>
-            ✨ Build the itinerary
-          </h2>
-          <p style={{ margin: 0, fontSize: "0.9rem", color: UI_THEME.colors.textLight }}>
-            Three steps: <b>1</b> pick each day's route &amp; hotel · <b>2</b> check the price · <b>3</b> tap <b>Generate PDF</b>.
-          </p>
+        {/* 1. Header */}
+        <div className="qp-head">
+          <h2>Build the itinerary</h2>
+          <span>① route &amp; hotel for each day &nbsp;→&nbsp; ② rooms &nbsp;→&nbsp; ③ Generate PDF</span>
         </div>
 
         {/* 2. Sticky summary bar */}
@@ -1557,10 +1633,28 @@ export default function QuotePreview({ quote }) {
           })}
         </div>
 
-        {/* 3. Trip overview strip */}
-        <h3 style={{ margin: "0 0 8px 0", fontSize: "1rem", color: "#0f172a" }}>
-          Your days <span style={{ fontWeight: 500, fontSize: "0.8rem", color: "#475569" }}>· tap a day to edit it</span>
-        </h3>
+        {/* 3. Days strip with the checks summary on the same line */}
+        <div className="qp-daysbar">
+          <h3>Your days <span>tap a day to edit</span></h3>
+          <div className="qp-chk">
+            {issues.length === 0
+              ? <span className="qp-chk-ok">✓ All set, ready for the PDF</span>
+              : <>
+                  <span className="qp-chk-warn">⚠ {issues.length} to finish</span>
+                  {missingHotelDays.length > 0 && (
+                    <button type="button" className="qp-fix" onClick={fixAllHotels}>Pick hotels ({missingHotelDays.length})</button>
+                  )}
+                  <button type="button" className="qp-fix" onClick={() => setShowChecks((v) => !v)}>{showChecks ? "Hide" : "Details"}</button>
+                </>}
+          </div>
+        </div>
+        {issues.length > 0 && showChecks && (
+          <div className="qp-checks">
+            {issues.map((w, k) => (
+              <div key={k} className="qp-warn"><span>{w.text}</span><button type="button" className="qp-fix" onClick={w.fix}>{w.btn}</button></div>
+            ))}
+          </div>
+        )}
         <div className="qp-ov">
           {timeline.map((d, i) => {
             const dep = isDepDay(d);
@@ -1576,35 +1670,13 @@ export default function QuotePreview({ quote }) {
                 <div className="qp-ovacts">
                   <button type="button" onClick={() => moveDay(i, -1)} disabled={i === 0} aria-label="Move day earlier">&#8249;</button>
                   <button type="button" onClick={() => moveDay(i, 1)} disabled={i === timeline.length - 1} aria-label="Move day later">&#8250;</button>
-                  <button type="button" onClick={() => copyDay(i)} aria-label="Duplicate day" title="Duplicate this day">Copy</button>
-                  <button type="button" onClick={() => deleteDay(i)} disabled={timeline.length <= 1} aria-label="Delete day" title="Remove this day">Remove</button>
+                  <button type="button" onClick={() => copyDay(i)} aria-label="Duplicate day" title="Duplicate this day">⧉</button>
+                  <button type="button" onClick={() => deleteDay(i)} disabled={timeline.length <= 1} aria-label="Delete day" title="Remove this day">✕</button>
                 </div>
               </div>
             );
           })}
           <button type="button" className="qp-ovadd" onClick={addDay}>+ Add day</button>
-        </div>
-
-        {/* Checks: one compact bar instead of a long list of warnings */}
-        <div className="qp-checks">
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ fontWeight: 800, fontSize: "0.95rem", color: issues.length ? "#78350f" : "#14532d" }}>
-              {issues.length === 0 ? "✅ All set. Ready to generate the PDF." : `⚠️ ${issues.length} ${issues.length === 1 ? "thing" : "things"} left to finish`}
-            </div>
-            {issues.length > 0 && (
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                {missingHotelDays.length > 0 && (
-                  <button type="button" className="qp-fix" style={{ background: "#fef3c7" }} onClick={fixAllHotels}>
-                    Pick hotels for {missingHotelDays.length} {missingHotelDays.length === 1 ? "day" : "days"}
-                  </button>
-                )}
-                <button type="button" className="qp-fix" onClick={() => setShowChecks((v) => !v)}>{showChecks ? "Hide list" : "Show list"}</button>
-              </div>
-            )}
-          </div>
-          {issues.length > 0 && showChecks && issues.map((w, k) => (
-            <div key={k} className="qp-warn"><span>{w.text}</span><button type="button" className="qp-fix" onClick={w.fix}>{w.btn}</button></div>
-          ))}
         </div>
 
         {/* 4. Active day editor */}
@@ -1618,9 +1690,17 @@ export default function QuotePreview({ quote }) {
               ))}
               <button type="button" className="qp-daypill plus" onClick={addDay} aria-label="Add a day">+ Day</button>
             </div>
-            <h3 style={{ margin: "0 0 15px 0", color: "#0f172a", fontSize: "clamp(1rem, 3vw, 1.2rem)" }}>
-              📍 Day {timeline[activeDay].day}: {timeline[activeDay].title || timeline[activeDay].date}
-            </h3>
+            <div className="qp-daytitle">
+              <h3>Day {timeline[activeDay].day}: {timeline[activeDay].title || timeline[activeDay].date}</h3>
+              <select
+                className="qp-route-select qp-preset"
+                value={TRANSIT_OPTIONS.includes(timeline[activeDay].transit_route) ? timeline[activeDay].transit_route : ""}
+                onChange={(e) => { const route = e.target.value; if (route) applyRoute(route); }}
+              >
+                <option value="">{timeline[activeDay].transit_route && !TRANSIT_OPTIONS.includes(timeline[activeDay].transit_route) ? `Custom route (built from the steps)` : "⚡ Quick start: pick a ready-made day"}</option>
+                {TRANSIT_OPTIONS.map((route, i) => <option key={i} value={route}>{routeLabel(route, startPoint, endPoint)}</option>)}
+              </select>
+            </div>
 
             {/* Route picker: Starting from -> Going to -> Overnight */}
             {(() => {
@@ -1658,81 +1738,64 @@ export default function QuotePreview({ quote }) {
               };
 
               const chipStyle = (on, disabled) => ({
-                padding: "8px 16px", borderRadius: "20px", minHeight: "40px", fontSize: "0.85rem", fontWeight: "bold",
-                border: on ? "2px solid #2563eb" : "1px solid #cbd5e1", backgroundColor: on ? "#2563eb" : "#fff",
-                color: on ? "#fff" : "#1e293b", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.45 : 1, transition: "all 0.15s",
+                padding: "4px 12px", borderRadius: "999px", minHeight: "30px", fontSize: "0.8rem", fontWeight: 700,
+                border: on ? "1px solid #4f46e5" : "1px solid #cbd5e1", backgroundColor: on ? "#4f46e5" : "#fff",
+                color: on ? "#fff" : "#1e293b", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.45 : 1, transition: "all 0.12s",
               });
               const row = (step, label, hint, options, value, onPick, disabled) => (
-                <div style={{ marginBottom: "14px" }}>
-                  <label style={{ fontWeight: "bold", color: "#334155", display: "block", marginBottom: "6px", fontSize: "0.9rem" }}>
-                    {step}. {label} {hint && <span style={{ fontWeight: 500, color: "#64748b", fontSize: "0.8rem" }}>{hint}</span>}
-                  </label>
-                  <div className="qp-city-btns" style={{ marginTop: 0 }}>
-                    {options.map((o) => (
-                      <button key={o} type="button" disabled={disabled} onClick={() => onPick(o)} style={chipStyle(value === o, disabled)}>{o}</button>
-                    ))}
-                  </div>
-                  {!disabled && (addOpen === step ? (
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center", marginTop: "8px" }}>
-                      <input
-                        autoFocus
-                        className="qp-route-select"
-                        style={{ maxWidth: "260px", minHeight: "38px" }}
-                        placeholder="Place name, e.g. Sopore"
-                        maxLength={40}
-                        value={addText}
-                        disabled={addBusy}
-                        onChange={(e) => setAddText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") { e.preventDefault(); addCustomPlace(addText, onPick); }
-                          if (e.key === "Escape") setAddOpen(null);
-                        }}
-                      />
-                      <button type="button" disabled={addBusy || !addText.trim()} onClick={() => addCustomPlace(addText, onPick)} style={{ ...chipStyle(true, false), border: "none" }}>
-                        {addBusy ? "Locating…" : "Add"}
-                      </button>
-                      <button type="button" disabled={addBusy} onClick={() => setAddOpen(null)} style={chipStyle(false, false)}>Cancel</button>
-                      {addErr && <div style={{ width: "100%", color: "#b91c1c", fontSize: "0.8rem" }}>{addErr}</div>}
+                <div className="qp-row">
+                  <label className="qp-rl">{step}. {label}{hint && <small>{hint}</small>}</label>
+                  <div className="qp-rc">
+                    <div className="qp-city-btns">
+                      {options.map((o) => (
+                        <button key={o} type="button" disabled={disabled} onClick={() => onPick(o)} style={chipStyle(value === o, disabled)}>{o}</button>
+                      ))}
+                      {!disabled && addOpen !== step && (
+                        <button type="button" onClick={() => { setAddOpen(step); setAddText(""); setAddErr(""); }} style={{ ...chipStyle(false, false), borderStyle: "dashed", color: "#4f46e5", borderColor: "#a5b4fc" }}>+ Place</button>
+                      )}
                     </div>
-                  ) : (
-                    <button type="button" onClick={() => { setAddOpen(step); setAddText(""); setAddErr(""); }} style={{ ...chipStyle(false, false), borderStyle: "dashed", color: "#0284c7", borderColor: "#7dd3fc", marginTop: "8px" }}>+ Add location</button>
-                  ))}
+                    {!disabled && addOpen === step && (
+                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center", marginTop: "6px" }}>
+                        <input
+                          autoFocus
+                          className="qp-route-select"
+                          style={{ maxWidth: "240px", minHeight: "32px" }}
+                          placeholder="Place name, e.g. Sopore"
+                          maxLength={40}
+                          value={addText}
+                          disabled={addBusy}
+                          onChange={(e) => setAddText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") { e.preventDefault(); addCustomPlace(addText, onPick); }
+                            if (e.key === "Escape") setAddOpen(null);
+                          }}
+                        />
+                        <button type="button" disabled={addBusy || !addText.trim()} onClick={() => addCustomPlace(addText, onPick)} style={{ ...chipStyle(true, false) }}>{addBusy ? "Locating…" : "Add"}</button>
+                        <button type="button" disabled={addBusy} onClick={() => setAddOpen(null)} style={chipStyle(false, false)}>Cancel</button>
+                        {addErr && <div style={{ width: "100%", color: "#b91c1c", fontSize: "0.78rem" }}>{addErr}</div>}
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
 
               return (
                 <div id="day-route-select">
-                  <div style={{ marginBottom: "14px" }}>
-                    <label style={{ fontWeight: "bold", color: "#334155", display: "block", marginBottom: "5px", fontSize: "0.9rem" }}>⚡ Quick start (optional): pick a ready-made day</label>
-                    <select
-                      className="qp-route-select"
-                      value={TRANSIT_OPTIONS.includes(day.transit_route) ? day.transit_route : ""}
-                      onChange={(e) => {
-                        const route = e.target.value;
-                        if (!route) return;
-                        applyRoute(route);
-                      }}
-                    >
-                      <option value="">{day.transit_route && !TRANSIT_OPTIONS.includes(day.transit_route) ? `Current: ${routeLabel(day.transit_route, startPoint, endPoint)} (built from steps below)` : `-- Choose a ready-made route for Day ${activeDay + 1}, or use steps 1–3 below --`}</option>
-                      {TRANSIT_OPTIONS.map((route, i) => <option key={i} value={route}>{routeLabel(route, startPoint, endPoint)}</option>)}
-                    </select>
-                  </div>
-
-                  {row(1, "Starting from", activeDay > 0 && !draft.from && !parsed && prevNight ? `(Day ${activeDay} overnight)` : (parsed && activeDay > 0 && from !== autoFrom ? `(Day ${activeDay} ended in ${prevNight || "?"})` : ""), fromOptions(), from, (o) => pick({ from: o }))}
-                  {row(2, "Going to", "", toOptions(), to, (o) => pick({ to: o }))}
-                  {row(3, "Overnight stay", isDep ? "(not needed on departure day)" : "", nightOptions(), night || (customRoute ? (day.overnight_stay || "") : ""), pickNight, isDep)}
+                  {row(1, "From", activeDay > 0 && !draft.from && !parsed && prevNight ? `Day ${activeDay} night` : (parsed && activeDay > 0 && from !== autoFrom ? `Day ${activeDay} ended in ${prevNight || "?"}` : ""), fromOptions(), from, (o) => pick({ from: o }))}
+                  {row(2, "To", "", toOptions(), to, (o) => pick({ to: o }))}
+                  {row(3, "Overnight", isDep ? "not needed" : "", nightOptions(), night || (customRoute ? (day.overnight_stay || "") : ""), pickNight, isDep)}
                   {addNote && <div style={{ fontSize: "0.8rem", color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "8px 10px", marginBottom: "10px" }}>{addNote}</div>}
-                  {customRoute && <div style={{ fontSize: "0.78rem", color: "#64748b", marginBottom: "10px" }}>Using preset “{day.transit_route}”. Pick From / To above to replace it.</div>}
+                  {customRoute && <div style={{ fontSize: "0.78rem", color: "#64748b", marginBottom: "10px" }}>Using “{day.transit_route}”. Pick From / To to replace it.</div>}
                 </div>
               );
             })()}
 
-            {/* Hotel dropdown: the hotels added for this day's overnight place */}
+            <div className="qp-pair">
             {!isDepDay(timeline[activeDay]) && (() => {
               const place = timeline[activeDay].overnight_stay || "";
               const list = HOTEL_KB[getHotelGroup(place)] || [];
               return (
-                <div style={{ marginBottom: "15px" }}>
+                <div>
                   <select
                     className="qp-hotel-select"
                     value={hotelSelections[activeDay] || ""}
@@ -1745,7 +1808,7 @@ export default function QuotePreview({ quote }) {
                   </select>
                   {!list.length && place && (
                     <div style={{ color: "#64748b", fontSize: "0.78rem", marginTop: "6px" }}>
-                      Add hotels for {place} in the Hotels tab. They then appear here and in the PDF.
+                      Add hotels for {place} in the Hotels tab.
                     </div>
                   )}
                 </div>
@@ -1753,12 +1816,12 @@ export default function QuotePreview({ quote }) {
             })()}
 
             {/* AI writer */}
-            <div style={{ background: "#faf5ff", border: "1px solid #e9d5ff", borderRadius: "8px", padding: "10px 12px", marginBottom: "4px" }}>
+            <div className="qp-ai">
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
                 <input
                   className="qp-route-select"
                   style={{ flex: 1, minWidth: "200px", maxWidth: "none" }}
-                  placeholder="Optional hints, e.g. honeymoon couple, relaxed pace, mention Shikara"
+                  placeholder="AI hints (optional): honeymoon couple, relaxed pace…"
                   maxLength={300}
                   value={aiHints}
                   onChange={(e) => setAiHints(e.target.value)}
@@ -1769,17 +1832,18 @@ export default function QuotePreview({ quote }) {
                   disabled={!!aiBusy}
                   style={{ padding: "8px 14px", borderRadius: "6px", border: "none", background: "#7c3aed", color: "#fff", fontWeight: "bold", cursor: aiBusy ? "wait" : "pointer", minHeight: "38px", opacity: aiBusy ? 0.7 : 1 }}
                 >
-                  {aiBusy === "day" ? "Writing…" : "✨ Rewrite day with AI"}
+                  {aiBusy === "day" ? "Writing…" : "✨ Rewrite day"}
                 </button>
               </div>
               {aiError && <div style={{ color: "#b91c1c", fontSize: "0.8rem", marginTop: "6px" }}>{aiError}</div>}
-              <div style={{ color: "#7e6a9b", fontSize: "0.72rem", marginTop: "6px" }}>AI text only fills the boxes below. Review it before generating the PDF.</div>
+            </div>
+
             </div>
 
             {/* Activity list */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "15px", marginTop: "15px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "10px" }}>
               {timeline[activeDay].schedule.map((slot, actIdx) => (
-                <div key={actIdx} style={{ backgroundColor: "#fff", padding: "clamp(10px, 3vw, 15px)", borderRadius: "6px", border: "1px solid #cbd5e1" }}>
+                <div key={actIdx} className="qp-act">
                   <div className="qp-activity-row">
                     <input
                       type="text"
@@ -1798,7 +1862,7 @@ export default function QuotePreview({ quote }) {
                       onClick={() => aiWriteActivity(actIdx)}
                       disabled={!!aiBusy}
                       title="Write this description with AI"
-                      style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #c4b5fd", background: "#f5f3ff", color: "#6d28d9", fontWeight: "bold", cursor: aiBusy ? "wait" : "pointer", minHeight: "36px", flexShrink: 0, opacity: aiBusy ? 0.7 : 1 }}
+                      style={{ padding: "4px 10px", borderRadius: "6px", border: "1px solid #c7d2fe", background: "#eef2ff", color: "#4338ca", fontWeight: "bold", fontSize: "0.8rem", cursor: aiBusy ? "wait" : "pointer", minHeight: "32px", flexShrink: 0, opacity: aiBusy ? 0.7 : 1 }}
                     >
                       {aiBusy === "act-" + actIdx ? "Writing…" : "✨ Write"}
                     </button>
@@ -1806,8 +1870,8 @@ export default function QuotePreview({ quote }) {
                   <textarea
                     value={slot.description}
                     onChange={(e) => handleDescriptionChange(activeDay, actIdx, e.target.value)}
-                    style={{ width: "100%", padding: "8px", border: "1px solid #cbd5e1", borderRadius: "4px", boxSizing: "border-box", resize: "vertical" }}
-                    rows={3}
+                    style={{ width: "100%", padding: "6px 8px", border: "1px solid #e2e8f0", borderRadius: "6px", boxSizing: "border-box", resize: "vertical", fontSize: "0.85rem", fontFamily: "inherit" }}
+                    rows={2}
                   />
                 </div>
               ))}
@@ -1817,7 +1881,7 @@ export default function QuotePreview({ quote }) {
 
         {/* 5. Hotel cost calculator (collapsed; stays mounted so the total still updates) */}
         <details className="qp-more">
-          <summary>🛏️ Rooms &amp; extra beds <span className="qp-sub">nights fill in automatically · rooms and EB are printed in the PDF</span></summary>
+          <summary><b>🛏️ Rooms &amp; extra beds</b> <span className="qp-sub">nights auto-fill · printed in the PDF</span></summary>
           <div style={{ padding: "4px 10px 12px" }}>
             <HotelCostDashboard hotelSelections={hotelSelections} timeline={timeline} onRowsChange={setHotelRows} />
           </div>
@@ -1825,7 +1889,7 @@ export default function QuotePreview({ quote }) {
 
         {/* 6. Hotel photo manager (rarely needed) */}
         <details className="qp-more">
-          <summary>🖼️ Hotel photos <span className="qp-sub">optional · add or change hotel pictures</span></summary>
+          <summary><b>🖼️ Hotel photos</b> <span className="qp-sub">optional</span></summary>
           <div style={{ padding: "4px 10px 12px" }}>
             <HotelImageManager />
           </div>
