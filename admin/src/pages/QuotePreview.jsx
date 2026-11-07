@@ -1551,33 +1551,73 @@ export default function QuotePreview({ quote, trip }) {
         }
       
         /* ===== Visual layer: Dal Lake dusk (ink teal, lake blue, saffron) ===== */
-        #qp-top { scroll-margin-top: 12px; --ink: #10272e; --lake: #1b5666; --lake-soft: #e4eef0; --saffron: #c98a14; --line: #d5e0df; }
+        #qp-top { scroll-margin-top: 12px; --ink: #10272e; --lake: #1b5666; --lake-soft: #e8f0f1; --saffron: #c98a14; --line: #dbe5e4; --mute: #5b7479; }
         #qp-top .qp-head h2 { font-family: Georgia, "Iowan Old Style", "Times New Roman", serif; font-weight: 700; font-size: 1.3rem; color: var(--ink); letter-spacing: 0; }
-        #qp-top .qp-head span { color: #5b7479; }
+        #qp-top .qp-head span { color: var(--mute); }
         #qp-top .qp-sticky { background: linear-gradient(120deg, #10272e 0%, #17414d 100%); border-bottom: 3px solid var(--saffron); border-radius: 12px; box-shadow: 0 10px 24px -14px rgb(16 39 46 / .7); padding: 10px 16px; }
         #qp-top .qp-sticky .k { color: #9fc0c6; letter-spacing: .05em; }
         #qp-top .qp-sticky .v { font-family: Georgia, "Iowan Old Style", serif; font-weight: 700; font-size: 1.02rem; }
-        #qp-top .qp-set, #qp-top .qp-active-day, #qp-top .qp-more { border-color: var(--line); border-radius: 14px; box-shadow: 0 1px 0 rgb(16 39 46 / .04), 0 12px 28px -22px rgb(16 39 46 / .45); }
-        #qp-top .qp-active-day { padding: 12px 14px 14px; border-top: 3px solid var(--lake); }
-        #qp-top .qp-daytitle h3 { font-family: Georgia, "Iowan Old Style", serif; font-size: 1.12rem; font-weight: 700; color: var(--ink); }
-        #qp-top .qp-daypills { background: transparent; }
-        #qp-top .qp-daypill { background: #fff; border: 1px solid var(--line); color: #2c4a52; transition: background .15s, color .15s; }
-        #qp-top .qp-daypill:hover:not(.on) { background: var(--lake-soft); }
-        #qp-top .qp-daypill.on { background: var(--lake); border-color: var(--lake); color: #fff; box-shadow: 0 4px 10px -4px rgb(27 86 102 / .7); }
-        #qp-top .qp-daypill .pd { background: var(--saffron); }
-        #qp-top .qp-daypill.plus { border: 1px dashed #8fb3ba; background: transparent; color: var(--lake); }
-        #qp-top .qp-row { border-top-color: #e6eded; }
-        #qp-top .qp-rl { color: #3d5a62; flex-basis: 96px; white-space: nowrap; }
-        @media (max-width: 720px) { #qp-top .qp-rl { flex-basis: auto; } }
-        #qp-top .qp-act { background: #f6f9f9; border-color: var(--line); border-radius: 12px; }
-        #qp-top select, #qp-top input[type="text"], #qp-top input[type="number"], #qp-top textarea { transition: border-color .15s, box-shadow .15s; }
-        #qp-top select:focus-visible, #qp-top input:focus-visible, #qp-top textarea:focus-visible, #qp-top button:focus-visible { outline: 2px solid var(--lake); outline-offset: 1px; border-color: var(--lake); }
-        #qp-top .qp-hotline { background: var(--lake-soft); border: 1px solid #c9dde0; border-radius: 12px; padding: 8px 10px; }
-        #qp-top .qp-hotline select.bad { border-color: #e0a45a; background: #fff6e8; color: #8a4b00; }
-        #qp-top .qp-stp button:active:not(:disabled) { background: var(--lake-soft); }
+        #qp-top .qp-set, #qp-top .qp-more { border-color: var(--line); border-radius: 14px; box-shadow: 0 12px 28px -24px rgb(16 39 46 / .5); }
         #qp-top .qp-fix { border-color: #c9dde0; color: var(--lake); }
         #qp-top .qp-chk-warn { background: #fff3d6; color: #8a5a00; }
         #qp-top .qp-save-btn { background: var(--ink); border: 0; border-bottom: 3px solid var(--saffron); }
+
+        /* Day editor: one calm sheet */
+        #qp-top .qp-active-day { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 14px 18px 18px; box-shadow: 0 1px 0 rgb(16 39 46 / .04), 0 18px 40px -30px rgb(16 39 46 / .55); }
+        #qp-top .qp-daypills { background: transparent; gap: 4px; padding: 0 0 10px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+        #qp-top .qp-daypill { background: transparent; border: 0; border-radius: 999px; color: var(--mute); font-weight: 600; min-height: 32px; padding: 0 22px 0 14px; transition: background .15s, color .15s; }
+        #qp-top .qp-daypill:hover:not(.on) { background: var(--lake-soft); color: var(--ink); }
+        #qp-top .qp-daypill.on { background: var(--ink); color: #fff; box-shadow: none; }
+        #qp-top .qp-daypill .pd { background: var(--saffron); }
+        #qp-top .qp-daypill.plus { border: 1px dashed #9db9be; color: var(--lake); background: transparent; }
+        #qp-top .qp-daytitle { margin-bottom: 10px; gap: 8px 12px; }
+        #qp-top .qp-daytitle h3 { font-family: Georgia, "Iowan Old Style", serif; font-size: 1.3rem; line-height: 1.2; font-weight: 700; color: var(--ink); }
+        #qp-top .qp-dayacts { gap: 2px; background: var(--lake-soft); border-radius: 10px; padding: 2px; }
+        #qp-top .qp-dayacts button { border: 0; background: transparent; width: 30px; height: 28px; border-radius: 8px; color: var(--ink); }
+        #qp-top .qp-dayacts button:hover:not(:disabled) { background: #fff; }
+        #qp-top .qp-daytitle .qp-preset { border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--mute); max-width: 260px; min-height: 34px; font-size: .8rem; }
+
+        /* Route as a journey: a thin rail with a stop per row */
+        #qp-top #day-route-select { margin: 4px 0 12px; }
+        #qp-top .qp-row { position: relative; border-top: 0; padding: 5px 0 5px 24px; gap: 12px; align-items: flex-start; }
+        #qp-top .qp-row::before { content: ""; position: absolute; left: 0; top: 13px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--lake); background: #fff; box-sizing: border-box; }
+        #qp-top .qp-row:has(+ .qp-row)::after { content: ""; position: absolute; left: 4px; top: 23px; bottom: -13px; width: 2px; background: #cfe0e3; }
+        #qp-top .qp-rl { flex: 0 0 52px; padding-top: 5px; font-size: .84rem; font-weight: 700; color: var(--ink); text-transform: none; letter-spacing: 0; white-space: nowrap; }
+        #qp-top .qp-rl small { font-size: .68rem; font-weight: 500; color: var(--mute); }
+        #qp-top .qp-city-btns { gap: 5px; }
+        #qp-top .qp-city-btns button:hover:not(:disabled) { filter: brightness(.96); }
+
+        /* Stay + AI toolbar */
+        #qp-top .qp-ai > div { gap: 8px; align-items: stretch; }
+        #qp-top .qp-hotline { width: auto; flex: 0 1 auto; background: var(--lake-soft); border: 0; border-radius: 12px; padding: 6px 8px; gap: 8px; }
+        #qp-top .qp-hotline select.qp-h-wide { width: 230px; border-color: transparent; background: #fff; }
+        #qp-top .qp-hotline select.bad { border: 1px solid #e0a45a; background: #fff6e8; color: #8a4b00; }
+        #qp-top .qp-stp { background: #fff; border-radius: 9px; padding: 2px 3px 2px 9px; gap: 4px; color: var(--mute); }
+        #qp-top .qp-stp button { border: 0; background: var(--lake-soft); width: 26px; height: 26px; border-radius: 7px; }
+        #qp-top .qp-stp b { min-width: 20px; }
+        #qp-top .qp-nohotel { font-size: .82rem; color: var(--mute); padding: 0 6px; align-self: center; }
+        #qp-top .qp-hotline:has(.qp-nohotel) { background: transparent; padding: 0; }
+        #qp-top .qp-ai input.qp-route-select { border: 1px solid var(--line); background: #fff; border-radius: 10px; }
+        #qp-top .qp-ai > div > button { background: var(--saffron); color: #1b1200; border-radius: 10px; min-height: 40px; }
+
+        /* Activities */
+        #qp-top .qp-act { background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--saffron); border-radius: 12px; padding: 10px 12px; }
+        #qp-top .qp-act input, #qp-top .qp-act textarea { background: #f6f9f9; border-color: transparent; border-radius: 9px; }
+        #qp-top .qp-act input:hover, #qp-top .qp-act textarea:hover { border-color: #c9dde0; }
+        #qp-top .qp-act .qp-time-input { color: var(--lake); font-weight: 600; }
+        #qp-top .qp-act .qp-title-input { font-weight: 700; color: var(--ink); }
+
+        #qp-top select:focus-visible, #qp-top input:focus-visible, #qp-top textarea:focus-visible, #qp-top button:focus-visible { outline: 2px solid var(--lake); outline-offset: 1px; }
+        @media (max-width: 720px) {
+          #qp-top .qp-active-day { padding: 10px 12px 14px; border-radius: 14px; }
+          #qp-top .qp-daytitle h3 { font-size: 1.1rem; }
+          #qp-top .qp-rl { flex-basis: auto; }
+          #qp-top .qp-row { flex-direction: column; gap: 0; padding-left: 20px; }
+          #qp-top .qp-row::before { top: 9px; }
+          #qp-top .qp-row:has(+ .qp-row)::after { top: 19px; }
+          #qp-top .qp-hotline { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+          #qp-top .qp-hotline select.qp-h-wide { width: 100%; }
+        }
         @media (prefers-reduced-motion: reduce) { #qp-top * { transition: none !important; } }
 `}</style>
 
@@ -1737,13 +1777,13 @@ export default function QuotePreview({ quote, trip }) {
               };
 
               const chipStyle = (on, disabled) => ({
-                padding: "4px 12px", borderRadius: "999px", minHeight: "30px", fontSize: "0.8rem", fontWeight: 700,
-                border: on ? "1px solid #1b5666" : "1px solid #cbd5e1", backgroundColor: on ? "#1b5666" : "#fff",
-                color: on ? "#fff" : "#1e293b", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.45 : 1, transition: "all 0.12s",
+                padding: "3px 12px", borderRadius: "999px", minHeight: "28px", fontSize: "0.8rem", fontWeight: 600,
+                border: on ? "1px solid #1b5666" : "1px solid transparent", backgroundColor: on ? "#1b5666" : "#edf2f2",
+                color: on ? "#fff" : "#1f3f47", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.4 : 1, transition: "background-color .12s, color .12s",
               });
               const row = (step, label, hint, options, value, onPick, disabled) => (
                 <div className="qp-row">
-                  <label className="qp-rl">{step}. {label}{hint && <small>{hint}</small>}</label>
+                  <label className="qp-rl">{label}{hint && <small>{hint}</small>}</label>
                   <div className="qp-rc">
                     <div className="qp-city-btns">
                       {options.map((o) => {
@@ -1759,7 +1799,7 @@ export default function QuotePreview({ quote, trip }) {
                         );
                       })}
                       {!disabled && addOpen !== step && (
-                        <button type="button" onClick={() => { setAddOpen(step); setAddText(""); setAddErr(""); }} style={{ ...chipStyle(false, false), borderStyle: "dashed", color: "#1b5666", borderColor: "#8fb3ba" }}>+ Place</button>
+                        <button type="button" onClick={() => { setAddOpen(step); setAddText(""); setAddErr(""); }} style={{ ...chipStyle(false, false), borderStyle: "dashed", color: "#1b5666", borderColor: "#8fb3ba", backgroundColor: "transparent" }}>+ Place</button>
                       )}
                     </div>
                     {!disabled && addOpen === step && (
@@ -1791,7 +1831,7 @@ export default function QuotePreview({ quote, trip }) {
                 <div id="day-route-select">
                   {row(1, "From", activeDay > 0 && !draft.from && !parsed && prevNight ? `Day ${activeDay} night` : (parsed && activeDay > 0 && from !== autoFrom ? `Day ${activeDay} ended in ${prevNight || "?"}` : ""), fromOptions(), from, (o) => pick({ from: o }))}
                   {row(2, "To", "", toOptions(), to, (o) => pick({ to: o }))}
-                  {row(3, "Overnight", isDep ? "not needed" : "", nightOptions(), night || (customRoute ? (day.overnight_stay || "") : ""), pickNight, isDep)}
+                  {row(3, "Stay", isDep ? "not needed" : "", nightOptions(), night || (customRoute ? (day.overnight_stay || "") : ""), pickNight, isDep)}
                   {(isDep || day.transit_route === DROP_ROUTE) && row(4, "Drop at", "", [...POINT_PRESETS, ...fromOptions().filter((o) => o !== "Airport" && o !== "Srinagar")], endPoint || DEFAULT_POINT, (o) => changeEnd(o))}
                   {addNote && <div style={{ fontSize: "0.8rem", color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "8px 10px", marginBottom: "10px" }}>{addNote}</div>}
                   {customRoute && <div style={{ fontSize: "0.78rem", color: "#64748b", marginBottom: "10px" }}>Using “{day.transit_route}”. Pick From / To to replace it.</div>}
@@ -1810,7 +1850,7 @@ export default function QuotePreview({ quote, trip }) {
                   const list = dep ? [] : (HOTEL_KB[getHotelGroup(d.overnight_stay)] || []);
                   return (
                     <div className="qp-hotline">
-                      {dep ? <span className="qp-ovdrop qp-h-wide" style={{ margin: 0 }}>Drop-off · no hotel</span> : (
+                      {dep ? <span className="qp-nohotel">Departure day, no hotel needed</span> : (
                         <>
                           <select className={"qp-h-wide" + (hotelSelections[i] ? "" : " bad")} aria-label={`Hotel for day ${i + 1}`} value={hotelSelections[i] || ""}
                             onChange={(e) => setHotelSelections((prev) => ({ ...prev, [i]: e.target.value }))}>
@@ -1836,7 +1876,7 @@ export default function QuotePreview({ quote, trip }) {
                 <input
                   className="qp-route-select"
                   style={{ flex: 1, minWidth: "160px", maxWidth: "none" }}
-                  placeholder="AI hints (optional): honeymoon couple, relaxed pace…"
+                  placeholder="AI hints: honeymoon, relaxed pace…"
                   maxLength={300}
                   value={aiHints}
                   onChange={(e) => setAiHints(e.target.value)}
