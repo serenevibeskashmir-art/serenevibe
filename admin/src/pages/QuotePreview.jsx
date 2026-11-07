@@ -1370,6 +1370,12 @@ export default function QuotePreview({ quote }) {
         .qp-daypill .pd { position: absolute; top: 6px; right: 7px; width: 9px; height: 9px; border-radius: 50%; background: #f59e0b; border: 1px solid #fff; }
         .qp-daypill.plus { background: #fff; border: 2px dashed #94a3b8; color: #334155; }
         .qp-active-day { scroll-margin-top: 12px; }
+        .qp-set { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 14px 12px; margin-bottom: 14px; box-shadow: ${UI_THEME.shadows.sm}; }
+        .qp-set-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; }
+        .qp-set-grid label { display: block; font-size: 0.74rem; font-weight: 700; color: #475569; margin-bottom: 3px; }
+        .qp-set-grid .qp-route-select { max-width: 100%; width: 100%; min-height: 38px; padding: 6px 8px; font-size: 0.84rem; }
+        @media (max-width: 900px) { .qp-set-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+        @media (max-width: 480px) { .qp-set-grid { grid-template-columns: 1fr; } }
         .qp-more { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 14px; box-shadow: ${UI_THEME.shadows.sm}; }
         .qp-more > summary { cursor: pointer; padding: 14px 18px; font-weight: 700; font-size: 0.92rem; color: #1e293b; list-style: none; min-height: 24px; }
         .qp-more > summary::-webkit-details-marker { display: none; }
@@ -1480,91 +1486,76 @@ export default function QuotePreview({ quote }) {
           </div>
         )}
 
-        {/* Vehicle + meal plan */}
-        <div style={{ background: "#fff", border: "1px solid " + UI_THEME.colors.border, borderRadius: "12px", padding: "14px 18px", marginBottom: "20px", boxShadow: UI_THEME.shadows.sm }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "14px" }}>
+        {/* Trip settings: vehicle, meal plan, start and end point in one compact row */}
+        <div className="qp-set">
+          <div className="qp-set-grid">
             <div>
-              <label style={{ display: "block", fontWeight: "700", color: "#334155", fontSize: "0.9rem", marginBottom: "6px" }}>🚗 Vehicle</label>
+              <label>🚗 Vehicle</label>
               <select className="qp-route-select"
                 value={VEHICLE_OPTIONS.includes(vehicleType) ? vehicleType : "__custom"}
                 onChange={(e) => setVehicleType(e.target.value === "__custom" ? "" : e.target.value)}>
                 {VEHICLE_OPTIONS.map((v) => <option key={v} value={v}>{v}</option>)}
-                <option value="__custom">Other (type your vehicle name)…</option>
+                <option value="__custom">Other…</option>
               </select>
-              {!VEHICLE_OPTIONS.includes(vehicleType) && (
-                <input className="qp-route-select" style={{ marginTop: "6px" }}
-                  placeholder="e.g. Toyota Innova Hycross, Force Urbania"
-                  value={vehicleType} onChange={(e) => setVehicleType(e.target.value)} />
-              )}
-              <div style={{ fontSize: "0.75rem", color: "#94a3b8", marginTop: "4px" }}>Shown in the PDF summary and inclusions.</div>
             </div>
             <div>
-              <label style={{ display: "block", fontWeight: "700", color: "#334155", fontSize: "0.9rem", marginBottom: "6px" }}>🍽️ Meal Plan</label>
-              <select className="qp-route-select" value={mealPlan} onChange={(e) => setMealPlan(e.target.value)}>
+              <label>🍽️ Meal plan</label>
+              <select className="qp-route-select" title={MEAL_PLANS.find((m) => m.code === mealPlan)?.desc} value={mealPlan} onChange={(e) => setMealPlan(e.target.value)}>
                 {MEAL_PLANS.map((m) => <option key={m.code} value={m.code}>{m.code} – {m.name}</option>)}
               </select>
-              <div style={{ fontSize: "0.75rem", color: "#94a3b8", marginTop: "4px" }}>{MEAL_PLANS.find((m) => m.code === mealPlan)?.desc}</div>
             </div>
+            {[["🛫 Starts from", startPoint, changeStart, "start"], ["🛬 Ends at", endPoint, changeEnd, "end"]].map(([label, val, setter, key]) => (
+              <div key={key}>
+                <label>{label}</label>
+                <select className="qp-route-select" value={POINT_PRESETS.includes(val) ? val : "__custom"}
+                  onChange={(e) => setter(e.target.value === "__custom" ? "" : e.target.value)}>
+                  {POINT_PRESETS.map((p) => <option key={p} value={p}>{p}</option>)}
+                  <option value="__custom">Other…</option>
+                </select>
+              </div>
+            ))}
           </div>
-        </div>
 
-        {/* Tour start / end points (collapsed: most tours use the Srinagar defaults) */}
-        <details className="qp-more">
-          <summary>🧭 Tour start &amp; end point <span className="qp-sub">{startPoint} → {endPoint} · change only if not Srinagar</span></summary>
-        <div style={{ padding: "4px 18px 14px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "14px" }}>
-            {[["Tour starts from (Day 1 pickup)", startPoint, changeStart, "start"], ["Tour ends at (last-day drop)", endPoint, changeEnd, "end"]].map(([label, val, setter, key]) => {
-              const isCustom = !POINT_PRESETS.includes(val);
-              return (
-                <div key={key}>
-                  <label style={{ display: "block", fontSize: "0.8rem", color: "#64748b", marginBottom: "4px" }}>{label}</label>
-                  <select
-                    className="qp-route-select"
-                    value={isCustom ? "__custom" : val}
-                    onChange={(e) => setter(e.target.value === "__custom" ? "" : e.target.value)}
-                  >
-                    {POINT_PRESETS.map((p) => <option key={p} value={p}>{p}</option>)}
-                    <option value="__custom">Other (type below)…</option>
-                  </select>
+          {/* Extra fields only appear when "Other…" is chosen */}
+          {(!VEHICLE_OPTIONS.includes(vehicleType)) && (
+            <input className="qp-route-select" style={{ marginTop: "8px", maxWidth: "340px" }}
+              placeholder="Vehicle name, e.g. Toyota Innova Hycross"
+              value={vehicleType} onChange={(e) => setVehicleType(e.target.value)} />
+          )}
+          {[["start", "Start", startPoint, changeStart], ["end", "End", endPoint, changeEnd]].map(([key, label, val, setter]) => {
+            const isCustom = !POINT_PRESETS.includes(val);
+            const showFind = !isSrinagarPoint(val) && val.trim().length >= 3;
+            if (!isCustom && !showFind) return null;
+            const info = key === "start" ? startInfo : endInfo;
+            const small = { width: "78px", padding: "4px 6px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "0.8rem", boxSizing: "border-box" };
+            return (
+              <div key={key} style={{ marginTop: "8px" }}>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                  <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#334155" }}>{label} point:</span>
                   {isCustom && (
-                    <input
-                      className="qp-route-select"
-                      style={{ marginTop: "6px" }}
-                      placeholder="e.g. Delhi Airport, Udhampur Railway Station"
-                      value={val}
-                      onChange={(e) => setter(e.target.value)}
-                    />
+                    <input className="qp-route-select" style={{ maxWidth: "300px", minHeight: "36px" }}
+                      placeholder="e.g. Delhi Airport, Udhampur Railway Station" value={val} onChange={(e) => setter(e.target.value)} />
                   )}
-                  {!isSrinagarPoint(val) && val.trim().length >= 3 && (() => {
-                    const info = key === "start" ? startInfo : endInfo;
-                    const small = { width: "78px", padding: "4px 6px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "0.8rem", boxSizing: "border-box" };
-                    return (
-                      <div style={{ marginTop: "6px" }}>
-                        <button type="button" onClick={() => locatePoint(key)} disabled={!!locBusy}
-                          style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #c4b5fd", background: "#f5f3ff", color: "#6d28d9", fontWeight: "bold", cursor: locBusy ? "wait" : "pointer", fontSize: "0.8rem" }}>
-                          {locBusy === key ? "Looking up…" : "📍 Find location & distance (AI)"}
-                        </button>
-                        {info && (
-                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "6px", alignItems: "center", fontSize: "0.72rem", color: "#64748b" }}>
-                            <span>Lat</span><input style={small} type="number" step="0.0001" value={info.lat ?? ""} onChange={(e) => editInfo(key, "lat", e.target.value)} />
-                            <span>Lon</span><input style={small} type="number" step="0.0001" value={info.lon ?? ""} onChange={(e) => editInfo(key, "lon", e.target.value)} />
-                            <span>km by road</span><input style={small} type="number" value={info.km ?? ""} onChange={(e) => editInfo(key, "km", e.target.value)} />
-                            <span>hrs</span><input style={{ ...small, width: "60px" }} type="number" step="0.5" value={info.hours ?? ""} onChange={(e) => editInfo(key, "hours", e.target.value)} />
-                          </div>
-                        )}
-                        {locMsg[key] && <div style={{ fontSize: "0.72rem", color: info ? "#7e6a9b" : "#b91c1c", marginTop: "4px" }}>{locMsg[key]}</div>}
-                      </div>
-                    );
-                  })()}
+                  {showFind && (
+                    <button type="button" onClick={() => locatePoint(key)} disabled={!!locBusy}
+                      style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #c4b5fd", background: "#f5f3ff", color: "#6d28d9", fontWeight: "bold", cursor: locBusy ? "wait" : "pointer", fontSize: "0.8rem" }}>
+                      {locBusy === key ? "Looking up…" : "📍 Find location & distance (AI)"}
+                    </button>
+                  )}
                 </div>
-              );
-            })}
-          </div>
-          <p style={{ margin: "8px 0 0", fontSize: "0.75rem", color: "#94a3b8" }}>
-            Updates the pickup / drop days and the PDF. Applies to the days using the “Airport Pickup…” (any overnight city) and “Airport Drop-Departure” routes (their descriptions are regenerated).
-          </p>
+                {info && (
+                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "6px", alignItems: "center", fontSize: "0.72rem", color: "#64748b" }}>
+                    <span>Lat</span><input style={small} type="number" step="0.0001" value={info.lat ?? ""} onChange={(e) => editInfo(key, "lat", e.target.value)} />
+                    <span>Lon</span><input style={small} type="number" step="0.0001" value={info.lon ?? ""} onChange={(e) => editInfo(key, "lon", e.target.value)} />
+                    <span>km by road</span><input style={small} type="number" value={info.km ?? ""} onChange={(e) => editInfo(key, "km", e.target.value)} />
+                    <span>hrs</span><input style={{ ...small, width: "60px" }} type="number" step="0.5" value={info.hours ?? ""} onChange={(e) => editInfo(key, "hours", e.target.value)} />
+                  </div>
+                )}
+                {locMsg[key] && <div style={{ fontSize: "0.72rem", color: info ? "#7e6a9b" : "#b91c1c", marginTop: "4px" }}>{locMsg[key]}</div>}
+              </div>
+            );
+          })}
         </div>
-        </details>
 
         {/* 3. Trip overview strip */}
         <h3 style={{ margin: "0 0 8px 0", fontSize: "1rem", color: "#0f172a" }}>
