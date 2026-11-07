@@ -18,6 +18,10 @@ const UI_THEME = {
   }
 };
 
+// Room type printed on the quote's "Where you'll stay" cards (a day's choice carries to later days, like rooms / EB).
+const ROOM_TYPES = ["Deluxe Room", "Super Deluxe Room", "Premium Room", "Executive Room", "Family Room", "Suite", "Cottage", "Houseboat Cabin"];
+const DEFAULT_ROOM_TYPE = "Deluxe Room";
+
 const TRANSIT_OPTIONS = [
   "Airport Pickup and Local Sightseeing: Overnight Srinagar",
   "Airport Pickup: Overnight Pahalgam",
@@ -1152,7 +1156,7 @@ export default function QuotePreview({ quote, trip }) {
                     vehicle_type: vehicleType,
                     meal_plan: mealPlan,
                     return_pdf: true,
-                    timeline,
+                    timeline: timeline.map((d) => (isDepDay(d) || d.room_type ? d : { ...d, room_type: DEFAULT_ROOM_TYPE })),
                     hotelSelections,
                     hotel_details: Object.values(hotelSelections).reduce((acc, id) => {
                       const h = ALL_HOTELS_FLAT[id];
@@ -1856,6 +1860,10 @@ export default function QuotePreview({ quote, trip }) {
                             onChange={(e) => setHotelSelections((prev) => ({ ...prev, [i]: e.target.value }))}>
                             <option value="">{list.length ? "Choose hotel…" : `No hotels in ${d.overnight_stay || "this place"}`}</option>
                             {list.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+                          </select>
+                          <select className="qp-h-room" aria-label={`Room type for day ${i + 1}`} value={d.room_type || DEFAULT_ROOM_TYPE}
+                            onChange={(e) => setRoomField(i, "room_type", e.target.value)}>
+                            {[...new Set([d.room_type || DEFAULT_ROOM_TYPE, ...ROOM_TYPES])].map((t) => <option key={t} value={t}>{t}</option>)}
                           </select>
                           {[["rooms", "Rooms", 1, 1, 20], ["eb", "EB", 0, 0, 20]].map(([f, lbl, def, min, max]) => {
                             const v = Math.max(min, Math.min(max, Number(d[f] ?? def) || def));
