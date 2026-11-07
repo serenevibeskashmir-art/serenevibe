@@ -3184,13 +3184,16 @@ def generate_pdf(itinerary_data: dict) -> str:
     hotel_rows = [hotel_header]
     _hd = itinerary_data.get("hotel_details") or {}
 
-    def _count(hid, key, default):
-        # rooms / extra beds typed in the itinerary builder for this hotel
-        try:
+    def _count(day, hid, key, default):
+        # rooms / extra beds typed on the day card (fallback: per-hotel values)
+        v = day.get(key)
+        if v in (None, ""):
             v = (_hd.get(str(hid)) or {}).get(key)
+        try:
             return str(max(0, int(float(v)))) if v not in (None, "") else default
         except (TypeError, ValueError):
             return default
+
     day_place_map = {}
     meal_plan_code = str(itinerary_data.get("meal_plan") or "MAP").strip().upper()
 
@@ -3227,8 +3230,8 @@ def generate_pdf(itinerary_data: dict) -> str:
 
         meal_plan = "-" if is_departure_day else _MEAL_PLAN_LABELS.get(meal_plan_code, "MAP (B&amp;D)")
         _has_hotel = bool(hotel_id) and not is_departure_day
-        rooms_txt = _count(hotel_id, "rooms", "1") if _has_hotel else "-"
-        eb_txt    = _count(hotel_id, "eb", "0") if _has_hotel else "-"
+        rooms_txt = _count(day_info, hotel_id, "rooms", "1") if _has_hotel else "-"
+        eb_txt    = _count(day_info, hotel_id, "eb", "0") if _has_hotel else "-"
         if eb_txt == "0":
             eb_txt = "-"     # no extra bed
 
