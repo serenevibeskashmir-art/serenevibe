@@ -1514,6 +1514,33 @@ class SectionTitle(Flowable):
         c.addOutlineEntry(self.title.title().replace("&", "&"), key, level=0, closed=False)
 
 
+# ─── Placeholder-safe business details ───────────────────────────────────────
+def _is_placeholder(v):
+    """True for blank / dummy values (xxx@..., XXXXXXXX, n/a ...) that must never reach a client."""
+    t = str(v or "").strip().lower()
+    return (t in ("", "n/a", "na", "none", "null", "-", "tbd")
+            or bool(re.search(r"x{3,}", t)) or t.startswith("xxx@"))
+
+
+def _real(v):
+    return "" if _is_placeholder(v) else str(v).strip()
+
+
+# Set these in the environment (or backend config) once; until then they are simply not printed.
+BANK_ACCOUNT_NO = _real(os.environ.get("SVK_BANK_ACCOUNT_NO"))
+BANK_IFSC       = _real(os.environ.get("SVK_BANK_IFSC"))
+BUSINESS_GST_NO = _real(os.environ.get("SVK_GST_NO"))
+
+
+def _sharing_text(adults):
+    try:
+        n = int(adults)
+    except (TypeError, ValueError):
+        n = 2
+    word = {1: "single", 2: "double", 3: "triple"}.get(n)
+    return f"Accommodation on {word} sharing basis" if word else "Accommodation as per the room plan above"
+
+
 # ─── Kashmir Route Map (Layout 3: map top + legend table below) ──────────────
 DEFAULT_POINT = "Srinagar Airport"   # default tour start / end point
 
@@ -2833,8 +2860,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     budget_tier  = itinerary_data.get("budget_tier", "Mid-Range")
     vehicle_type = itinerary_data.get("vehicle_type", "Sedan")
     client_email = str(itinerary_data.get("client_email") or "").strip()
-    if client_email.lower() in ("", "n/a", "na", "none", "null", "-", "tbd"):
-        client_email = "xxx@gmail.com"   # email is optional; show a placeholder in the PDF
+    client_email = _real(client_email)   # blank / dummy email is never printed
     start_point  = str(itinerary_data.get("start_point") or "").strip() or DEFAULT_POINT
     end_point    = str(itinerary_data.get("end_point") or "").strip() or DEFAULT_POINT
     itinerary_data = dict(itinerary_data)
@@ -2856,8 +2882,10 @@ def generate_pdf(itinerary_data: dict) -> str:
         [
             Paragraph("CLIENT NAME", styles["summary_label"]),
             Paragraph(clean(client_name), styles["summary_value"]),
-            Paragraph("EMAIL", styles["summary_label"]),
-            Paragraph(clean(str(client_email)), styles["summary_value"]),
+            Paragraph("EMAIL" if client_email else "QUOTE VALID UNTIL", styles["summary_label"]),
+            Paragraph(clean(str(client_email)) if client_email else
+                      (datetime.datetime.now(IST) + datetime.timedelta(days=7)).strftime("%d %b %Y"),
+                      styles["summary_value"]),
         ],
         [
             Paragraph("TOUR DURATION", styles["summary_label"]),
@@ -3316,7 +3344,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         "Stay at the hotels mentioned in the itinerary or similar",
         _MEAL_INCLUSION.get(str(itinerary_data.get("meal_plan") or "MAP").strip().upper(), _MEAL_INCLUSION["MAP"]),
         "Celebration Cake",
-        "Accommodation on triple sharing basis",
+        _sharing_text(adults),
         "01 Hour complimentary Shikara ride",
         "Toll taxes, fuel charges, parking fees and driver's allowance",
     ]
@@ -3413,7 +3441,9 @@ def generate_pdf(itinerary_data: dict) -> str:
 
     _sd = _start_dt(start_date)
     _d1 = (datetime.datetime.now(IST) + datetime.timedelta(days=7)).strftime("%d %b %Y")
-    _d2 = (_sd - datetime.timedelta(days=30)).strftime("%d %b %Y") if _sd else ""
+    _d2_dt = (_sd - datetime.timedelta(days=7)) if _sd else None
+    _d2 = _d2_dt.strftime("%d %b %Y") if _d2_dt else ""
+    _d2_passed = bool(_d2_dt and _d2_dt.date() <= datetime.datetime.now(IST).date())
     _d3 = _sd.strftime("%d %b %Y") if _sd else ""
     pay_data = [
         ("1st Instalment (25%)",
@@ -3423,12 +3453,13 @@ def generate_pdf(itinerary_data: dict) -> str:
          "Pending"),
         ("2nd Instalment (25%)",
          f"INR {inst2_amt:,}" if total_amt else "TBD",
-         "A month before travel date" + (f"<br/><font size='7' color='#64748b'>by {_d2}</font>" if _d2 else ""),
+         ("With the 1st instalment" if _d2_passed else
+          "7 days before arrival" + (f"<br/><font size='7' color='#64748b'>by {_d2}</font>" if _d2 else "")),
          "NEFT / UPI / Cheque",
          "Pending"),
         ("3rd Instalment (50%)",
          f"INR {inst3_amt:,}" if total_amt else "TBD",
-         "On Arrival" + (f"<br/><font size='7' color='#64748b'>{_d3}</font>" if _d3 else ""),
+         "On arrival" + (f"<br/><font size='7' color='#64748b'>{_d3}</font>" if _d3 else ""),
          "NEFT / UPI / Cheque",
          "Pending"),
     ]
@@ -3467,10 +3498,15 @@ def generate_pdf(itinerary_data: dict) -> str:
     # Bank details sub-note
     bank_note_style = ParagraphStyle("bn", fontName="Lato", fontSize=7.5,
                                      textColor=GRAY_600, leading=11)
+    _bank = ["Account Name: Serene Vibes Kashmir", "Bank: J&amp;K Bank"]
+    if BANK_ACCOUNT_NO:
+        _bank.append(f"Account No: {BANK_ACCOUNT_NO}")
+    if BANK_IFSC:
+        _bank.append(f"IFSC: {BANK_IFSC}")
+    _bank.append("UPI: serenevibeskashmir@upi")
     page_block_1.append(Paragraph(
-        "<b>Bank Transfer Details:</b>  Account Name: Serene Vibes Kashmir  |  "
-        "Bank: J&amp;K Bank  |  Account No: XXXXXXXXXX  |  IFSC: JAKA0XXXXXX  |  "
-        "UPI: serenevibeskashmir@upi",
+        ("<b>Bank Transfer Details:</b>  " if (BANK_ACCOUNT_NO and BANK_IFSC) else "<b>Pay by UPI:</b>  ")
+        + ("  |  ".join(_bank) if (BANK_ACCOUNT_NO and BANK_IFSC) else "serenevibeskashmir@upi"),
         bank_note_style
     ))
     # Flush page_block_1 (Hotel Assignments + Inc/Exc + Payment) to story
@@ -3646,8 +3682,8 @@ def generate_pdf(itinerary_data: dict) -> str:
         [
             Paragraph("Office Address", contact_label_st),
             Paragraph("NH-44, Lethpora, Jammu &amp; Kashmir – 192122", contact_val_st),
-            Paragraph("GST No.", contact_label_st),
-            Paragraph("01XXXXXXXXX1ZX", contact_val_st),
+            Paragraph("GST No." if BUSINESS_GST_NO else "", contact_label_st),
+            Paragraph(BUSINESS_GST_NO, contact_val_st),
         ],
     ]
 
@@ -3690,9 +3726,9 @@ def generate_pdf(itinerary_data: dict) -> str:
          "in case The Traveler is unable to confirm your booking on the requested date."),
 
         ("Travel Plan / Itinerary",
-         "These are sample itineraries intended to give a general idea of our standard tour. External "
+         "This itinerary is planned for you. External "
          "factors such as weather, road conditions, natural hazards and physical ability of participants "
-         "may dictate changes before or during the trip. Serene Vibes is not responsible for delays or "
+         "may require changes before or during the trip, and we will always rearrange sightseeing for you. Serene Vibes is not responsible for delays or "
          "expenses incurred due to natural calamities, flight cancellations, accidents, transport "
          "breakdown, sickness, political closures or any untoward incidents."),
 
@@ -3748,17 +3784,18 @@ def generate_pdf(itinerary_data: dict) -> str:
     ]
 
     # General terms as a compact bulleted block
+    _flights_in_quote = bool(itinerary_data.get("include_flights") or itinerary_data.get("flights_included"))
     general_bullets = [
-        "All flight tickets are booked on minimum available fare.",
-        "Please reach the airport 3 hours prior to scheduled departure.",
+        *(["All flight tickets are booked on minimum available fare.",
+           "Please reach the airport 3 hours prior to scheduled departure."] if _flights_in_quote else []),
         "Government-issued IDs are required to process reservations.",
         "Carry a confirmed hotel voucher at the time of check-in.",
         "Number of meals corresponds to number of nights booked; breakfast not provided on day of arrival.",
         "The hotel has the right to claim damages incurred by guests.",
         "Mini-bar (if available) is on a chargeable basis.",
         "Cost of additional services outside the package must be settled directly at the hotel.",
-        "Face mask / cover is mandatory during boarding and travel on airlines.",
-        "No seat is provided to infants on airlines.",
+        *(["Face mask / cover is mandatory during boarding and travel on airlines.",
+           "No seat is provided to infants on airlines."] if _flights_in_quote else []),
     ]
 
     # Render in 2-column grid for compactness
