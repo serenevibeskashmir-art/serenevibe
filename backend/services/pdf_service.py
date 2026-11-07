@@ -3402,35 +3402,136 @@ class PriceBand(Flowable):
 
 
 class IncludedStrip(Flowable):
-    """Five 'what you get' cells, each with a line icon."""
-    _ICONS = ("car", "bed", "meal", "boat", "tax")
+    """Five 'what you get' cells. Each has its own colour: a glossy gradient tile with a soft glow,
+    a white pictogram, a bold title and a tinted caption, on a faint tinted cell background."""
+    # (gradient top, gradient bottom, glow/tint, caption colour)
+    _PAL = (
+        ("#4f9dff", "#1d5fd6", "#e8f1ff", "#1e55b8"),   # car     - blue
+        ("#9b7bff", "#6a3fd8", "#f0eaff", "#5b34b8"),   # bed     - violet
+        ("#ffb347", "#e5780b", "#fff3e0", "#b45f08"),   # meals   - amber
+        ("#2fd0c0", "#0a8f86", "#e4f8f5", "#0b756d"),   # shikara - teal
+        ("#ff7a9c", "#d42a5b", "#ffe9ef", "#b0224c"),   # taxes   - rose
+    )
+    _KINDS = ("car", "bed", "meal", "boat", "tax")
 
     def __init__(self, width, items):
         super().__init__()
-        self.width, self.height, self.items = width, 17.5 * mm, items
+        self.width, self.height, self.items = width, 21 * mm, items
+
+    # ---- white pictograms, drawn on a tile whose colour is `hole` ----------
+    @staticmethod
+    def _glyph(c, kind, cx, cy, u, hole):
+        W = colors.white
+        c.saveState()
+        c.setFillColor(W); c.setStrokeColor(W); c.setLineCap(1); c.setLineJoin(1)
+        if kind == "car":
+            p = c.beginPath()                                   # cabin
+            p.moveTo(cx - 0.62*u, cy + 0.02*u); p.lineTo(cx - 0.38*u, cy + 0.50*u)
+            p.lineTo(cx + 0.38*u, cy + 0.50*u); p.lineTo(cx + 0.62*u, cy + 0.02*u); p.close()
+            c.drawPath(p, fill=1, stroke=0)
+            c.roundRect(cx - 0.95*u, cy - 0.46*u, 1.9*u, 0.56*u, 0.2*u, fill=1, stroke=0)   # body
+            c.setFillColor(hole)                                # windows
+            for dx in (-0.2, 0.2):
+                q = c.beginPath()
+                q.moveTo(cx + (dx-0.17)*u, cy + 0.06*u); q.lineTo(cx + (dx-0.10)*u, cy + 0.40*u)
+                q.lineTo(cx + (dx+0.10)*u, cy + 0.40*u); q.lineTo(cx + (dx+0.17)*u, cy + 0.06*u); q.close()
+                c.drawPath(q, fill=1, stroke=0)
+            for dx in (-0.55, 0.55):                            # wheels
+                c.setFillColor(hole); c.circle(cx + dx*u, cy - 0.46*u, 0.30*u, fill=1, stroke=0)
+                c.setFillColor(W);    c.circle(cx + dx*u, cy - 0.46*u, 0.20*u, fill=1, stroke=0)
+        elif kind == "bed":
+            c.roundRect(cx - 0.98*u, cy - 0.50*u, 0.16*u, 1.0*u, 0.07*u, fill=1, stroke=0)   # headboard
+            c.roundRect(cx - 0.98*u, cy - 0.30*u, 1.96*u, 0.24*u, 0.08*u, fill=1, stroke=0)  # frame
+            c.roundRect(cx - 0.80*u, cy - 0.06*u, 1.74*u, 0.30*u, 0.10*u, fill=1, stroke=0)  # mattress
+            c.setFillColor(hole); c.roundRect(cx - 0.66*u, cy + 0.10*u, 0.52*u, 0.26*u, 0.12*u, fill=1, stroke=0)
+            c.setFillColor(W);    c.roundRect(cx - 0.62*u, cy + 0.12*u, 0.44*u, 0.20*u, 0.10*u, fill=1, stroke=0)  # pillow
+            c.roundRect(cx + 0.78*u, cy - 0.50*u, 0.16*u, 0.30*u, 0.05*u, fill=1, stroke=0)  # leg
+        elif kind == "meal":
+            c.circle(cx, cy, 0.52*u, fill=1, stroke=0)                       # plate
+            c.setFillColor(hole); c.circle(cx, cy, 0.36*u, fill=1, stroke=0)
+            c.setFillColor(W);    c.circle(cx, cy, 0.24*u, fill=1, stroke=0)
+            c.setLineWidth(0.20*u)                                           # fork
+            c.line(cx - 0.88*u, cy - 0.55*u, cx - 0.88*u, cy + 0.55*u)
+            c.setLineWidth(0.11*u)
+            for dx in (-0.12, 0.0, 0.12):
+                c.line(cx + (-0.88+dx)*u, cy + 0.10*u, cx + (-0.88+dx)*u, cy + 0.60*u)
+            c.setLineWidth(0.18*u)                                           # knife
+            c.line(cx + 0.88*u, cy - 0.55*u, cx + 0.88*u, cy + 0.20*u)
+            k = c.beginPath(); k.moveTo(cx + 0.80*u, cy + 0.20*u); k.curveTo(cx + 0.78*u, cy + 0.62*u, cx + 0.96*u, cy + 0.66*u, cx + 1.0*u, cy + 0.62*u)
+            k.lineTo(cx + 1.0*u, cy + 0.20*u); k.close(); c.drawPath(k, fill=1, stroke=0)
+        elif kind == "boat":
+            c.setLineWidth(0.11*u)                                           # canopy poles + roof
+            c.line(cx - 0.50*u, cy - 0.12*u, cx - 0.50*u, cy + 0.20*u)
+            c.line(cx + 0.50*u, cy - 0.12*u, cx + 0.50*u, cy + 0.20*u)
+            r = c.beginPath(); r.moveTo(cx - 0.72*u, cy + 0.20*u)
+            r.curveTo(cx - 0.40*u, cy + 0.72*u, cx + 0.40*u, cy + 0.72*u, cx + 0.72*u, cy + 0.20*u); r.close()
+            c.drawPath(r, fill=1, stroke=0)
+            h = c.beginPath(); h.moveTo(cx - 1.05*u, cy - 0.10*u)                 # curved hull
+            h.curveTo(cx - 0.70*u, cy - 0.48*u, cx + 0.70*u, cy - 0.48*u, cx + 1.05*u, cy - 0.10*u)
+            h.lineTo(cx - 1.05*u, cy - 0.10*u); h.close(); c.drawPath(h, fill=1, stroke=0)
+            c.setLineWidth(0.10*u)                                           # water
+            for yy in (-0.66, ):
+                w = c.beginPath(); w.moveTo(cx - 0.95*u, cy + yy*u)
+                w.curveTo(cx - 0.65*u, cy + (yy+0.16)*u, cx - 0.40*u, cy + (yy-0.12)*u, cx - 0.10*u, cy + yy*u)
+                w.curveTo(cx + 0.20*u, cy + (yy+0.16)*u, cx + 0.45*u, cy + (yy-0.12)*u, cx + 0.95*u, cy + yy*u)
+                c.drawPath(w, fill=0, stroke=1)
+        else:  # tax: receipt with zig-zag edge and ticked lines
+            x0, x1, yt, yb = cx - 0.62*u, cx + 0.62*u, cy + 0.82*u, cy - 0.78*u
+            r = c.beginPath(); r.moveTo(x0, yt); r.lineTo(x1, yt); r.lineTo(x1, yb)
+            n = 5; step = (x1 - x0) / n
+            for i in range(n):
+                r.lineTo(x1 - step*(i + 0.5), yb + 0.20*u); r.lineTo(x1 - step*(i + 1), yb)
+            r.lineTo(x0, yt); r.close(); c.drawPath(r, fill=1, stroke=0)
+            c.setStrokeColor(hole); c.setLineWidth(0.11*u)
+            for k, yy in enumerate((0.48, 0.14, -0.20)):
+                c.line(cx - 0.34*u, cy + yy*u, cx + 0.34*u - (0.0 if k != 2 else 0.30*u), cy + yy*u)
+        c.restoreState()
 
     def draw(self):
         c, w, h = self.canv, self.width, self.height
-        R = 3 * mm
-        _soft_shadow(c, 0, 0, w, h, R, layers=4, alpha=0.022)
+        R = 3.2 * mm
+        _soft_shadow(c, 0, 0, w, h, R, layers=5, alpha=0.026)
         c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.6)
         c.roundRect(0, 0, w, h, R, fill=1, stroke=1)
         n = len(self.items); cw = w / n
         for i, (head, sub) in enumerate(self.items):
-            cx = cw * i + cw / 2
+            pal = self._PAL[i % 5]
+            top_c, bot_c, tint, cap = (colors.HexColor(x) for x in pal)
+            x0 = cw * i; cx = x0 + cw / 2
+            # faint tinted wash behind the cell, fading downwards, clipped to the card
+            c.saveState()
+            pth = c.beginPath(); pth.roundRect(0, 0, w, h, R); c.clipPath(pth, stroke=0, fill=0)
+            p2 = c.beginPath(); p2.rect(x0, 0, cw, h); c.clipPath(p2, stroke=0, fill=0)
+            c.linearGradient(0, h, 0, 0, (tint, WHITE), extend=True)
+            c.restoreState()
             if i:
-                c.setStrokeColor(HAIR); c.setLineWidth(0.5); c.line(cw * i, 3 * mm, cw * i, h - 3 * mm)
-            icy = h - 5.6 * mm
-            c.setFillColor(colors.HexColor("#e7f5f3")); c.circle(cx, icy, 3.3 * mm, fill=1, stroke=0)
-            c.setStrokeColor(colors.HexColor("#c4e6e1")); c.setLineWidth(0.4); c.circle(cx, icy, 3.3 * mm, fill=0, stroke=1)
-            _line_icon(c, self._ICONS[i % 5], cx, icy, 1.65 * mm, TEAL)
+                c.setStrokeColor(HAIR); c.setLineWidth(0.5); c.line(x0, 3 * mm, x0, h - 3 * mm)
+            # coloured accent line along the top of the cell
+            c.saveState()
+            pth = c.beginPath(); pth.roundRect(0, 0, w, h, R); c.clipPath(pth, stroke=0, fill=0)
+            c.setFillColor(bot_c); c.rect(x0, h - 0.9 * mm, cw, 0.9 * mm, fill=1, stroke=0)
+            c.restoreState()
+            # glossy tile with glow
+            t = 9.6 * mm; ty = h - 3.3 * mm - t; tx = cx - t / 2
+            c.saveState()
+            for k in range(4, 0, -1):
+                c.setFillColor(colors.Color(bot_c.red, bot_c.green, bot_c.blue, alpha=0.05))
+                c.roundRect(tx - k*0.45*mm, ty - k*0.45*mm - 0.6*mm, t + k*0.9*mm, t + k*0.9*mm, 3.2*mm + k*0.4*mm, fill=1, stroke=0)
+            c.restoreState()
+            _grad_roundrect(c, tx, ty, t, t, 3 * mm, top_c, bot_c, "d")
+            c.saveState()
+            c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.55)); c.setLineWidth(0.5)
+            c.roundRect(tx + 0.3*mm, ty + 0.3*mm, t - 0.6*mm, t - 0.6*mm, 2.7*mm, fill=0, stroke=1)
+            c.restoreState()
+            self._glyph(c, self._KINDS[i % 5], cx, ty + t / 2, 2.6 * mm, bot_c)
+            # text
             c.setFillColor(NAVY_DEEP)
-            head, hfs = _fit_text(c, head, "Lato-Bold", 7.6, cw - 4 * mm, 6.6)
+            head, hfs = _fit_text(c, head, "Lato-Bold", 8.0, cw - 4 * mm, 6.6)
             c.setFont("Lato-Bold", hfs)
-            c.drawCentredString(cx, h - 12.4 * mm, head)
-            c.setFillColor(INK_SOFT)
-            c.setFont("Lato", _fit_font(c, sub, "Lato", 6.4, cw - 4 * mm))
-            c.drawCentredString(cx, h - 15.6 * mm, sub)
+            c.drawCentredString(cx, ty - 4.6 * mm, head)
+            c.setFillColor(cap)
+            c.setFont("Lato", _fit_font(c, sub, "Lato", 6.6, cw - 4 * mm))
+            c.drawCentredString(cx, ty - 8.0 * mm, sub)
 
 
 class PromiseBox(Flowable):
