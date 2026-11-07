@@ -3407,6 +3407,7 @@ class PriceBand(Flowable):
             c.setFillColor(SAFFRON); c.drawString(tx + c.stringWidth(a, "Lato-Bold", 7.4), ly - 4 * mm, b)
 
 
+DAY_MIN_START = 82 * mm   # room a day needs before it may start on the current page (banner + photo + ~2 steps)
 _P1_SLACK = 3 * mm      # safety margin so page 1 never spills onto page 2
 
 
@@ -4083,7 +4084,11 @@ def generate_pdf(itinerary_data: dict) -> str:
         block.append(Spacer(1, 5*mm))
         if idx == 1:
             block = _day_title + block          # the heading never sits alone at the foot of a page
-        story.append(KeepTogether(block))
+        # A day card is NOT wrapped in KeepTogether: a tall day would jump whole to the next page and
+        # leave a big blank gap behind. Instead we only make sure the banner, photo and first steps
+        # fit before starting a day; the step table then flows (and splits by row) onto the next page.
+        story.append(CondPageBreak(DAY_MIN_START))
+        story.extend(block)
 
     # Sections now flow straight on after the last day card (no forced page
     # break) so the page after the itinerary isn't left mostly empty.
