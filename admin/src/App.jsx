@@ -21,6 +21,7 @@ export default function App() {
   const [checking, setChecking]           = useState(true);
   const [activeTab, setActiveTab]         = useState('itinerary');
   const [quote, setQuote]                 = useState(null);
+  const [trip, setTrip]                   = useState({ vehicle: '', meal: 'MAP' });   // vehicle '' = auto by group size
 
   useEffect(() => {
     verifyAdminSession()
@@ -95,8 +96,8 @@ export default function App() {
               calculate costs, and export a PDF quotation.
             </p>
           </div>
-          <LeadForm onGenerated={setQuote} />
-          {quote && <QuotePreview quote={quote} />}
+          <LeadForm onGenerated={setQuote} trip={trip} onTripChange={setTrip} />
+          {quote && <QuotePreview quote={quote} trip={trip} />}
         </section>
       )}
 
