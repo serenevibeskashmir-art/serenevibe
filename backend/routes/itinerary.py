@@ -3,7 +3,7 @@ import os
 from flask import Blueprint, jsonify, request, send_file
 
 from backend.auth import admin_required
-from backend.services.pdf_service import generate_pdf, _quote_ref
+from backend.services.pdf_service import generate_pdf, _quote_ref, normalize_extras
 from backend.services.sheet_log import log_quote
 
 itinerary_bp = Blueprint("itinerary", __name__)
@@ -129,14 +129,9 @@ MEAL_PLANS = {
 }
 
 
-_EXTRA_KEYS = ("union_cab", "gondola_p1", "gondola_p2")
-
-
 def _included_extras(value):
-    """Which normally-excluded extras are part of this package (admin checkboxes)."""
-    if not isinstance(value, (list, tuple)):
-        return []
-    return [k for k in _EXTRA_KEYS if k in value]
+    """Which normally-excluded extras are part of this package (admin switches)."""
+    return normalize_extras(value)
 
 
 def _meal_plan(value):
@@ -235,6 +230,7 @@ def generate_custom_itinerary():
         "custom_cost": custom_cost,
         "show_per_person": bool(data.get("show_per_person", False)),
         "included_extras": _included_extras(data.get("included_extras")),
+        "couple": bool(data.get("couple")) and adults == 2,
         "meta_summary": {
             "client_name": client_name,
             "client_email": client_email,
