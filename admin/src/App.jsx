@@ -31,7 +31,7 @@ export default function App() {
   const [activeTab, setActiveTab]         = useState('itinerary');
   const [step, setStep]                   = useState('trip');
   const [quote, setQuote]                 = useState(null);
-  const [trip, setTrip]                   = useState({ vehicle: '', meal: 'MAP' });   // vehicle '' = auto by group size
+  const [trip, setTrip]                   = useState({ vehicle: '', meal: 'MAP', couple: false, coupleExtras: [] });   // vehicle '' = auto by group size; couple only counts with 2 adults
 
   useEffect(() => {
     verifyAdminSession()
