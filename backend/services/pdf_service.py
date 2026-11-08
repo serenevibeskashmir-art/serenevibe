@@ -3423,6 +3423,142 @@ def _extras_list(itinerary_data):
     return [k for k in ("union_cab", "gondola_p1", "gondola_p2") if k in ex]
 
 
+class BackdropGroup(Flowable):
+    """Soft 'Kashmir morning' backdrop behind a stack of cards: pale sky-to-cream gradient, layered
+    mountain ridges along the bottom, a faint sun glow and snow dots. Children are drawn on top."""
+    PAD = 3.2 * mm
+
+    def __init__(self, width, children, gap=3 * mm):
+        super().__init__()
+        self.width, self.children, self.gap = width, children, gap
+        self._recalc()
+
+    def _recalc(self):
+        iw = self.width - 2 * self.PAD
+        self._hs = [ch.wrap(iw, 10000)[1] for ch in self.children]
+        self.height = sum(self._hs) + self.gap * (len(self.children) - 1) + 2 * self.PAD
+
+    def wrap(self, aw, ah):
+        self._recalc()
+        return self.width, self.height
+
+    def draw(self):
+        import math, random
+        c, w, h = self.canv, self.width, self.height
+        R = 4 * mm
+        _soft_shadow(c, 0, 0, w, h, R, layers=4, alpha=0.02)
+        c.saveState()
+        pth = c.beginPath(); pth.roundRect(0, 0, w, h, R); c.clipPath(pth, stroke=0, fill=0)
+        c.linearGradient(0, h, w, 0, (colors.HexColor("#eaf4fb"), colors.HexColor("#fff7ea")), extend=True)
+        # sun glow (top right)
+        for k in range(7, 0, -1):
+            c.setFillColor(colors.Color(1.0, 0.82, 0.45, alpha=0.035))
+            c.circle(w * 0.90, h * 0.92, 5 * mm + k * 4.2 * mm, fill=1, stroke=0)
+        # far + near mountain ridges
+        for (base, amp, col, al, ph) in ((0.20, 0.17, "#9cc3e0", 0.20, 0.0), (0.10, 0.12, "#6fa3cc", 0.17, 1.7)):
+            ridge = c.beginPath(); ridge.moveTo(0, 0); ridge.lineTo(0, h * base)
+            steps = 46
+            for i in range(1, steps + 1):
+                x = w * i / steps
+                y = h * base + h * amp * (0.55 * abs(math.sin(i * 0.42 + ph)) + 0.45 * abs(math.sin(i * 0.17 + ph * 0.6)))
+                ridge.lineTo(x, y)
+            ridge.lineTo(w, 0); ridge.close()
+            c.setFillColor(colors.HexColor(col)); c.setFillAlpha(al)
+            c.drawPath(ridge, fill=1, stroke=0)
+        c.setFillAlpha(1)
+        # snow dots
+        rnd = random.Random(7)
+        for _ in range(46):
+            c.setFillColor(colors.Color(1, 1, 1, alpha=rnd.uniform(0.35, 0.8)))
+            c.circle(rnd.uniform(0, w), rnd.uniform(h * 0.15, h), rnd.uniform(0.25, 0.7) * mm, fill=1, stroke=0)
+        c.restoreState()
+        c.setStrokeColor(colors.HexColor("#d6e6f1")); c.setLineWidth(0.7)
+        c.roundRect(0, 0, w, h, R, fill=0, stroke=1)
+        # children, top to bottom
+        iw = w - 2 * self.PAD
+        y = h - self.PAD
+        for ch, hh in zip(self.children, self._hs):
+            y -= hh
+            ch.drawOn(c, self.PAD, y)
+            y -= self.gap
+
+
+class IncludedCards(Flowable):
+    """'What's included' as roomy cards: coloured icon disc with a green 'included' tick, bold title,
+    tinted caption. One row for up to 4 items, otherwise two balanced rows (last row centred)."""
+    CARD_H = 11.6 * mm
+    GAP = 2.4 * mm
+
+    def __init__(self, width, items):
+        super().__init__()
+        self.width, self.items = width, items
+        self.compact = False
+        self._recalc()
+
+    def _layout(self):
+        n = len(self.items)
+        rows = 1 if n <= 4 else 2
+        cols = -(-n // rows)
+        return rows, cols
+
+    def _recalc(self):
+        rows, _ = self._layout()
+        ch = self.CARD_H - (1.4 * mm if self.compact else 0)
+        self.card_h = ch
+        self.height = rows * ch + (rows - 1) * (self.GAP - (0.6 * mm if self.compact else 0)) + 1.2 * mm
+
+    def draw(self):
+        c, w = self.canv, self.width
+        rows, cols = self._layout()
+        gap = self.GAP - (0.6 * mm if self.compact else 0)
+        ch = self.card_h
+        cw = (w - gap * (cols - 1)) / cols
+        R = 3 * mm
+        n = len(self.items)
+        for i, item in enumerate(self.items):
+            head, sub = item[0], item[1]
+            kind = item[2] if len(item) > 2 else IncludedStrip._KINDS[i % 5]
+            pal = IncludedStrip._KIND_PAL.get(kind) or IncludedStrip._PAL[i % 5]
+            top_c, bot_c, tint, cap = (colors.HexColor(x) for x in pal)
+            r, col = divmod(i, cols)
+            in_row = cols if r < rows - 1 else n - cols * (rows - 1)
+            x0 = col * (cw + gap) + (cols - in_row) * (cw + gap) / 2
+            y0 = (rows - 1 - r) * (ch + gap) + 1.2 * mm
+            _soft_shadow(c, x0, y0, cw, ch, R, layers=3, alpha=0.022)
+            c.setFillColor(WHITE); c.setStrokeColor(colors.HexColor("#e3ebf2")); c.setLineWidth(0.6)
+            c.roundRect(x0, y0, cw, ch, R, fill=1, stroke=1)
+            c.saveState()
+            pth = c.beginPath(); pth.roundRect(x0, y0, cw, ch, R); c.clipPath(pth, stroke=0, fill=0)
+            c.setFillColor(tint); c.circle(x0 + 6.4 * mm, y0 + ch / 2, ch * 1.05, fill=1, stroke=0)
+            c.setFillColor(WHITE); c.circle(x0 + 6.4 * mm, y0 + ch / 2, ch * 0.62, fill=1, stroke=0)
+            c.setFillColor(tint); c.circle(x0 + 6.4 * mm, y0 + ch / 2, ch * 0.5, fill=1, stroke=0)
+            c.restoreState()
+            d = min(8.2 * mm, ch - 2.4 * mm)
+            dx, dy = x0 + 2.4 * mm, y0 + (ch - d) / 2
+            c.saveState()
+            for k in range(3, 0, -1):
+                c.setFillColor(colors.Color(bot_c.red, bot_c.green, bot_c.blue, alpha=0.07))
+                c.circle(dx + d / 2, dy + d / 2 - 0.3 * mm, d / 2 + k * 0.5 * mm, fill=1, stroke=0)
+            c.restoreState()
+            _grad_roundrect(c, dx, dy, d, d, d / 2, top_c, bot_c, "d")
+            c.saveState()
+            c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.55)); c.setLineWidth(0.5)
+            c.circle(dx + d / 2, dy + d / 2, d / 2 - 0.4 * mm, fill=0, stroke=1)
+            c.restoreState()
+            IncludedStrip._glyph(c, kind, dx + d / 2, dy + d / 2, d * 0.235, bot_c)
+            # little green 'included' tick on the disc
+            _check_badge(c, dx + d - 0.5 * mm, dy + 0.6 * mm, 1.35 * mm, colors.HexColor("#16a34a"))
+            tx = dx + d + 2.6 * mm
+            avail = x0 + cw - 2.2 * mm - tx
+            c.setFillColor(NAVY_DEEP)
+            head, hfs = _fit_text(c, head, "Lato-Bold", 8.4, avail, 6.4)
+            c.setFont("Lato-Bold", hfs)
+            c.drawString(tx, y0 + ch / 2 + 0.9 * mm, head)
+            c.setFillColor(cap)
+            c.setFont("Lato", _fit_font(c, sub, "Lato", 6.6, avail))
+            c.drawString(tx, y0 + ch / 2 - 3.1 * mm, sub)
+
+
 class IncludedStrip(Flowable):
     """Five 'what you get' cells. Each has its own colour: a glossy gradient tile with a soft glow,
     a white pictogram, a bold title and a tinted caption, on a faint tinted cell background."""
@@ -3607,7 +3743,7 @@ class PromiseBox(Flowable):
                 self.items.append((str(t[0]), str(t[1])))
             else:
                 self.items.append(("", str(t)))
-        self.height = 25 * mm
+        self.height = 28 * mm
 
     @staticmethod
     def _glyph(c, kind, cx, cy, u, hole):
@@ -3663,66 +3799,62 @@ class PromiseBox(Flowable):
     def draw(self):
         from reportlab.lib.utils import simpleSplit
         c, w, h = self.canv, self.width, self.height
-        R = 3.2 * mm
-        _soft_shadow(c, 0, 0, w, h, R, layers=4, alpha=0.02)
-        _grad_roundrect(c, 0, 0, w, h, R, colors.HexColor("#f3faf8"), colors.HexColor("#e4f1ee"), "d")
-        c.setStrokeColor(colors.HexColor("#cfe5e0")); c.setLineWidth(0.6)
-        c.roundRect(0, 0, w, h, R, fill=0, stroke=1)
-        # teal-to-gold accent line along the top edge
-        c.saveState()
-        p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
-        p2 = c.beginPath(); p2.rect(0, h - 1.0 * mm, w, 1.0 * mm); c.clipPath(p2, stroke=0, fill=0)
-        c.linearGradient(0, 0, w, 0, (TEAL, GOLD_MID), extend=True)
-        c.restoreState()
-
-        x0 = 6.5 * mm
-        _check_badge(c, x0 + 1.7 * mm, h - 6.0 * mm, 1.7 * mm, TEAL)
+        # section label with a hairline, then four separate cards
         c.setFillColor(TEAL)
-        tw = _spaced(c, x0 + 5 * mm, h - 7.0 * mm, "OUR PROMISE TO YOU", "Lato-Bold", 6.8, 1.1)
-        c.setStrokeColor(colors.HexColor("#bfdcd6")); c.setLineWidth(0.5)
-        c.line(x0 + 5 * mm + tw + 3 * mm, h - 6.2 * mm, w - 6.5 * mm, h - 6.2 * mm)
+        _check_badge(c, 1.9 * mm, h - 2.6 * mm, 1.7 * mm, TEAL)
+        tw = _spaced(c, 5.6 * mm, h - 3.6 * mm, "OUR PROMISE TO YOU", "Lato-Bold", 6.8, 1.1)
+        c.setStrokeColor(colors.HexColor("#cfe5e0")); c.setLineWidth(0.5)
+        c.line(5.6 * mm + tw + 3 * mm, h - 2.8 * mm, w, h - 2.8 * mm)
 
         n = max(len(self.items), 1)
-        inner_x, inner_w = 5 * mm, w - 10 * mm
-        cw = inner_w / n
-        tile = 8.6 * mm
-        body_top = h - self.HEAD_H - 2.2 * mm
+        gap = 2.6 * mm
+        cw = (w - gap * (n - 1)) / n
+        ch = h - 6.2 * mm
+        R = 2.8 * mm
+        tile = 7.6 * mm
         for i, (title, text) in enumerate(self.items):
-            x = inner_x + i * cw
-            if i:
-                c.setStrokeColor(colors.HexColor("#c9e0db")); c.setLineWidth(0.5)
-                c.line(x, 3.2 * mm, x, body_top + 0.5 * mm)
+            x = i * (cw + gap)
             top_c, bot_c = (colors.HexColor(v) for v in self._PAL[i % 4])
-            tx = x + 2.2 * mm
-            ty = body_top - tile
+            _soft_shadow(c, x, 0, cw, ch, R, layers=4, alpha=0.024)
+            c.setFillColor(WHITE); c.setStrokeColor(colors.HexColor("#e3ebf2")); c.setLineWidth(0.6)
+            c.roundRect(x, 0, cw, ch, R, fill=1, stroke=1)
+            # soft tint washing in from the icon corner + coloured left edge
+            c.saveState()
+            pth = c.beginPath(); pth.roundRect(x, 0, cw, ch, R); c.clipPath(pth, stroke=0, fill=0)
+            tint = colors.Color(bot_c.red, bot_c.green, bot_c.blue, alpha=0.07)
+            c.setFillColor(tint); c.circle(x + 5 * mm, ch - 4 * mm, 17 * mm, fill=1, stroke=0)
+            c.setFillColor(bot_c); c.rect(x, 0, 1.1 * mm, ch, fill=1, stroke=0)
+            c.restoreState()
+            tx = x + 4.2 * mm
+            ty = ch - 2.6 * mm - tile
             c.saveState()
             for k in range(3, 0, -1):
                 c.setFillColor(colors.Color(bot_c.red, bot_c.green, bot_c.blue, alpha=0.06))
-                c.roundRect(tx - k*0.4*mm, ty - k*0.4*mm - 0.5*mm, tile + k*0.8*mm, tile + k*0.8*mm, 2.8*mm + k*0.3*mm, fill=1, stroke=0)
+                c.roundRect(tx - k*0.4*mm, ty - k*0.4*mm - 0.5*mm, tile + k*0.8*mm, tile + k*0.8*mm, 2.6*mm + k*0.3*mm, fill=1, stroke=0)
             c.restoreState()
-            _grad_roundrect(c, tx, ty, tile, tile, 2.6 * mm, top_c, bot_c, "d")
+            _grad_roundrect(c, tx, ty, tile, tile, 2.4 * mm, top_c, bot_c, "d")
             c.saveState()
             c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.5)); c.setLineWidth(0.5)
-            c.roundRect(tx + 0.3*mm, ty + 0.3*mm, tile - 0.6*mm, tile - 0.6*mm, 2.3*mm, fill=0, stroke=1)
+            c.roundRect(tx + 0.3*mm, ty + 0.3*mm, tile - 0.6*mm, tile - 0.6*mm, 2.1*mm, fill=0, stroke=1)
             c.restoreState()
-            self._glyph(c, self._KINDS[i % 4], tx + tile / 2, ty + tile / 2, 2.2 * mm, bot_c)
-            # text
-            txx = tx + tile + 2.6 * mm
-            tw_ = x + cw - 3 * mm - txx
-            y = body_top - 2.4 * mm
+            self._glyph(c, self._KINDS[i % 4], tx + tile / 2, ty + tile / 2, 2.0 * mm, bot_c)
+            # title sits beside the icon, the text gets the full card width underneath
+            txx = tx + tile + 2.4 * mm
+            tw_ = x + cw - 2.6 * mm - txx
             if title:
-                tsz = _fit_font(c, title, "Lato-Bold", 7.8, tw_)
+                tsz = _fit_font(c, title, "Lato-Bold", 8.2, tw_)
                 c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", tsz)
-                c.drawString(txx, y, title)
-                y -= 3.7 * mm
-            sz = 6.5
-            lines = simpleSplit(text, "Lato", sz, tw_)
+                c.drawString(txx, ty + tile / 2 - tsz * 0.17, title)
+            bw = x + cw - 2.6 * mm - tx
+            sz = 6.6
+            lines = simpleSplit(text, "Lato", sz, bw)
             while len(lines) > 3 and sz > 5.6:
-                sz -= 0.2; lines = simpleSplit(text, "Lato", sz, tw_)
+                sz -= 0.2; lines = simpleSplit(text, "Lato", sz, bw)
             c.setFillColor(SLATE); c.setFont("Lato", sz)
+            y = ty - 3.3 * mm
             for ln in lines[:3]:
-                c.drawString(txx, y, ln)
-                y -= sz * 1.28 / 72 * 25.4 * mm
+                c.drawString(tx, y, ln)
+                y -= sz * 1.3 / 72 * 25.4 * mm
 
 
 def _ts_icon(c, kind, cx, cy, s, col):
@@ -3779,59 +3911,54 @@ _TS_ICONS = {"CLIENT NAME": "user", "TOUR DURATION": "clock", "GUESTS": "users",
 
 
 class TripSummary(Flowable):
-    """Trip facts card: navy header (budget tier chip + quote no.), two-column zebra grid with the
-    label over a bold value, and the estimated cost as a full-width emerald total bar."""
+    """Trip facts card. Navy header (budget tier + quote no.), a 'prepared for' row with the
+    validity pill, a journey line (start -> end), four fact columns with tinted icon discs,
+    and the estimated cost as a full-width emerald total bar."""
     HEAD_H = 9 * mm
-    ROW_H = 9.2 * mm
-    BAR_H = 11.8 * mm
+    # (row A client, row B journey, row C facts, total bar), normal and compact
+    _DIM = ((13.0 * mm, 12.0 * mm, 13.0 * mm, 11.0 * mm), (11.2 * mm, 10.4 * mm, 11.4 * mm, 10.0 * mm))
 
-    def __init__(self, width, left, right, ref=""):
+    def __init__(self, width, left, right, ref="", valid="", email=""):
         super().__init__()
-        self.width, self.ref = width, ref
+        self.width, self.ref, self.valid, self.email = width, ref, valid, email
         self.tier, self.cost = "", None
-        self.left = []
-        for label, value, hot in left:
+        self.info = {}
+        for label, value, hot in list(left) + list(right):
             if label == "BUDGET TIER":
                 self.tier = str(value)
-            else:
-                self.left.append((label, value))
-        self.right = []
-        for label, value, hot in right:
-            if hot:
+            elif hot:
                 self.cost = str(value)
             else:
-                self.right.append((label, value))
-        rows = max(len(self.left), len(self.right), 1)
-        self.height = self.HEAD_H + self.ROW_H * rows + (self.BAR_H if self.cost else 0)
+                self.info[label] = value
+        self.compact = False
+        self._recalc()
+
+    def _recalc(self):
+        a, j, f, bar = self._DIM[1 if self.compact else 0]
+        self.height = self.HEAD_H + a + j + f + (bar if self.cost else 0)
 
     def draw(self):
         c, w, h = self.canv, self.width, self.height
         R = 3.5 * mm
-        half = w / 2
-        rows = max(len(self.left), len(self.right), 1)
-        body_top = h - self.HEAD_H
-        body_bot = h - self.HEAD_H - self.ROW_H * rows
+        rowA, rowJ, rowF, BAR = self._DIM[1 if self.compact else 0]
+        if not self.cost:
+            BAR = 0
+        y_a = h - self.HEAD_H                 # top of row A
+        y_j = y_a - rowA                      # top of journey row
+        y_f = y_j - rowJ                      # top of facts row
+        y_b = y_f - rowF                      # top of total bar (= BAR)
 
         _soft_shadow(c, 0, 0, w, h, R, layers=5, alpha=0.03)
         c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.6)
         c.roundRect(0, 0, w, h, R, fill=1, stroke=1)
 
+        # ---- header band ----
         c.saveState()
         p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
-        # zebra rows
-        for r in range(rows):
-            if r % 2 == 0:
-                c.setFillColor(colors.HexColor("#f4f8fc"))
-                c.rect(0, body_top - (r + 1) * self.ROW_H, w, self.ROW_H, fill=1, stroke=0)
-        c.restoreState()
-
-        # header band
-        c.saveState()
-        p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
-        p2 = c.beginPath(); p2.rect(0, body_top, w, self.HEAD_H); c.clipPath(p2, stroke=0, fill=0)
+        p2 = c.beginPath(); p2.rect(0, y_a, w, self.HEAD_H); c.clipPath(p2, stroke=0, fill=0)
         c.linearGradient(0, 0, w, 0, (NAVY_DEEP, NAVY_MID), extend=True)
         c.restoreState()
-        c.setFillColor(GOLD_MID); c.rect(0, body_top - 0.5 * mm, w, 0.9 * mm, fill=1, stroke=0)
+        c.setFillColor(GOLD_MID); c.rect(0, y_a - 0.5 * mm, w, 0.9 * mm, fill=1, stroke=0)
         _diamond(c, 7 * mm, h - self.HEAD_H / 2, 1.5 * mm, colors.HexColor("#f5b82e"))
         c.setFillColor(WHITE)
         _spaced(c, 11.5 * mm, h - self.HEAD_H / 2 - 1.1 * mm, "TRIP SUMMARY", "Lato-Bold", 9, 1.6)
@@ -3850,87 +3977,178 @@ class TripSummary(Flowable):
             c.setFillColor(NAVY_DEEP)
             _spaced(c, rx - tw / 2, h - self.HEAD_H / 2 - 0.9 * mm, t, "Lato-Bold", 7, 0.5, "c")
 
-        # centre divider
-        c.setStrokeColor(GRAY_200); c.setLineWidth(0.6)
-        c.line(half, body_bot + 2 * mm, half, body_top - 2 * mm)
+        # ---- row A: prepared for + validity pill ----
+        c.saveState()
+        p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
+        p2 = c.beginPath(); p2.rect(0, y_j, w, rowA - 0.5 * mm); c.clipPath(p2, stroke=0, fill=0)
+        c.linearGradient(0, 0, w, 0, (colors.HexColor("#f6f9fd"), WHITE), extend=True)
+        c.restoreState()
+        name = _raw(self.info.get("CLIENT NAME", "")) or "Guest"
+        ymid = y_j + (rowA - 0.5 * mm) / 2
+        ar = min(4.1 * mm, (rowA - 3 * mm) / 2)
+        _grad_roundrect(c, 6 * mm, ymid - ar, 2 * ar, 2 * ar, ar, SKY_MID, NAVY_MID, "d")
+        c.setFillColor(WHITE); c.setFont("Lato-Bold", 10.5)
+        c.drawCentredString(6 * mm + ar, ymid - 3.6, (name.strip()[:1] or "G").upper())
+        nx = 6 * mm + 2 * ar + 3 * mm
+        c.setFillColor(INK_SOFT)
+        lw_ = _spaced(c, nx, ymid + 2.9 * mm, "PREPARED FOR", "Lato-Bold", 5.8, 1.0)
+        if self.email:
+            c.setFont("Lato", 6.2); c.setFillColor(colors.HexColor("#94a3b8"))
+            c.drawString(nx + lw_ + 3 * mm, ymid + 2.9 * mm, _raw(self.email))
+        pill_w = 41 * mm
+        nm, nfs = _fit_text(c, name, "Lato-Bold", 13, w - nx - pill_w - 12 * mm, 9)
+        c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", nfs)
+        c.drawString(nx, ymid - 4.2 * mm, nm)
+        if self.valid:
+            ph = min(9.2 * mm, rowA - 3 * mm)
+            px, py = w - 6 * mm - pill_w, ymid - ph / 2
+            c.setFillColor(colors.HexColor("#fff8e6")); c.setStrokeColor(colors.HexColor("#f6dfa0")); c.setLineWidth(0.6)
+            c.roundRect(px, py, pill_w, ph, ph / 2, fill=1, stroke=1)
+            _ts_icon(c, "calendar", px + 5.2 * mm, ymid, 1.9 * mm, GOLD_MID)
+            c.setFillColor(GOLD)
+            _spaced(c, px + 9.4 * mm, ymid + 0.9 * mm, "QUOTE VALID UNTIL", "Lato-Bold", 5.2, 0.7)
+            c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", 8.8)
+            c.drawString(px + 9.4 * mm, ymid - 3.0 * mm, _raw(self.valid))
 
-        # facts
-        for col, items, accent in ((0, self.left, SKY), (1, self.right, TEAL)):
-            x0 = col * half
-            tx = x0 + 8 * mm
-            vmax = half - 14 * mm
-            for r, (label, value) in enumerate(items):
-                top = body_top - r * self.ROW_H
-                c.setFillColor(accent)
-                c.roundRect(x0 + 4.5 * mm, top - self.ROW_H + 2 * mm, 0.9 * mm, self.ROW_H - 4 * mm,
-                            0.45 * mm, fill=1, stroke=0)
-                c.setFillColor(INK_SOFT)
-                _spaced(c, tx, top - 3.3 * mm, label, "Lato-Bold", 6.6, 0.9)
-                v, fs = _fit_text(c, _raw(value), "Lato-Bold", 11, vmax, 8)
-                c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", fs)
-                c.drawString(tx, top - 7.6 * mm, v)
+        # ---- row B: journey line ----
+        c.setStrokeColor(colors.HexColor("#e8eef5")); c.setLineWidth(0.5)
+        c.line(5 * mm, y_j, w - 5 * mm, y_j)
+        jm = y_j - rowJ / 2
+        sp = _raw(self.info.get("START POINT", "")) or "-"
+        ep = _raw(self.info.get("END POINT", "")) or "-"
+        side_max = w * 0.30
+        sp, sfs = _fit_text(c, sp, "Lato-Bold", 9.6, side_max, 7.4)
+        ep, efs = _fit_text(c, ep, "Lato-Bold", 9.6, side_max, 7.4)
+        # start: hollow ring; end: filled flag disc
+        c.setStrokeColor(SKY); c.setFillColor(WHITE); c.setLineWidth(1.3)
+        c.circle(7.4 * mm, jm, 1.6 * mm, fill=1, stroke=1)
+        c.setFillColor(INK_SOFT)
+        _spaced(c, 11.6 * mm, jm + 1.6 * mm, "START POINT", "Lato-Bold", 5.6, 0.9)
+        c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", sfs); c.drawString(11.6 * mm, jm - 3.0 * mm, sp)
+        c.setFillColor(TEAL); c.circle(w - 7.4 * mm, jm, 1.9 * mm, fill=1, stroke=0)
+        _ts_icon(c, "flag", w - 7.4 * mm, jm, 1.0 * mm, WHITE)
+        c.setFillColor(INK_SOFT)
+        _spaced(c, w - 11.6 * mm, jm + 1.6 * mm, "END POINT", "Lato-Bold", 5.6, 0.9, "r")
+        c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", efs); c.drawRightString(w - 11.6 * mm, jm - 3.0 * mm, ep)
+        lx0 = 11.6 * mm + c.stringWidth(sp, "Lato-Bold", sfs) + 5 * mm
+        lx1 = w - 11.6 * mm - c.stringWidth(ep, "Lato-Bold", efs) - 5 * mm
+        if lx1 - lx0 > 22 * mm:
+            c.setStrokeColor(colors.HexColor("#b9d4e8")); c.setLineWidth(0.9); c.setDash(1.2, 1.8); c.setLineCap(1)
+            c.line(lx0, jm, lx1, jm); c.setDash()
+            mx = (lx0 + lx1) / 2
+            c.setFillColor(WHITE); c.setStrokeColor(colors.HexColor("#b9d4e8")); c.setLineWidth(0.8)
+            c.circle(mx, jm, 3.3 * mm, fill=1, stroke=1)
+            _ts_icon(c, "car", mx, jm, 1.9 * mm, SKY)
 
-        # total bar
+        # ---- row C: four facts ----
+        c.setStrokeColor(colors.HexColor("#e8eef5")); c.setLineWidth(0.5)
+        c.line(5 * mm, y_f, w - 5 * mm, y_f)
+        facts = (("TOUR DURATION", "clock", "#0284c7"), ("GUESTS", "users", "#6a3fd8"),
+                 ("VEHICLE", "car", "#e5780b"), ("TRAVEL DATE", "calendar", "#0a8f86"))
+        cw = w / 4
+        fm = y_f - rowF / 2
+        for i, (label, icon, hexc) in enumerate(facts):
+            col = colors.HexColor(hexc)
+            x0 = cw * i
+            if i:
+                c.setStrokeColor(colors.HexColor("#e8eef5")); c.setLineWidth(0.5)
+                c.line(x0, y_f - 2.2 * mm, x0, y_b + 2.2 * mm)
+            dr = 3.4 * mm
+            dx = x0 + 5 * mm + dr
+            c.setFillColor(colors.Color(col.red, col.green, col.blue, alpha=0.12))
+            c.circle(dx, fm, dr, fill=1, stroke=0)
+            _ts_icon(c, icon, dx, fm, 1.9 * mm, col)
+            tx = dx + dr + 2.4 * mm
+            c.setFillColor(INK_SOFT)
+            _spaced(c, tx, fm + 1.5 * mm, label, "Lato-Bold", 5.6, 0.8)
+            v, fs = _fit_text(c, _raw(self.info.get(label, "")) or "-", "Lato-Bold", 10, x0 + cw - 3 * mm - tx, 7)
+            c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", fs)
+            c.drawString(tx, fm - 3.3 * mm, v)
+
+        # ---- total bar ----
         if self.cost:
             c.saveState()
             p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
-            p2 = c.beginPath(); p2.rect(0, 0, w, self.BAR_H); c.clipPath(p2, stroke=0, fill=0)
+            p2 = c.beginPath(); p2.rect(0, 0, w, BAR); c.clipPath(p2, stroke=0, fill=0)
             c.linearGradient(0, 0, w, 0, (colors.HexColor("#10b981"), colors.HexColor("#047857")), extend=True)
+            c.setFillColor(colors.Color(1, 1, 1, alpha=0.10)); c.rect(0, BAR - 0.5 * mm, w, 0.5 * mm, fill=1, stroke=0)
             c.restoreState()
-            my = self.BAR_H / 2
+            my = BAR / 2
+            _check_badge(c, 8.4 * mm, my, 2.1 * mm, colors.Color(1, 1, 1, alpha=0.22), tick=WHITE)
             c.setFillColor(colors.HexColor("#d1fae5"))
-            _spaced(c, 8 * mm, my - 1.1 * mm, "ESTIMATED TOTAL COST", "Lato-Bold", 7.4, 1.2)
-            c.setFillColor(WHITE)
-            c.setFont("Lato-Bold", 15)
-            c.drawRightString(w - 8 * mm, my - 2.0 * mm, _raw(self.cost))
+            _spaced(c, 13 * mm, my + 0.4 * mm, "ESTIMATED TOTAL COST", "Lato-Bold", 7.4, 1.2)
+            c.setFillColor(colors.HexColor("#a7f3d0")); c.setFont("Lato", 5.8)
+            c.drawString(13 * mm, my - 3.0 * mm, "Stay, car, driver, meals and taxes as listed")
+            c.setFillColor(WHITE); c.setFont("Lato-Bold", 16.5)
+            c.drawRightString(w - 8 * mm, my - 2.3 * mm, _raw(self.cost))
 
 
 class TrustStrip(Flowable):
-    """Five proof points in columns, plus one guest quote with a star rating."""
+    """Dark proof band: five stat columns on the left, one guest quote on a glass panel on the right."""
     def __init__(self, width, stats, quote, by):
         super().__init__()
-        self.width, self.height, self.stats, self.quote, self.by = width, 20 * mm, stats, quote, by
+        self.width, self.height, self.stats, self.quote, self.by = width, 22 * mm, stats, quote, by
+
+    @staticmethod
+    def _cap_lines(cap):
+        cap = cap.replace("\u00b7", " ").split()
+        # up to two short lines, balanced
+        if len(cap) <= 1:
+            return [" ".join(cap)]
+        best = min(range(1, len(cap)), key=lambda k: abs(len(" ".join(cap[:k])) - len(" ".join(cap[k:]))))
+        return [" ".join(cap[:best]), " ".join(cap[best:])]
 
     def draw(self):
+        from reportlab.lib.utils import simpleSplit
         c, w, h = self.canv, self.width, self.height
-        R = 3 * mm
-        _grad_roundrect(c, 0, 0, w, h, R, colors.HexColor("#17233b"), colors.HexColor("#0b1222"), "d")
+        R = 3.2 * mm
+        _soft_shadow(c, 0, 0, w, h, R, layers=4, alpha=0.03)
+        _grad_roundrect(c, 0, 0, w, h, R, colors.HexColor("#1a2740"), colors.HexColor("#0a1120"), "d")
         c.saveState()
         p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
-        p2 = c.beginPath(); p2.rect(0, h - 0.7 * mm, w, 0.7 * mm); c.clipPath(p2, stroke=0, fill=0)
-        c.linearGradient(0, 0, w, 0, (colors.HexColor("#17233b"), SAFFRON, colors.HexColor("#17233b")), (0, 0.5, 1), extend=False)
+        p2 = c.beginPath(); p2.rect(0, h - 0.8 * mm, w, 0.8 * mm); c.clipPath(p2, stroke=0, fill=0)
+        c.linearGradient(0, 0, w, 0, (colors.HexColor("#1a2740"), SAFFRON, colors.HexColor("#1a2740")), (0, 0.5, 1), extend=False)
         c.restoreState()
-        n = len(self.stats); cw = (w - 8 * mm) / n
+
+        qw = w * 0.355                              # quote panel width
+        sx0, sw = 3 * mm, w - qw - 7 * mm            # stats area
+        n = len(self.stats); cw = sw / n
         for i, (val, cap) in enumerate(self.stats):
-            cx = 4 * mm + cw * i + cw / 2
+            cx = sx0 + cw * i + cw / 2
             if i:
-                c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.12)); c.setLineWidth(0.5)
-                c.line(4 * mm + cw * i, h - 11.4 * mm, 4 * mm + cw * i, h - 3.6 * mm)
+                c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.11)); c.setLineWidth(0.5)
+                c.line(sx0 + cw * i, h * 0.28, sx0 + cw * i, h * 0.76)
             c.setFillColor(SAFFRON if i == 0 else WHITE)
-            c.setFont("Lato-Bold", 12.4)
-            c.drawCentredString(cx, h - 7.6 * mm, val)
-            c.setFillColor(colors.HexColor("#94a3b8"))
-            fs = 5.4
-            while c.stringWidth(cap, "Lato-Bold", fs) + 0.45 * (len(cap) - 1) > cw - 3 * mm and fs > 4.2:
+            c.setFont("Lato-Bold", 12.6)
+            c.drawCentredString(cx, h * 0.55, val)
+            c.setFillColor(colors.HexColor("#9fb0c6"))
+            lines = self._cap_lines(cap)
+            fs = 5.0
+            while max(c.stringWidth(l, "Lato-Bold", fs) + 0.4 * len(l) for l in lines) > cw - 2 * mm and fs > 4.0:
                 fs -= 0.1
-            _spaced(c, cx, h - 11 * mm, cap, "Lato-Bold", fs, 0.45, "c")
-        c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.10)); c.setLineWidth(0.5)
-        c.line(8 * mm, h - 13.4 * mm, w - 8 * mm, h - 13.4 * mm)
-        # quote row: stars + italic quote, centred as one unit
-        q = f"\u201c{self.quote}\u201d"
-        by = f"  {self.by}"
-        sz = 6.8
-        stars_w = 5 * 2.5 * mm + 2 * mm
-        while stars_w + c.stringWidth(q, "Lato-Italic", sz) + c.stringWidth(by, "Lato-Bold", sz - 0.4) > w - 12 * mm and sz > 5:
-            sz -= 0.2
-        total = stars_w + c.stringWidth(q, "Lato-Italic", sz) + c.stringWidth(by, "Lato-Bold", sz - 0.4)
-        x = (w - total) / 2; y = 4.2 * mm
+            for k, l in enumerate(lines):
+                _spaced(c, cx, h * 0.55 - 3.7 * mm - k * (fs * 1.25 / 72 * 25.4 * mm), l, "Lato-Bold", fs, 0.4, "c")
+
+        # quote panel (glass card)
+        px, py, pw, ph = w - qw - 2.6 * mm, 2.6 * mm, qw, h - 5.4 * mm
+        c.setFillColor(colors.Color(1, 1, 1, alpha=0.07)); c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.14)); c.setLineWidth(0.5)
+        c.roundRect(px, py, pw, ph, 2.4 * mm, fill=1, stroke=1)
+        c.setFillColor(colors.Color(SAFFRON.red, SAFFRON.green, SAFFRON.blue, alpha=0.9))
+        c.setFont("Lato-Bold", 22); c.drawString(px + 2.6 * mm, py + ph - 7.2 * mm, "\u201c")
         for k in range(5):
-            _star(c, x + 1.1 * mm + k * 2.5 * mm, y + 0.9 * mm, 1.15 * mm, SAFFRON)
-        x += stars_w
-        c.setFillColor(colors.HexColor("#dbe3ee")); c.setFont("Lato-Italic", sz); c.drawString(x, y, q)
-        x += c.stringWidth(q, "Lato-Italic", sz)
-        c.setFillColor(colors.HexColor("#94a3b8")); c.setFont("Lato-Bold", sz - 0.4); c.drawString(x, y, by)
+            _star(c, px + 11.2 * mm + k * 2.6 * mm, py + ph - 3.7 * mm, 1.15 * mm, SAFFRON)
+        tw_ = pw - 5.2 * mm
+        sz = 6.5
+        q = self.quote
+        lines = simpleSplit(q, "Lato-Italic", sz, tw_)
+        while len(lines) > 3 and sz > 5.2:
+            sz -= 0.2; lines = simpleSplit(q, "Lato-Italic", sz, tw_)
+        c.setFillColor(colors.HexColor("#e2e8f0")); c.setFont("Lato-Italic", sz)
+        y = py + ph - 8.0 * mm
+        for ln in lines[:3]:
+            c.drawString(px + 2.6 * mm, y, ln); y -= sz * 1.3 / 72 * 25.4 * mm
+        c.setFillColor(SAFFRON); c.setFont("Lato-Bold", 5.8)
+        c.drawString(px + 2.6 * mm, py + 1.9 * mm, "\u2014 " + self.by)
 
 
 class NextSteps(Flowable):
@@ -4030,7 +4248,8 @@ def generate_pdf(itinerary_data: dict) -> str:
     story.append(Spacer(1, 3*mm))
     _extras = _extras_list(itinerary_data)
     _tiles = [
-        (f"Private {clean(str(vehicle_type))}", "pickup to drop"),
+        ((f"Private {clean(str(vehicle_type))}", "pickup to drop") if len(clean(str(vehicle_type))) <= 8
+         else (clean(str(vehicle_type)), "private, pickup to drop")),
         (f"{_nights} nights stay", "hotels as listed"),
         (_meal_name, "as per your meal plan"),
         ("Shikara ride", "1 hour, on us"),
@@ -4041,13 +4260,15 @@ def generate_pdf(itinerary_data: dict) -> str:
     for _k, _ph in (("gondola_p1", "Phase 1"), ("gondola_p2", "Phase 2")):
         if _k in _extras:
             _tiles.append(("Gondola", _ph, "gondola"))
-    story.append(IncludedStrip(usable_w, _tiles))
-    story.append(Spacer(1, 3*mm))
-    story.append(PromiseBox(usable_w, [
-        ("Weather-proof plan", "Road or weather change? We rearrange sightseeing at no extra cost."),
-        ("Your driver, named", "Driver name and number shared before you travel."),
-        ("24/7 local support", "Our Srinagar team is on call throughout your trip."),
-        ("No hidden charges", "Inclusions and exclusions are listed clearly."),
+    _inner_w = usable_w - 2 * BackdropGroup.PAD
+    story.append(BackdropGroup(usable_w, [
+        IncludedCards(_inner_w, _tiles),
+        PromiseBox(_inner_w, [
+            ("Weather-proof plan", "Road or weather change? We rearrange sightseeing at no extra cost."),
+            ("Your driver, named", "Driver name and number shared before you travel."),
+            ("24/7 local support", "Our Srinagar team is on call throughout your trip."),
+            ("No hidden charges", "Inclusions and exclusions are listed clearly."),
+        ]),
     ]))
     story.append(Spacer(1, 4*mm))
 
@@ -4062,12 +4283,11 @@ def generate_pdf(itinerary_data: dict) -> str:
          ("GUESTS", _guests_txt, False),
          ("START POINT", start_point, False),
          ("BUDGET TIER", str(budget_tier), False)],
-        [("EMAIL" if client_email else "QUOTE VALID UNTIL", client_email if client_email else _valid_txt, False),
-         ("TRAVEL DATE", str(start_date), False),
+        [("TRAVEL DATE", str(start_date), False),
          ("VEHICLE", str(vehicle_type), False),
          ("END POINT", end_point, False),
          ("ESTIMATED COST", _cost_txt, _is_amount(custom_cost))],
-        ref=_quote_ref(client_name))
+        ref=_quote_ref(client_name), valid=_valid_txt, email=client_email or "")
     story.append(summary_card)
     story.append(Spacer(1, 4*mm))
     _trust = TrustStrip(usable_w, TRUST_STATS, TRUST_QUOTE, TRUST_QUOTE_BY)
@@ -4082,10 +4302,13 @@ def generate_pdf(itinerary_data: dict) -> str:
                 f.height = min(f.height, 2 * mm)
     if _p1_used() > _p1_room:                             # 2) compact the two tall cards
         for f in story:
-            if isinstance(f, IncludedStrip):
-                f.height = 18 * mm; f.compact = True
+            if isinstance(f, BackdropGroup):
+                for _ch in f.children:
+                    if isinstance(_ch, IncludedCards):
+                        _ch.compact = True; _ch._recalc()
+                f.gap = 2 * mm; f._recalc()
             elif isinstance(f, TripSummary):
-                f.ROW_H = 8.2 * mm; f.height = f.HEAD_H + f.ROW_H * max(len(f.left), len(f.right), 1) + (f.BAR_H if f.cost else 0)
+                f.compact = True; f._recalc()
     if _p1_used() > _p1_room:                             # 3) last resort: drop the proof strip
         story.remove(_trust)
         while story and isinstance(story[-1], Spacer):
