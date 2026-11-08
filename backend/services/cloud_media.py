@@ -142,7 +142,7 @@ def hotel_data_url_to_cloud(src: str, hotel_id: str) -> str:
     """Turn a base64 data URL into a Cloudinary https URL. Anything else is returned unchanged.
     The file name is a hash of the picture, so saving the same photo twice never duplicates it."""
     import base64
-    if not (isinstance(src, str) and src.startswith("data:image/") and ";base64," in src):
+    if not (isinstance(src, str) and src.startswith(("data:image/", "data:application/octet-stream")) and ";base64," in src):
         return src
     raw = base64.b64decode(src.split(",", 1)[1])
     digest = hashlib.sha1(raw).hexdigest()[:16]
