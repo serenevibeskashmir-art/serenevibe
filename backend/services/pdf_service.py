@@ -2438,6 +2438,9 @@ class SectionTitle(Flowable):
         key = "sec_" + re.sub(r"[^a-z0-9]+", "_", self.title.lower())
         c.bookmarkPage(key)
         c.addOutlineEntry(self.title.title().replace("&", "&"), key, level=0, closed=False)
+        _reg = getattr(c, "_svk_secs", None)
+        if _reg is not None:                       # remember which page this section starts on (clickable rail)
+            _reg.setdefault(key, c.getPageNumber())
 
 
 # ─── Placeholder-safe business details ───────────────────────────────────────
@@ -3642,6 +3645,9 @@ def _page_frame(canvas, doc):
     """Watermark (not on the branded cover) + border + footer on every page."""
     canvas.saveState()
     w, h = A4
+    if doc.page == 1 and getattr(canvas, "_svk_secs", None) is not None:
+        canvas.bookmarkPage("sec_overview")
+        canvas._svk_secs.setdefault("sec_overview", 1)
     if doc.page > 1:
         _draw_watermark(canvas, w, h)
     _draw_page_border(canvas, w, h)
@@ -3679,6 +3685,7 @@ class NumberedCanvas(_rl_canvas.Canvas):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._saved_pages = []
+        self._svk_secs = {}
 
     def showPage(self):
         self._saved_pages.append(dict(self.__dict__))
@@ -3689,8 +3696,48 @@ class NumberedCanvas(_rl_canvas.Canvas):
         for state in self._saved_pages:
             self.__dict__.update(state)
             self._draw_page_number(total)
+            self._draw_contents_rail()
             super().showPage()
         super().save()
+
+    # Clickable contents rail: slim vertical tabs in the right margin of every page. Each tab jumps to
+    # that section; the tab for the section you are in is highlighted. Sections a quote does not have
+    # (e.g. no stays) are skipped automatically.
+    _RAIL = (("Overview", "sec_overview"), ("Route", "sec_tour_route_map"),
+             ("Itinerary", "sec_day_by_day_itinerary"), ("Stay", "sec_where_you_ll_stay"),
+             ("Inclusions", "sec_inclusions_exclusions"), ("Payment", "sec_payment_schedule"),
+             ("Policy", "sec_cancellation_policy"), ("Terms", "sec_terms_conditions"),
+             ("Contact", "sec_get_in_touch_with_us"), ("Sign", "sec_client_acknowledgement"))
+
+    def _draw_contents_rail(self):
+        tabs = [(lab, key, self._svk_secs[key]) for lab, key in self._RAIL if key in self._svk_secs]
+        if len(tabs) < 2:
+            return
+        w, h = A4
+        tw, th, gap = 6.0 * mm, 13.2 * mm, 1.2 * mm
+        x = w - 14.4 * mm
+        total_h = len(tabs) * th + (len(tabs) - 1) * gap
+        top = h / 2 + total_h / 2
+        cur = 0
+        for i, (_, _, pg) in enumerate(tabs):
+            if pg <= self._pageNumber:
+                cur = i
+        for i, (lab, key, _) in enumerate(tabs):
+            y = top - (i + 1) * th - i * gap
+            on = (i == cur)
+            self.saveState()
+            self.setFillColor(NAVY if on else SKY_LIGHT)
+            self.setStrokeColor(GOLD_MID if on else colors.HexColor("#b9dcf0"))
+            self.setLineWidth(0.6)
+            self.roundRect(x, y, tw, th, 1.4 * mm, fill=1, stroke=1)
+            self.translate(x + tw / 2, y + th / 2)
+            self.rotate(90)
+            self.setFillColor(WHITE if on else NAVY)
+            self.setFont("Lato-Bold", 5.4)
+            self.drawCentredString(0, -1.9, lab.upper())
+            self.restoreState()
+            self.linkRect(lab, key, Rect=(x, y, x + tw, y + th), relative=0, thickness=0,
+                          name=f"svkrail_{self._pageNumber}_{i}")   # unique name: page state is restored per page
 
     def _draw_page_number(self, total):
         w, _ = A4
