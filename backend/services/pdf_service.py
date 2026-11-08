@@ -3411,6 +3411,18 @@ DAY_MIN_START = 82 * mm   # room a day needs before it may start on the current 
 _P1_SLACK = 3 * mm      # safety margin so page 1 never spills onto page 2
 
 
+_EXTRA_LABELS = {
+    "union_cab":  "Union cabs (Pahalgam ABC & snow-chain vehicle)",
+    "gondola_p1": "Gondola Phase 1",
+    "gondola_p2": "Gondola Phase 2",
+}
+
+
+def _extras_list(itinerary_data):
+    ex = itinerary_data.get("included_extras") or []
+    return [k for k in ("union_cab", "gondola_p1", "gondola_p2") if k in ex]
+
+
 class IncludedStrip(Flowable):
     """Five 'what you get' cells. Each has its own colour: a glossy gradient tile with a soft glow,
     a white pictogram, a bold title and a tinted caption, on a faint tinted cell background."""
@@ -3423,6 +3435,10 @@ class IncludedStrip(Flowable):
         ("#ff7a9c", "#d42a5b", "#ffe9ef", "#b0224c"),   # taxes   - rose
     )
     _KINDS = ("car", "bed", "meal", "boat", "tax")
+    _KIND_PAL = {
+        "cab":     ("#5fb0ff", "#1a6fc9", "#e6f2ff", "#175aa3"),   # union cab - sky blue
+        "gondola": ("#7ddc6e", "#2b9a3f", "#eaf9e6", "#237a33"),   # gondola   - green
+    }
 
     def __init__(self, width, items):
         super().__init__()
@@ -3486,6 +3502,31 @@ class IncludedStrip(Flowable):
                 w.curveTo(cx - 0.65*u, cy + (yy+0.16)*u, cx - 0.40*u, cy + (yy-0.12)*u, cx - 0.10*u, cy + yy*u)
                 w.curveTo(cx + 0.20*u, cy + (yy+0.16)*u, cx + 0.45*u, cy + (yy-0.12)*u, cx + 0.95*u, cy + yy*u)
                 c.drawPath(w, fill=0, stroke=1)
+        elif kind == "cab":     # taxi: car with roof sign
+            p = c.beginPath()
+            p.moveTo(cx - 0.62*u, cy + 0.02*u); p.lineTo(cx - 0.38*u, cy + 0.46*u)
+            p.lineTo(cx + 0.38*u, cy + 0.46*u); p.lineTo(cx + 0.62*u, cy + 0.02*u); p.close()
+            c.drawPath(p, fill=1, stroke=0)
+            c.roundRect(cx - 0.95*u, cy - 0.46*u, 1.9*u, 0.56*u, 0.2*u, fill=1, stroke=0)
+            c.roundRect(cx - 0.24*u, cy + 0.50*u, 0.48*u, 0.20*u, 0.05*u, fill=1, stroke=0)   # roof sign
+            c.setFillColor(hole)
+            for dx in (-0.2, 0.2):
+                q = c.beginPath()
+                q.moveTo(cx + (dx-0.17)*u, cy + 0.06*u); q.lineTo(cx + (dx-0.10)*u, cy + 0.36*u)
+                q.lineTo(cx + (dx+0.10)*u, cy + 0.36*u); q.lineTo(cx + (dx+0.17)*u, cy + 0.06*u); q.close()
+                c.drawPath(q, fill=1, stroke=0)
+            for dx in (-0.55, 0.55):
+                c.setFillColor(hole); c.circle(cx + dx*u, cy - 0.46*u, 0.30*u, fill=1, stroke=0)
+                c.setFillColor(W);    c.circle(cx + dx*u, cy - 0.46*u, 0.20*u, fill=1, stroke=0)
+        elif kind == "gondola":  # cable car: sloped cable, hanger and cabin
+            c.setLineWidth(0.10*u)
+            c.line(cx - 1.05*u, cy + 0.78*u, cx + 1.05*u, cy + 0.50*u)                        # cable
+            c.setLineWidth(0.12*u); c.line(cx, cy + 0.64*u, cx, cy + 0.32*u)                  # hanger
+            c.roundRect(cx - 0.62*u, cy - 0.58*u, 1.24*u, 0.92*u, 0.16*u, fill=1, stroke=0)   # cabin
+            c.setFillColor(hole)
+            for dx in (-0.40, 0.08):
+                c.roundRect(cx + dx*u, cy - 0.10*u, 0.32*u, 0.30*u, 0.05*u, fill=1, stroke=0)  # windows
+            c.rect(cx - 0.62*u, cy - 0.30*u, 1.24*u, 0.06*u, fill=1, stroke=0)
         else:  # tax: receipt with zig-zag edge and ticked lines
             x0, x1, yt, yb = cx - 0.62*u, cx + 0.62*u, cy + 0.82*u, cy - 0.78*u
             r = c.beginPath(); r.moveTo(x0, yt); r.lineTo(x1, yt); r.lineTo(x1, yb)
@@ -3505,8 +3546,10 @@ class IncludedStrip(Flowable):
         c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.6)
         c.roundRect(0, 0, w, h, R, fill=1, stroke=1)
         n = len(self.items); cw = w / n
-        for i, (head, sub) in enumerate(self.items):
-            pal = self._PAL[i % 5]
+        for i, item in enumerate(self.items):
+            head, sub = item[0], item[1]
+            kind = item[2] if len(item) > 2 else self._KINDS[i % 5]
+            pal = self._KIND_PAL.get(kind) or self._PAL[i % 5]
             top_c, bot_c, tint, cap = (colors.HexColor(x) for x in pal)
             x0 = cw * i; cx = x0 + cw / 2
             # faint tinted wash behind the cell, fading downwards, clipped to the card
@@ -3534,10 +3577,10 @@ class IncludedStrip(Flowable):
             c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.55)); c.setLineWidth(0.5)
             c.roundRect(tx + 0.3*mm, ty + 0.3*mm, t - 0.6*mm, t - 0.6*mm, 2.7*mm, fill=0, stroke=1)
             c.restoreState()
-            self._glyph(c, self._KINDS[i % 5], cx, ty + t / 2, (2.3 if self.compact else 2.6) * mm, bot_c)
+            self._glyph(c, kind, cx, ty + t / 2, (2.3 if self.compact else 2.6) * mm, bot_c)
             # text
             c.setFillColor(NAVY_DEEP)
-            head, hfs = _fit_text(c, head, "Lato-Bold", 8.0, cw - 4 * mm, 6.6)
+            head, hfs = _fit_text(c, head, "Lato-Bold", 8.0 if n <= 6 else 7.2, cw - 3 * mm, 6.6 if n <= 6 else 5.4)
             c.setFont("Lato-Bold", hfs)
             c.drawCentredString(cx, ty - (4.0 if self.compact else 4.6) * mm, head)
             c.setFillColor(cap)
@@ -3985,13 +4028,20 @@ def generate_pdf(itinerary_data: dict) -> str:
                            round(_total_now * 0.25) if _total_now else 0, _quote_ref(client_name),
                            show_per_person=bool(itinerary_data.get("show_per_person"))))
     story.append(Spacer(1, 3*mm))
-    story.append(IncludedStrip(usable_w, [
+    _extras = _extras_list(itinerary_data)
+    _tiles = [
         (f"Private {clean(str(vehicle_type))}", "pickup to drop"),
         (f"{_nights} nights stay", "hotels as listed"),
         (_meal_name, "as per your meal plan"),
         ("Shikara ride", "1 hour, on us"),
         ("All taxes", "toll, fuel, parking"),
-    ]))
+    ]
+    if "union_cab" in _extras:
+        _tiles.append(("Union cab", "Pahalgam & snow chain", "cab"))
+    for _k, _ph in (("gondola_p1", "Phase 1"), ("gondola_p2", "Phase 2")):
+        if _k in _extras:
+            _tiles.append(("Gondola", _ph, "gondola"))
+    story.append(IncludedStrip(usable_w, _tiles))
     story.append(Spacer(1, 3*mm))
     story.append(PromiseBox(usable_w, [
         ("Weather-proof plan", "Road or weather change? We rearrange sightseeing at no extra cost."),
@@ -4394,14 +4444,28 @@ def generate_pdf(itinerary_data: dict) -> str:
         "01 Hour complimentary Shikara ride",
         "Toll taxes, fuel charges, parking fees and driver's allowance",
     ]
+    _extras = _extras_list(itinerary_data)
+    for _k in _extras:
+        inc_items.append(_EXTRA_LABELS[_k])
+    _gondola_inc = [k for k in _extras if k.startswith("gondola")]
+    _act = "Activities: River Rafting, Paragliding and Skiing"
+    if len(_gondola_inc) == 2:
+        pass                                           # both phases included: not an exclusion
+    elif _gondola_inc == ["gondola_p1"]:
+        _act += ", Gondola Phase II (INR 1000 per person)"
+    elif _gondola_inc == ["gondola_p2"]:
+        _act += ", Gondola Phase I (INR 800 per person)"
+    else:
+        _act += ", Gondola (Phase I INR 800 & Phase II INR 1000 per person)"
     exc_items = [
         "Any Airfare or Train fare",
         "Entrances, Snacks" + ("" if str(itinerary_data.get("meal_plan") or "MAP").strip().upper() == "AP" else ", Lunch") + " and any meals not covered by the meal plan",
-        "Activities: River Rafting, Paragliding and Skiing, Gondola (Phase I INR 800 & Phase II INR 1000 per person)",
+        _act,
         "All personal expenses such as tips, laundry, telephone bills, beverages and camera fees",
-        "Union cabs for ABC Pahalgam and snow chain vehicle if required for Gulmarg",
-        "Any claim due to road blocks, curfews, accidents etc.",
     ]
+    if "union_cab" not in _extras:
+        exc_items.append("Union cabs for ABC Pahalgam and snow chain vehicle if required for Gulmarg")
+    exc_items.append("Any claim due to road blocks, curfews, accidents etc.")
 
     def bullet_list(items, icon, color):
         rows = []
