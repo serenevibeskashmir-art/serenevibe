@@ -97,7 +97,7 @@ def main():
             except ValueError:
                 continue
             if not isinstance(images, list) or not any(
-                    isinstance(i, str) and i.startswith("data:image/") for i in images):
+                    isinstance(i, str) and i.startswith(("data:image/", "data:application/octet-stream")) for i in images):
                 continue
             backup[row.hotel_id] = images
             print(f"hotel       {row.hotel_id:<22} {sum(1 for i in images if str(i).startswith('data:'))} photo(s) -> Cloudinary")
