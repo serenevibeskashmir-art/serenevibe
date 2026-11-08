@@ -2101,9 +2101,10 @@ class HandyEssentials(Flowable):
     ]
     PITCH = 4.8 * mm
 
-    def __init__(self, width, segments):
+    def __init__(self, width, segments, show_bar=True):
         super().__init__()
         self.width = width
+        self.show_bar = show_bar
         seen, self.hospitals = set(), []
         for sg in segments:
             key = sg["city"].lower()
@@ -2113,7 +2114,7 @@ class HandyEssentials(Flowable):
         self.hospitals = self.hospitals[:4]
         hosp_h = (3 + 4.5) * mm + len(self.hospitals) * 4.2 * mm if self.hospitals else 0
         self.card_h = 10 * mm + len(self.NUMBERS) * self.PITCH + hosp_h + 4 * mm
-        self.height = 8 * mm + 4 * mm + self.card_h
+        self.height = (8 * mm + 4 * mm if show_bar else 0) + self.card_h
         self._skip = False
 
     def wrap(self, aw, ah):
@@ -2132,15 +2133,16 @@ class HandyEssentials(Flowable):
             return
         c, w, h, ch = self.canv, self.width, self.height, self.card_h
         bar_h = 8 * mm
-        c.setFillColor(NAVY_DEEP); c.roundRect(0, h - bar_h, w, bar_h, 2 * mm, fill=1, stroke=0)
-        c.setFillColor(SKY);       c.roundRect(0, h - bar_h, 3 * mm, bar_h, 1.2 * mm, fill=1, stroke=0)
-        c.setFillColor(WHITE);     c.setFont("Lato-Bold", 9.5)
-        c.drawString(7 * mm, h - bar_h + 2.7 * mm, "HANDY NUMBERS & LOCAL WORDS")
+        if self.show_bar:
+            c.setFillColor(NAVY_DEEP); c.roundRect(0, h - bar_h, w, bar_h, 2 * mm, fill=1, stroke=0)
+            c.setFillColor(SKY);       c.roundRect(0, h - bar_h, 3 * mm, bar_h, 1.2 * mm, fill=1, stroke=0)
+            c.setFillColor(WHITE);     c.setFont("Lato-Bold", 9.5)
+            c.drawString(7 * mm, h - bar_h + 2.7 * mm, "HANDY NUMBERS & LOCAL WORDS")
 
         gap = 4 * mm
         cw = (w - gap) / 2
         for x, col in ((0, SKY), (cw + gap, TEAL)):
-            c.setFillColor(GRAY_50); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+            c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
             c.roundRect(x, 0, cw, ch, 2 * mm, fill=1, stroke=1)
             c.setFillColor(col); c.roundRect(x, 0, 1.4 * mm, ch, 0.7 * mm, fill=1, stroke=0)
 
@@ -4900,6 +4902,150 @@ def _trip_story(timeline):
     return "A Kashmir trip planned around you, with a driver who looks after everything"
 
 
+class IncludedExcluded(Flowable):
+    """Inclusions and exclusions as two cards in the same look as the hotel / travel cards:
+    a medallion heading, a divider, then ticked (or crossed) lines."""
+    PAD, HEAD_H, GAP = 5 * mm, 12 * mm, 4 * mm
+
+    def __init__(self, width, inc, exc, compact=False):
+        super().__init__()
+        self.width, self.inc, self.exc = width, [_raw(i) for i in inc], [_raw(i) for i in exc]
+        self.compact = compact
+        self._recalc()
+
+    def _recalc(self):
+        self.fs = 7.2 if self.compact else 7.8
+        self.lead = 3.2 * mm if self.compact else 3.5 * mm
+        self.igap = 1.6 * mm if self.compact else 2.3 * mm
+        self.cw = (self.width - self.GAP) / 2
+        self.tw = self.cw - self.PAD - 7.5 * mm - 4 * mm
+        def body(items):
+            return sum(min(len(simpleSplit(t, "Lato", self.fs, self.tw)), 3) * self.lead + self.igap for t in items)
+        self.card_h = self.HEAD_H + 2 * mm + max(body(self.inc), body(self.exc)) + 2 * mm
+        self.height = self.card_h
+
+    def wrap(self, aw, ah):
+        return (self.width, self.height)
+
+    def _card(self, c, x, items, title, sub, ring, tint, tick):
+        h, cw = self.card_h, self.cw
+        c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+        c.roundRect(x, 0, cw, h, 2 * mm, fill=1, stroke=1)
+        c.setFillColor(ring); c.roundRect(x, 0, 1.4 * mm, h, 0.7 * mm, fill=1, stroke=0)
+        mx, my = x + self.PAD + 3.6 * mm, h - 6.4 * mm
+        c.setFillColor(WHITE); c.setStrokeColor(ring); c.setLineWidth(1.5); c.circle(mx, my, 4.0 * mm, fill=1, stroke=1)
+        c.setFillColor(tint); c.circle(mx, my, 3.1 * mm, fill=1, stroke=0)
+        if tick:
+            _check_tick(c, mx, my, 1.35 * mm, ring)
+        else:
+            c.setStrokeColor(ring); c.setLineWidth(1.0); c.setLineCap(1)
+            d = 1.25 * mm
+            c.line(mx - d, my - d, mx + d, my + d); c.line(mx - d, my + d, mx + d, my - d)
+        c.setFillColor(NAVY); c.setFont("Lato-Bold", 9.4); c.drawString(x + self.PAD + 10 * mm, my + 0.7 * mm, title)
+        c.setFillColor(GRAY_400); c.setFont("Lato", 6.6); c.drawString(x + self.PAD + 10 * mm, my - 2.9 * mm, sub)
+        c.setStrokeColor(GRAY_200); c.setLineWidth(0.4)
+        c.line(x + 4 * mm, h - self.HEAD_H, x + cw - 4 * mm, h - self.HEAD_H)
+        y = h - self.HEAD_H - 4.6 * mm
+        for t in items:
+            lines = simpleSplit(t, "Lato", self.fs, self.tw)[:3]
+            cx, cy = x + self.PAD + 2.2 * mm, y + 1.05 * mm
+            c.setFillColor(tint); c.circle(cx, cy, 1.9 * mm, fill=1, stroke=0)
+            if tick:
+                _check_tick(c, cx, cy, 0.9 * mm, ring)
+            else:
+                c.setStrokeColor(ring); c.setLineWidth(0.9); c.setLineCap(1); d = 0.8 * mm
+                c.line(cx - d, cy - d, cx + d, cy + d); c.line(cx - d, cy + d, cx + d, cy - d)
+            c.setFillColor(GRAY_600); c.setFont("Lato", self.fs)
+            for ln in lines:
+                c.drawString(x + self.PAD + 7.5 * mm, y, ln); y -= self.lead
+            y -= self.igap
+
+    def draw(self):
+        c = self.canv
+        self._card(c, 0, self.inc, "What's included", f"{len(self.inc)} items in your price", EMERALD, EMERALD_LITE, True)
+        self._card(c, self.cw + self.GAP, self.exc, "Not included", "Pay directly if you need these", ROSE, colors.HexColor("#ffe4e6"), False)
+
+
+class PaymentPlan(Flowable):
+    """Payment schedule as three instalment cards joined by a progress line, then a pay-by strip.
+    rows: [(label, pct, amount_text, due, due_note, mode, status)]"""
+    HEAD, GAP = 14 * mm, 3 * mm
+
+    def __init__(self, width, rows, pay_label, pay_text, compact=False):
+        super().__init__()
+        self.width, self.rows = width, rows
+        self.pay_label, self.pay_text = pay_label, _raw(pay_text)
+        self.compact = compact
+        self._recalc()
+
+    def _recalc(self):
+        self.cw = (self.width - 2 * self.GAP) / 3
+        self.card_h = 33 * mm if self.compact else 38 * mm
+        self.strip_tw = self.width - 6 * mm - 30 * mm
+        self.pay_lines = simpleSplit(self.pay_text, "Lato", 7.4, self.strip_tw)[:2]
+        self.strip_h = (7.5 + 3.2 * (len(self.pay_lines) - 1)) * mm + 1.2 * mm
+        self.height = self.card_h + 3 * mm + self.strip_h
+
+    def wrap(self, aw, ah):
+        return (self.width, self.height)
+
+    def draw(self):
+        c, ch = self.canv, self.card_h
+        y0 = self.strip_h + 3 * mm
+        palette = [(SKY, SKY_LIGHT), (TEAL, TEAL_LITE), (NAVY, GRAY_100)]
+        c.saveState(); c.translate(0, y0)
+        for i, (label, pct, amt, due, note, mode, status) in enumerate(self.rows):
+            x = i * (self.cw + self.GAP)
+            ring, tint = palette[i % 3]
+            c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+            c.roundRect(x, 0, self.cw, ch, 2 * mm, fill=1, stroke=1)
+            c.setFillColor(ring); c.roundRect(x, 0, self.cw, 1.4 * mm, 0.7 * mm, fill=1, stroke=0)
+            # numbered medallion + title
+            mx, my = x + 8 * mm, ch - 7.6 * mm
+            c.setFillColor(WHITE); c.setStrokeColor(ring); c.setLineWidth(1.5); c.circle(mx, my, 4.0 * mm, fill=1, stroke=1)
+            c.setFillColor(ring); c.circle(mx, my, 3.1 * mm, fill=1, stroke=0)
+            c.setFillColor(WHITE); c.setFont("Lato-Bold", 9); c.drawCentredString(mx, my - 1.2 * mm, str(i + 1))
+            c.setFillColor(NAVY); c.setFont("Lato-Bold", 9); c.drawString(x + 14 * mm, my + 0.5 * mm, label)
+            c.setFillColor(GRAY_400); c.setFont("Lato", 6.6); c.drawString(x + 14 * mm, my - 3.1 * mm, mode)
+            # share pill (top right)
+            ptxt = f"{pct}%"
+            pw = c.stringWidth(ptxt, "Lato-Bold", 7.4) + 5 * mm
+            c.setFillColor(tint); c.roundRect(x + self.cw - pw - 3.5 * mm, ch - 8.6 * mm, pw, 4.6 * mm, 2.3 * mm, fill=1, stroke=0)
+            c.setFillColor(ring); c.setFont("Lato-Bold", 7.4); c.drawCentredString(x + self.cw - pw / 2 - 3.5 * mm, ch - 7.1 * mm, ptxt)
+            # amount
+            c.setStrokeColor(GRAY_200); c.setLineWidth(0.4)
+            c.line(x + 4 * mm, ch - 13.2 * mm, x + self.cw - 4 * mm, ch - 13.2 * mm)
+            c.setFillColor(EMERALD); c.setFont("Lato-Bold", 14); c.drawString(x + 5 * mm, ch - 20.2 * mm, amt)
+            # due
+            c.setFillColor(BLACK); c.setFont("Lato-Bold", 7.6); c.drawString(x + 5 * mm, ch - 25.4 * mm, due)
+            if note:
+                c.setFillColor(GRAY_600); c.setFont("Lato", 6.8); c.drawString(x + 5 * mm, ch - 29 * mm, note)
+            # status pill (bottom right)
+            stw = c.stringWidth(status, "Lato-Bold", 6.8) + 5 * mm
+            c.setFillColor(GOLD_LITE); c.roundRect(x + self.cw - stw - 3.5 * mm, 2.6 * mm, stw, 4.3 * mm, 2.1 * mm, fill=1, stroke=0)
+            c.setFillColor(GOLD); c.setFont("Lato-Bold", 6.8); c.drawCentredString(x + self.cw - stw / 2 - 3.5 * mm, 4.0 * mm, status)
+            if i < 2:                                                  # arrow chevron joining the cards
+                ax = x + self.cw + self.GAP / 2
+                c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+                c.circle(ax, ch / 2, 2.0 * mm, fill=1, stroke=1)
+                c.setStrokeColor(GRAY_400); c.setLineWidth(0.8); c.setLineCap(1)
+                c.line(ax - 0.5 * mm, ch / 2 + 0.9 * mm, ax + 0.5 * mm, ch / 2); c.line(ax + 0.5 * mm, ch / 2, ax - 0.5 * mm, ch / 2 - 0.9 * mm)
+        c.restoreState()
+        # pay-by strip
+        sh = self.strip_h
+        c.setFillColor(GRAY_50); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+        c.roundRect(0, 0, self.width, sh, 2 * mm, fill=1, stroke=1)
+        c.setFillColor(SKY); c.roundRect(0, 0, 1.4 * mm, sh, 0.7 * mm, fill=1, stroke=0)
+        lw = c.stringWidth(self.pay_label, "Lato-Bold", 7.2) + 6 * mm
+        c.setFillColor(SKY_LIGHT); c.roundRect(5 * mm, sh / 2 - 2.5 * mm, lw, 5 * mm, 2.5 * mm, fill=1, stroke=0)
+        c.setFillColor(SKY); c.setFont("Lato-Bold", 7.2); c.drawString(8 * mm, sh / 2 - 0.9 * mm, self.pay_label)
+        c.setFillColor(GRAY_600); c.setFont("Lato", 7.4)
+        ty = sh / 2 + (len(self.pay_lines) - 1) * 1.6 * mm - 1.0 * mm
+        for ln in self.pay_lines:
+            c.drawString(5 * mm + lw + 3 * mm, ty, ln); ty -= 3.2 * mm
+
+
+
 def generate_pdf(itinerary_data: dict) -> str:
     import os as _os; _out = _os.environ.get("OUTPUT_DIR", "/tmp/output"); Path(_out).mkdir(exist_ok=True)
     client_name = str(itinerary_data.get("client_name", "Client"))
@@ -5324,6 +5470,7 @@ def generate_pdf(itinerary_data: dict) -> str:
             _photo_cache[st["hid"]] = _pick_best_photos(HOTEL_LOOKUP[st["hid"]].get("images", []), 2)
         return _photo_cache[st["hid"]]
 
+    _segs = []
     if stays:
         _title = [SectionTitle(usable_w, "WHERE YOU'LL STAY", icon=""), Spacer(1, 4*mm)]
         _cards = [HotelStayCard(usable_w, st, _stay_photos(st)) for st in stays]
@@ -5338,7 +5485,6 @@ def generate_pdf(itinerary_data: dict) -> str:
             _exp = SignatureExperiences(usable_w, _segs, extras=_extras, photos=dest_bgs)
             if _exp.items and len(timeline) <= 6 and len(_segs) <= 4:
                 story.append(KeepTogether([_exp, Spacer(1, 4*mm)]))
-    story.append(TravelEssentials(usable_w))   # flows to the next page when this one is full
     page_block_1 = []
 
     # ── 5. Inclusions / Exclusions ────────────────────────────────────────────
@@ -5375,91 +5521,11 @@ def generate_pdf(itinerary_data: dict) -> str:
         exc_items.append("Union cabs for ABC Pahalgam and snow chain vehicle if required for Gulmarg")
     exc_items.append("Any claim due to road blocks, curfews, accidents etc.")
 
-    def bullet_list(items, icon, color):
-        rows = []
-        for item in items:
-            rows.append([
-                Paragraph(f"<font color='#{color}'><b>{icon}</b></font>",
-                          ParagraphStyle("ic", fontName="Lato-Bold",
-                                        fontSize=11, alignment=TA_CENTER)),
-                Paragraph(clean(item), styles["inclusion"]),
-            ])
-        t = Table(rows, colWidths=[8*mm, usable_w/2 - 8*mm - 3*mm])
-        t.setStyle(TableStyle([
-            ("LEFTPADDING",  (0,0),(-1,-1), 2),
-            ("RIGHTPADDING", (0,0),(-1,-1), 2),
-            ("TOPPADDING",   (0,0),(-1,-1), 2),
-            ("BOTTOMPADDING",(0,0),(-1,-1), 3),
-            ("VALIGN",       (0,0),(-1,-1), "TOP"),
-        ]))
-        return t
-
-    inc_header = Table([[
-        Paragraph("<b>INCLUSIONS</b>", ParagraphStyle("ih", fontName="Lato-Bold",
-                  fontSize=9.5, textColor=WHITE)),
-        Paragraph("<b>EXCLUSIONS</b>", ParagraphStyle("eh", fontName="Lato-Bold",
-                  fontSize=9.5, textColor=WHITE)),
-    ]], colWidths=[usable_w/2, usable_w/2])
-    inc_header.setStyle(TableStyle([
-        ("BACKGROUND", (0,0),(0,0), EMERALD),
-        ("BACKGROUND", (1,0),(1,0), ROSE),
-        ("TOPPADDING", (0,0),(-1,-1), 8),
-        ("BOTTOMPADDING",(0,0),(-1,-1), 8),
-        ("LEFTPADDING", (0,0),(-1,-1), 12),
-        ("LINEBEFORE", (0,0),(0,0), 3, colors.HexColor("#047857")),
-        ("LINEBEFORE", (1,0),(1,0), 3, colors.HexColor("#be123c")),
-    ]))
-
-    inc_body = Table([[
-        bullet_list(inc_items, "+", "059669"),
-        bullet_list(exc_items, "x", "e11d48"),
-    ]], colWidths=[usable_w/2, usable_w/2])
-    inc_body.setStyle(TableStyle([
-        ("BACKGROUND", (0,0),(0,0), colors.HexColor("#f0fdf4")),
-        ("BACKGROUND", (1,0),(1,0), colors.HexColor("#fff1f2")),
-        ("BOX",        (0,0),(-1,-1), 0.5, GRAY_200),
-        ("TOPPADDING", (0,0),(-1,-1), 6),
-        ("BOTTOMPADDING",(0,0),(-1,-1), 6),
-        ("LEFTPADDING", (0,0),(-1,-1), 4),
-        ("VALIGN",     (0,0),(-1,-1), "TOP"),
-    ]))
-
-    page_block_1.append(SectionTitle(usable_w, "INCLUSIONS & EXCLUSIONS", icon=""))
-    page_block_1.append(Spacer(1, 3*mm))
-    page_block_1.append(inc_header)
-    page_block_1.append(inc_body)
-    page_block_1.append(Spacer(1, 5*mm))
-
-    # Inclusions and Payment are separate blocks so either can fill the space left by the hotel cards
-    story.append(KeepTogether(page_block_1))
-    page_block_1 = []
-
-    # ── 6. Payment Schedule ───────────────────────────────────────────────────
-    page_block_1.append(SectionTitle(usable_w, "PAYMENT SCHEDULE", icon=""))
-    page_block_1.append(Spacer(1, 3*mm))
-
     # Calculate payment milestones dynamically (25% / 25% / 50% split per policy)
     total_amt   = _amount_int(custom_cost)
     inst1_amt   = round(total_amt * 0.25)
     inst2_amt   = round(total_amt * 0.25)
     inst3_amt   = total_amt - inst1_amt - inst2_amt
-
-    pay_header_style = ParagraphStyle("pyh", fontName="Lato-Bold",
-                                      fontSize=8.5, textColor=WHITE, alignment=TA_CENTER)
-    pay_body_style   = ParagraphStyle("pyb", fontName="Lato",
-                                      fontSize=8.5, textColor=BLACK, alignment=TA_CENTER)
-    pay_amt_style    = ParagraphStyle("pya", fontName="Lato-Bold",
-                                      fontSize=9.5, textColor=EMERALD, alignment=TA_CENTER)
-    pay_note_style   = ParagraphStyle("pyn", fontName="Lato-Italic",
-                                      fontSize=7.5, textColor=GRAY_600, alignment=TA_CENTER)
-
-    pay_rows = [[
-        Paragraph("<b>Instalment</b>",   pay_header_style),
-        Paragraph("<b>Amount (INR)</b>", pay_header_style),
-        Paragraph("<b>Due Date</b>",     pay_header_style),
-        Paragraph("<b>Mode</b>",         pay_header_style),
-        Paragraph("<b>Status</b>",       pay_header_style),
-    ]]
 
     _sd = _start_dt(start_date)
     _d1 = (datetime.datetime.now(IST) + datetime.timedelta(days=7)).strftime("%d %b %Y")
@@ -5467,74 +5533,42 @@ def generate_pdf(itinerary_data: dict) -> str:
     _d2 = _d2_dt.strftime("%d %b %Y") if _d2_dt else ""
     _d2_passed = bool(_d2_dt and _d2_dt.date() <= datetime.datetime.now(IST).date())
     _d3 = _sd.strftime("%d %b %Y") if _sd else ""
-    pay_data = [
-        ("1st Instalment (25%)",
-         f"INR {inst1_amt:,}" if total_amt else "TBD",
-         f"On Confirmation<br/><font size='7' color='#64748b'>hold quote by {_d1}</font>",
-         "NEFT / UPI / Cheque",
-         "Pending"),
-        ("2nd Instalment (25%)",
-         f"INR {inst2_amt:,}" if total_amt else "TBD",
-         ("With the 1st instalment" if _d2_passed else
-          "7 days before arrival" + (f"<br/><font size='7' color='#64748b'>by {_d2}</font>" if _d2 else "")),
-         "NEFT / UPI / Cheque",
-         "Pending"),
-        ("3rd Instalment (50%)",
-         f"INR {inst3_amt:,}" if total_amt else "TBD",
-         "On arrival" + (f"<br/><font size='7' color='#64748b'>{_d3}</font>" if _d3 else ""),
-         "NEFT / UPI / Cheque",
-         "Pending"),
+    pay_rows = [
+        ("1st Instalment", 25, f"INR {inst1_amt:,}" if total_amt else "TBD",
+         "On confirmation", f"Hold quote by {_d1}", "NEFT / UPI / Cheque", "Pending"),
+        ("2nd Instalment", 25, f"INR {inst2_amt:,}" if total_amt else "TBD",
+         ("With the 1st instalment" if _d2_passed else "7 days before arrival"),
+         ("" if _d2_passed or not _d2 else f"By {_d2}"), "NEFT / UPI / Cheque", "Pending"),
+        ("3rd Instalment", 50, f"INR {inst3_amt:,}" if total_amt else "TBD",
+         "On arrival", (_d3 or ""), "NEFT / UPI / Cheque", "Pending"),
     ]
-
-    for label, amt, due, mode, status in pay_data:
-        pay_rows.append([
-            Paragraph(clean(label), ParagraphStyle("pl", fontName="Lato",
-                      fontSize=8.5, textColor=BLACK)),
-            Paragraph(f"<b>{clean(amt)}</b>", pay_amt_style),
-            Paragraph(due,  pay_body_style),
-            Paragraph(clean(mode), pay_body_style),
-            Paragraph(f"<font color='#b45309'>{clean(status)}</font>",
-                      ParagraphStyle("ps", fontName="Lato-Bold",
-                                     fontSize=8, textColor=GOLD, alignment=TA_CENTER)),
-        ])
-
-    pay_col_w = [usable_w*0.28, usable_w*0.20, usable_w*0.22, usable_w*0.18, usable_w*0.12]
-    pay_table = Table(pay_rows, colWidths=pay_col_w, hAlign="LEFT")
-    pay_table.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, 0), NAVY_DEEP),
-        ("BACKGROUND",    (0, 0), (0, 0), SKY),
-        ("TEXTCOLOR",     (0, 0), (-1, 0), WHITE),
-        ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.HexColor("#f0fdf4"), WHITE]),
-        ("BOX",           (0, 0), (-1, -1), 0.5, GRAY_200),
-        ("INNERGRID",     (0, 0), (-1, -1), 0.3, GRAY_200),
-        ("LINEBEFORE",    (0, 0), (0, -1), 2.5, SKY),
-        ("TOPPADDING",    (0, 0), (-1, -1), 7),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-    ]))
-    page_block_1.append(pay_table)
-    page_block_1.append(Spacer(1, 3*mm))
-
-    # Bank details sub-note
-    bank_note_style = ParagraphStyle("bn", fontName="Lato", fontSize=7.5,
-                                     textColor=GRAY_600, leading=11)
     _bank = ["Account Name: Serene Vibes Kashmir", "Bank: J&amp;K Bank"]
     if BANK_ACCOUNT_NO:
         _bank.append(f"Account No: {BANK_ACCOUNT_NO}")
     if BANK_IFSC:
         _bank.append(f"IFSC: {BANK_IFSC}")
     _bank.append("UPI: serenevibeskashmir@upi")
-    page_block_1.append(Paragraph(
-        ("<b>Bank Transfer Details:</b>  " if (BANK_ACCOUNT_NO and BANK_IFSC) else "<b>Pay by UPI:</b>  ")
-        + ("  |  ".join(_bank) if (BANK_ACCOUNT_NO and BANK_IFSC) else "serenevibeskashmir@upi"),
-        bank_note_style
-    ))
-    # Flush page_block_1 (Hotel Assignments + Inc/Exc + Payment) to story
-    story.append(KeepTogether(page_block_1))
-    story.append(Spacer(1, 4*mm))
-    story.append(HandyEssentials(usable_w, _segs))   # flows to the next page when this one is full
+    _has_bank = bool(BANK_ACCOUNT_NO and BANK_IFSC)
+    _pay_label = "BANK TRANSFER" if _has_bank else "PAY BY UPI"
+    _pay_text = "  |  ".join(_bank) if _has_bank else "serenevibeskashmir@upi"
+
+    # ── Final page: Inclusions, Payment and Handy numbers ALWAYS share one page ──
+    _inc_cards = IncludedExcluded(usable_w, inc_items, exc_items)
+    _pay_plan = PaymentPlan(usable_w, pay_rows, _pay_label, _pay_text)
+    _handy = HandyEssentials(usable_w, _segs, show_bar=False)
+    _final_parts = lambda: [
+        SectionTitle(usable_w, "INCLUSIONS & EXCLUSIONS", icon=""), Spacer(1, 3*mm), _inc_cards, Spacer(1, 5*mm),
+        SectionTitle(usable_w, "PAYMENT SCHEDULE", icon=""), Spacer(1, 3*mm), _pay_plan, Spacer(1, 5*mm),
+        SectionTitle(usable_w, "HANDY NUMBERS & LOCAL WORDS", icon=""), Spacer(1, 3*mm), _handy,
+    ]
+    _room = doc.height - 12 - 2 * mm
+    def _final_h():
+        return sum(f.wrap(usable_w, 10000)[1] for f in _final_parts())
+    if _final_h() > _room:                      # long lists: tighten text, then cards, so it still fits one page
+        _inc_cards.compact = True; _inc_cards._recalc()
+        _pay_plan.compact = True; _pay_plan._recalc()
+    story.append(KeepTogether(_final_parts()))
+    story.append(CondPageBreak(doc.height - 14))   # the cancellation page starts fresh, never beside these three
 
     # ── 7–9. Cancellation Policy + Travel Notes + Contact Card ────────────────
     # Rule 2: These three sections always live on ONE page together.
@@ -5897,7 +5931,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         ("VALIGN",       (0,0),(-1,-1), "TOP"),
     ]))
     story.append(gen_table)
-    story.append(Spacer(1, 6*mm))
+    story.append(Spacer(1, 5*mm))
 
     # ── Client Acknowledgement / Signature Block ──────────────────────────────
     story.append(PageBreak())
@@ -6027,6 +6061,8 @@ def generate_pdf(itinerary_data: dict) -> str:
     story.append(Spacer(1, 7*mm))
     story.append(SocialButtons(usable_w, client_name, _quote_ref(client_name)))
     story.append(Spacer(1, 6*mm))
+    story.append(TravelEssentials(usable_w))      # last page has room; keeps every earlier page full
+    story.append(Spacer(1, 5*mm))
 
     # Timestamp
     ts = ts_gen.strftime("%d %b %Y, %I:%M %p") + " IST"
