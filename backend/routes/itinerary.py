@@ -128,6 +128,16 @@ MEAL_PLANS = {
 }
 
 
+_EXTRA_KEYS = ("union_cab", "gondola_p1", "gondola_p2")
+
+
+def _included_extras(value):
+    """Which normally-excluded extras are part of this package (admin checkboxes)."""
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [k for k in _EXTRA_KEYS if k in value]
+
+
 def _meal_plan(value):
     value = str(value or "").strip().upper()
     return value if value in MEAL_PLANS else "MAP"
@@ -223,6 +233,7 @@ def generate_custom_itinerary():
         "hotel_details": data.get("hotel_details") if isinstance(data.get("hotel_details"), dict) else {},
         "custom_cost": custom_cost,
         "show_per_person": bool(data.get("show_per_person", False)),
+        "included_extras": _included_extras(data.get("included_extras")),
         "meta_summary": {
             "client_name": client_name,
             "client_email": client_email,
