@@ -1272,11 +1272,11 @@ def _step_kind(head, desc):
 
 class DayBookSpread(Flowable):
     PAD     = 1.5 * mm     # cover border around the pages
-    RIB     = 4.2 * mm     # ribbon hanging below the book
+    RIB     = 3.0 * mm     # ribbon hanging below the book
     FOOT_H  = 6.6 * mm
     ICON_R  = 3.7 * mm
     LABEL_W = 15.5 * mm
-    MIN_H   = 82 * mm
+    MIN_H   = 74 * mm
 
     def __init__(self, width, day_num, title, date_label="", stay="", travel=None, route="",
                  photo=None, photo_label="", steps=None, client_name=""):
@@ -1342,10 +1342,10 @@ class DayBookSpread(Flowable):
         pw = self._page_w()
         self.tx_off = 5 * mm + self.LABEL_W + 2.6 * mm + 2 * self.ICON_R + 2.6 * mm      # text column x inside the page
         self.tw = pw - self.tx_off - 4.5 * mm
-        self.hs, self.ds = 8.9 * f, 7.5 * f
-        self.hl, self.dl = 4.2 * mm * f, 3.5 * mm * f
+        self.hs, self.ds = 8.9 * f, 7.0 * f
+        self.hl, self.dl = 4.2 * mm * f, 3.25 * mm * f
         self.pill_h = 3.9 * mm * f
-        gap = 4.4 * mm * f
+        gap = 3.5 * mm * f
         self.row_h = []
         for r in self.rows:
             r["h_lines"] = simpleSplit(r["head"], "Lato-Bold", self.hs, self.tw) or [""]
@@ -1358,7 +1358,7 @@ class DayBookSpread(Flowable):
             r["h"] = max(2 * self.ICON_R + 0.6 * mm, body_h)
             self.row_h.append(r["h"] + gap)
         self.gap = gap
-        return 5.2 * mm + sum(self.row_h) - gap + 4.4 * mm + self.FOOT_H
+        return 4.6 * mm + sum(self.row_h) - gap + 3.6 * mm + self.FOOT_H
 
     def _left_parts(self):
         pw = self._page_w()
@@ -1615,8 +1615,8 @@ class DayBookSpread(Flowable):
         # ── RIGHT PAGE ──────────────────────────────────────────────────────
         rx0 = cx
         f = self.f
-        body_top = py1 - 5.2 * mm
-        avail = (body_top - (py0 + foot + 4.4 * mm))
+        body_top = py1 - 4.6 * mm
+        avail = (body_top - (py0 + foot + 3.6 * mm))
         used = sum(self.row_h) - self.gap
         extra = max(0, min((avail - used) / max(len(self.rows), 1), 4.5 * mm))
         icx = rx0 + 5 * mm + self.LABEL_W + 2.6 * mm + self.ICON_R
@@ -2009,8 +2009,9 @@ class TravelEssentials(Flowable):
         self._skip = False
 
     def wrap(self, aw, ah):
-        self._skip = ah < self.height
-        return (self.width, 0) if self._skip else (self.width, self.height)
+        # Never vanish: when the page has no room left, the box simply starts on the next page.
+        self._skip = False
+        return (self.width, self.height)
 
     def _page(self, c, x, pw, hb, title, sub, items, ring, tint, kind):
         top = hb - self.PAD
@@ -2116,8 +2117,9 @@ class HandyEssentials(Flowable):
         self._skip = False
 
     def wrap(self, aw, ah):
-        self._skip = ah < self.height
-        return (self.width, 0) if self._skip else (self.width, self.height)
+        # Never vanish: when the page has no room left, the box simply starts on the next page.
+        self._skip = False
+        return (self.width, self.height)
 
     @staticmethod
     def _pill(c, x, y, text, col, lite):
@@ -5052,7 +5054,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     # and push the block to the bottom of the page with a spacer.  A PageBreak
     # follows so the Day-by-Day section starts cleanly on page 2.
     timeline_for_map = itinerary_data.get("timeline", [])
-    avail  = min((doc.height - 12) - 4 * mm, 152 * mm)     # map block opens page 2; Day-by-day follows
+    avail  = min((doc.height - 12) - 4 * mm, 138 * mm)     # map block opens page 2; Day 1 must fit under it
     map_title = SectionTitle(usable_w, "TOUR ROUTE MAP", icon="")
     gap_h  = 3 * mm
     route_map = KashmirRouteMap(usable_w, timeline_for_map,
@@ -5060,7 +5062,7 @@ def generate_pdf(itinerary_data: dict) -> str:
                                 start_point=start_point, end_point=end_point,
                                 start_info=itinerary_data.get("start_info"), end_info=itinerary_data.get("end_info"))
     story.append(KeepTogether([map_title, Spacer(1, gap_h), route_map]))
-    story.append(Spacer(1, 6*mm))
+    story.append(Spacer(1, 4*mm))
 
     # ── 3. Day-by-day itinerary ───────────────────────────────────────────────
     _day_title = [SectionTitle(usable_w, "DAY-BY-DAY ITINERARY", icon=""), Spacer(1, 4*mm)]   # kept with Day 1
@@ -5134,9 +5136,9 @@ def generate_pdf(itinerary_data: dict) -> str:
             travel=_travel, route=_route_show, photo=day_bg,
             photo_label=KashmirRouteMap.DISPLAY.get(_pk, str(_pk).title()) if day_bg is not None else KashmirRouteMap.DISPLAY.get(_pk, str(_pk).title()),
             steps=steps, client_name=client_name)
-        block = [spread, Spacer(1, 5*mm)]
+        block = [spread, Spacer(1, 3*mm)]
         if idx == 1:
-            block = [KeepTogether(_day_title + [spread]), Spacer(1, 5*mm)]   # the heading never sits alone at the foot of a page
+            block = [KeepTogether(_day_title + [spread]), Spacer(1, 3*mm)]   # the heading never sits alone at the foot of a page
         # Each spread is one unbroken book; platypus moves a spread that does not fit to the next page.
         story.extend(block)
 
@@ -5336,7 +5338,7 @@ def generate_pdf(itinerary_data: dict) -> str:
             _exp = SignatureExperiences(usable_w, _segs, extras=_extras, photos=dest_bgs)
             if _exp.items and len(timeline) <= 6 and len(_segs) <= 4:
                 story.append(KeepTogether([_exp, Spacer(1, 4*mm)]))
-    story.append(TravelEssentials(usable_w))   # only drawn when it fits in the leftover space
+    story.append(TravelEssentials(usable_w))   # flows to the next page when this one is full
     page_block_1 = []
 
     # ── 5. Inclusions / Exclusions ────────────────────────────────────────────
@@ -5532,7 +5534,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     # Flush page_block_1 (Hotel Assignments + Inc/Exc + Payment) to story
     story.append(KeepTogether(page_block_1))
     story.append(Spacer(1, 4*mm))
-    story.append(HandyEssentials(usable_w, _segs))   # only drawn when it fits in the leftover space
+    story.append(HandyEssentials(usable_w, _segs))   # flows to the next page when this one is full
 
     # ── 7–9. Cancellation Policy + Travel Notes + Contact Card ────────────────
     # Rule 2: These three sections always live on ONE page together.
