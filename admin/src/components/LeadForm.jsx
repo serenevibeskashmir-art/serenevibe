@@ -15,6 +15,8 @@ export default function LeadForm({ onGenerated, trip = { vehicle: "", meal: "MAP
   const [tripPace] = useState("Moderate");
   const [budgetTier, setBudgetTier] = useState("Mid-Range");
   const [customVehicle, setCustomVehicle] = useState(false);   // "Other…" chosen in the vehicle list
+  const coupleItems = trip.coupleExtras || [];
+  const toggleCoupleItem = (k) => onTripChange({ ...trip, coupleExtras: coupleItems.includes(k) ? coupleItems.filter((x) => x !== k) : [...coupleItems, k] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -57,6 +59,7 @@ export default function LeadForm({ onGenerated, trip = { vehicle: "", meal: "MAP
     else { setCustomVehicle(false); onTripChange({ ...trip, vehicle: v }); }
   };
   const meal = MEAL_PLANS.find((m) => m.code === (trip.meal || "MAP"));
+  const isCouple = Number(adults) === 2;   // couple options are offered only for exactly 2 adults
 
   return (
     <form onSubmit={handleSubmit} className="sv-stack sv-form">
@@ -79,6 +82,19 @@ export default function LeadForm({ onGenerated, trip = { vehicle: "", meal: "MAP
           <Stepper label="Adults" value={Number(adults) || 1} min={1} max={30} onChange={setAdults} />
           <Stepper label="Kids <12" value={Number(kids) || 0} min={0} max={15} onChange={setKids} />
         </div>
+        {isCouple && (
+          <div className="sv-stack">
+            <button type="button" className={"sv-sw" + (trip.couple ? " on" : "")} role="switch" aria-checked={!!trip.couple}
+              onClick={() => onTripChange({ ...trip, couple: !trip.couple })}>
+              <span>Couple</span><i className="box" /></button>
+            {trip.couple && [["couple_cake", "Cake Cutting Celebration"], ["couple_bed", "Bed decoration"], ["couple_candle", "Candle light dinner"]].map(([k, lab]) => (
+              <button key={k} type="button" className={"sv-sw" + (coupleItems.includes(k) ? " on" : "")} role="switch" aria-checked={coupleItems.includes(k)}
+                onClick={() => toggleCoupleItem(k)}>
+                <span>{lab}</span><i className="box" /></button>
+            ))}
+            {trip.couple && <div className="sv-sub">Ticked items are added to the PDF.</div>}
+          </div>
+        )}
       </section>
 
       <section className="sv-card sv-stack">
