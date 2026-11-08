@@ -4,7 +4,7 @@ import os
 import requests
 from pathlib import Path
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.utils import ImageReader
+from reportlab.lib.utils import ImageReader, simpleSplit
 from reportlab.lib import colors
 from reportlab.lib.units import mm, cm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -1098,6 +1098,461 @@ class StepDot(Flowable):
         c.setFillColor(WHITE)
         c.setFont("Lato-Bold", 6.8)
         c.drawCentredString(s / 2, s / 2 - 2.3, str(self.n))
+
+
+# ─── Day card: open-book spread ──────────────────────────────────────────────
+# One day = one open book. Left page: day header, stay, route + distance chips and a
+# destination photo. Right page: the day's steps on a vertical timeline. A shaded centre
+# fold and a ribbon marker finish the look. Height grows with the number of steps.
+_BOOK_COVER  = colors.HexColor("#14213d")
+_BOOK_PAGE   = colors.HexColor("#fffdf8")
+_BOOK_RIBBON = colors.HexColor("#b4173f")
+_BOOK_BAND   = colors.HexColor("#dff1fd")
+
+# kind -> (ring/kicker colour, tint, title colour)
+_STEP_STYLE = {
+    "Transfer":    (SKY,                           SKY_LIGHT,                     TEAL),
+    "Sightseeing": (EMERALD,                       EMERALD_LITE,                  TEAL),
+    "Stay":        (GOLD_MID,                      GOLD_LITE,                     GOLD),
+    "Meal":        (colors.HexColor("#e11d48"),    colors.HexColor("#ffe4e6"),    colors.HexColor("#be123c")),
+    "Activity":    (colors.HexColor("#7c3aed"),    colors.HexColor("#ede9fe"),    colors.HexColor("#6d28d9")),
+    "Plan":        (GRAY_600,                      GRAY_100,                      NAVY),
+}
+_STEP_ICON = {"Transfer": "car", "Sightseeing": "peak", "Stay": "bed",
+              "Meal": "fork", "Activity": "star", "Plan": "star"}
+_STEP_SUB  = {"Transfer": "Transfer", "Sightseeing": "Explore", "Stay": "Settle in",
+              "Meal": "Dine", "Activity": "Enjoy", "Plan": ""}
+
+
+def _step_kind(head, desc):
+    """Tag a step (Transfer / Sightseeing / Stay / Meal / Activity) from its words; the heading wins."""
+    def has(t, words):
+        return any(w in t for w in words)
+    h, d = str(head or "").lower(), str(desc or "").lower()
+    tests = (
+        ("Stay",     ("check-in", "check in", "checkin", "overnight", "check-out", "check out", "houseboat stay", "settle in")),
+        ("Transfer", ("transfer", "pickup", "pick-up", "pick up", "drop", "drive", "airport", "departure", "arrival", "journey", "proceed")),
+        ("Meal",     ("breakfast", "lunch", "dinner", "meal", "kahwa", "wazwan")),
+        ("Activity", ("shikara", "gondola", "ride", "trek", "pony", "sledge", "skiing", "rafting", "cable car", "boat")),
+        ("Sightseeing", ("sightseeing", "visit", "explore", "garden", "lake", "temple", "valley", "meadow", "tour", "market", "shrine", "view")),
+    )
+    for t in (h, d):
+        if not t:
+            continue
+        for kind, words in tests:
+            if kind == "Stay" and t is d and not has(t, ("check-in", "check in", "checkin", "overnight stay")):
+                continue
+            if has(t, words):
+                return kind
+    return "Sightseeing"
+
+
+class DayBookSpread(Flowable):
+    PAD     = 1.5 * mm     # cover border around the pages
+    RIB     = 4.2 * mm     # ribbon hanging below the book
+    FOOT_H  = 6.6 * mm
+    ICON_R  = 3.7 * mm
+    LABEL_W = 15.5 * mm
+    MIN_H   = 82 * mm
+
+    def __init__(self, width, day_num, title, date_label="", stay="", travel=None, route="",
+                 photo=None, photo_label="", steps=None, client_name=""):
+        super().__init__()
+        self.width, self.day_num, self.title = width, day_num, title
+        self.date_label, self.stay_src = date_label, stay
+        self.travel = travel if (travel and travel.get("text")) else None
+        self.route, self.photo, self.photo_label = route, photo, photo_label
+        self.client_name = client_name
+        self.steps = list(steps or [])
+        if not self.steps:
+            self.steps = [{"time": "", "head": "Details to be confirmed",
+                           "desc": "Your travel coordinator will confirm the plan for this day.", "kind": "Plan"}]
+        self._prepped = False
+        self.height = self.MIN_H + self.RIB
+
+    # ── content prep ────────────────────────────────────────────────────────
+    def _prep(self):
+        if self._prepped:
+            return
+        self._prepped = True
+        stay = self.stay_src() if callable(self.stay_src) else self.stay_src
+        self.stay_txt = f"Stay: {_raw(stay)}" if stay else ""
+        n = len(self.steps)
+        used_travel = False
+        self.rows = []
+        for i, s in enumerate(self.steps):
+            head, desc = _raw(s.get("head", "")), _raw(s.get("desc", ""))
+            kind = s.get("kind") or _step_kind(head, desc)
+            t = (head + " " + desc).lower()
+            time_txt = _raw(s.get("time", ""))
+            kicker, sub = time_txt, ""
+            if not time_txt:
+                if kind == "Transfer" and any(w in t for w in ("pickup", "pick-up", "pick up", "meets you", "welcome")) and i == 0:
+                    kicker, sub = "On arrival", "Meet and greet"
+                elif kind == "Transfer" and self.travel and self.travel.get("km") and not used_travel:
+                    used_travel = True
+                    kicker = f"{self.travel['km']} km"
+                    sub = _raw(_fmt_drive_time(self.travel["hours"])).capitalize() if self.travel.get("hours") else ""
+                elif kind == "Transfer" and any(w in t for w in ("drop", "departure", "depart")):
+                    kicker, sub = "On departure", "Safe journey"
+                elif kind == "Stay":
+                    kicker, sub = "Evening", "Settle in"
+                elif kind == "Meal":
+                    kicker = "Morning" if "breakfast" in t else "Midday" if "lunch" in t else "Evening"
+                    sub = "Dine"
+                else:
+                    if n == 1:
+                        kicker = "All day"
+                    else:
+                        f = i / (n - 1)
+                        kicker = "Morning" if f < 0.34 else "Afternoon" if f < 0.67 else "Evening"
+                    sub = _STEP_SUB.get(kind, "")
+            self.rows.append({"kind": kind, "head": head, "desc": desc, "kicker": kicker, "sub": sub})
+
+    # ── layout ──────────────────────────────────────────────────────────────
+    def _page_w(self):
+        return (self.width - 2 * self.PAD) / 2
+
+    def _layout(self, f):
+        """Right-page row heights at font scale f; returns the body height the right page needs."""
+        self.f = f
+        pw = self._page_w()
+        self.tx_off = 5 * mm + self.LABEL_W + 2.6 * mm + 2 * self.ICON_R + 2.6 * mm      # text column x inside the page
+        self.tw = pw - self.tx_off - 4.5 * mm
+        self.hs, self.ds = 8.9 * f, 7.5 * f
+        self.hl, self.dl = 4.2 * mm * f, 3.5 * mm * f
+        self.pill_h = 3.9 * mm * f
+        gap = 4.4 * mm * f
+        self.row_h = []
+        for r in self.rows:
+            r["h_lines"] = simpleSplit(r["head"], "Lato-Bold", self.hs, self.tw) or [""]
+            r["d_lines"] = simpleSplit(r["desc"], "Lato", self.ds, self.tw) if r["desc"] else []
+            r["pill_w"] = pdfmetrics.stringWidth(r["kind"], "Lato-Bold", 6.3 * f) + 4.6 * mm * f
+            last_w = pdfmetrics.stringWidth(r["h_lines"][-1], "Lato-Bold", self.hs)
+            r["pill_inline"] = last_w + 2 * mm + r["pill_w"] <= self.tw
+            head_h = len(r["h_lines"]) * self.hl + (0 if r["pill_inline"] else self.pill_h + 0.6 * mm)
+            body_h = head_h + 0.8 * mm + len(r["d_lines"]) * self.dl
+            r["h"] = max(2 * self.ICON_R + 0.6 * mm, body_h)
+            self.row_h.append(r["h"] + gap)
+        self.gap = gap
+        return 5.2 * mm + sum(self.row_h) - gap + 4.4 * mm + self.FOOT_H
+
+    def _left_parts(self):
+        pw = self._page_w()
+        nbox = 13 * mm
+        tl = simpleSplit(_raw(self.title), "Lato-Bold", 11.2, pw - nbox - 7 * mm) or [""]
+        tl = tl[:2]
+        title_h = max(14 * mm, 6.2 * mm + len(tl) * 4.9 * mm + (3.6 * mm if self.date_label else 0))
+        hdr_h = title_h + (9.4 * mm if self.stay_txt else 1.8 * mm)
+        if self.travel:
+            band_h = 22 * mm if self.travel.get("km") else 10 * mm
+        elif self.route:
+            band_h = 10 * mm
+        else:
+            band_h = 0
+        return tl, title_h, hdr_h, band_h
+
+    def wrap(self, aw, ah):
+        self._prep()
+        need = 0
+        for f in (1.0, 0.94, 0.88, 0.82, 0.76):
+            need = self._layout(f)
+            _, _, hdr_h, band_h = self._left_parts()
+            left_min = hdr_h + band_h + 24 * mm + self.FOOT_H
+            self.book_h = max(need, left_min, self.MIN_H)
+            if self.book_h + self.RIB <= ah:
+                break
+        self.height = self.book_h + self.RIB
+        return self.width, self.height
+
+    # ── drawing helpers ─────────────────────────────────────────────────────
+    def _icon(self, c, kind, cx, cy, col):
+        c.saveState()
+        c.setStrokeColor(col); c.setFillColor(col); c.setLineWidth(0.75)
+        c.setLineJoin(1); c.setLineCap(1)
+        m = mm
+        if kind == "car":
+            c.roundRect(cx - 2.3*m, cy - 1.1*m, 4.6*m, 1.7*m, 0.55*m, fill=0, stroke=1)
+            p = c.beginPath()
+            p.moveTo(cx - 1.4*m, cy + 0.6*m); p.lineTo(cx - 0.8*m, cy + 1.6*m)
+            p.lineTo(cx + 0.9*m, cy + 1.6*m); p.lineTo(cx + 1.5*m, cy + 0.6*m)
+            c.drawPath(p, fill=0, stroke=1)
+            c.circle(cx - 1.3*m, cy - 1.2*m, 0.55*m, fill=1, stroke=0)
+            c.circle(cx + 1.3*m, cy - 1.2*m, 0.55*m, fill=1, stroke=0)
+        elif kind == "peak":
+            p = c.beginPath()
+            p.moveTo(cx - 2.5*m, cy - 1.4*m); p.lineTo(cx - 0.7*m, cy + 1.3*m)
+            p.lineTo(cx + 0.3*m, cy - 0.2*m); p.lineTo(cx + 1.2*m, cy + 0.7*m)
+            p.lineTo(cx + 2.5*m, cy - 1.4*m); p.close()
+            c.drawPath(p, fill=0, stroke=1)
+            c.circle(cx + 1.5*m, cy + 1.7*m, 0.45*m, fill=1, stroke=0)
+        elif kind == "bed":
+            c.line(cx - 2.4*m, cy - 1.3*m, cx - 2.4*m, cy + 1.4*m)
+            c.line(cx - 2.4*m, cy - 0.7*m, cx + 2.4*m, cy - 0.7*m)
+            c.roundRect(cx - 2.0*m, cy - 0.7*m, 4.4*m, 1.2*m, 0.4*m, fill=0, stroke=1)
+            c.roundRect(cx - 1.7*m, cy + 0.5*m, 1.4*m, 0.8*m, 0.3*m, fill=1, stroke=0)
+            c.line(cx + 2.4*m, cy - 1.3*m, cx + 2.4*m, cy - 0.7*m)
+        elif kind == "fork":
+            c.line(cx - 1.1*m, cy - 1.8*m, cx - 1.1*m, cy + 1.8*m)
+            c.line(cx - 1.8*m, cy + 0.3*m, cx - 1.8*m, cy + 1.8*m)
+            c.line(cx - 0.4*m, cy + 0.3*m, cx - 0.4*m, cy + 1.8*m)
+            c.line(cx - 1.8*m, cy + 0.3*m, cx - 0.4*m, cy + 0.3*m)
+            c.line(cx + 1.4*m, cy - 1.8*m, cx + 1.4*m, cy + 1.8*m)
+            p = c.beginPath(); p.moveTo(cx + 1.4*m, cy + 1.8*m)
+            p.curveTo(cx + 2.4*m, cy + 1.3*m, cx + 2.4*m, cy - 0.2*m, cx + 1.4*m, cy - 0.4*m)
+            c.drawPath(p, fill=0, stroke=1)
+        else:
+            _star(c, cx, cy, 2.2*m, col)
+        c.restoreState()
+
+    def _fold_shadow(self, c, cx, hb):
+        y0, y1 = self.PAD, hb - self.PAD
+        for i in range(16):                                   # left page darkens toward the fold
+            a = 0.22 * (i / 15.0) ** 2.2
+            c.setFillColor(colors.Color(0.05, 0.08, 0.15, alpha=a))
+            c.rect(cx - 7.5 * mm + i * 0.47 * mm, y0, 0.5 * mm, y1 - y0, fill=1, stroke=0)
+        for i in range(12):                                   # right page, lighter
+            a = 0.15 * (1 - i / 11.0) ** 2.0
+            c.setFillColor(colors.Color(0.05, 0.08, 0.15, alpha=a))
+            c.rect(cx + i * 0.4 * mm, y0, 0.45 * mm, y1 - y0, fill=1, stroke=0)
+        c.setStrokeColor(colors.Color(0.05, 0.08, 0.15, alpha=0.35)); c.setLineWidth(0.4)
+        c.line(cx, y0, cx, y1)
+
+    def _landscape(self, c, w, h):
+        """No destination photo: a calm sky + mountains + meadow so the page never looks empty."""
+        steps = 24
+        for i in range(steps):
+            t = i / (steps - 1.0)
+            c.setFillColor(colors.Color(0.55 + 0.37 * t, 0.74 + 0.20 * t, 0.90 + 0.06 * t))
+            c.rect(0, h - (i + 1) * h / steps, w, h / steps + 0.3, fill=1, stroke=0)
+        def ridge(col, pts):
+            p = c.beginPath(); p.moveTo(0, 0)
+            for fx, fy in pts:
+                p.lineTo(fx * w, fy * h)
+            p.lineTo(w, 0); p.close()
+            c.setFillColor(col); c.drawPath(p, fill=1, stroke=0)
+        ridge(colors.HexColor("#8fb0cc"), [(0, .55), (.22, .78), (.38, .6), (.58, .88), (.8, .62), (1, .74)])
+        ridge(colors.HexColor("#5f8f86"), [(0, .38), (.2, .55), (.45, .36), (.7, .58), (1, .4)])
+        ridge(colors.HexColor("#2f6b3f"), [(0, .22), (.3, .3), (.6, .2), (1, .28)])
+
+    # ── draw ────────────────────────────────────────────────────────────────
+    def draw(self):
+        c = self.canv
+        W, hb, pad = self.width, self.book_h, self.PAD
+        pw, cx = self._page_w(), self.width / 2
+        c.saveState()
+        c.translate(0, self.RIB)
+
+        # ribbon (behind the cover edge, hanging below)
+        rw, rx = 4.6 * mm, cx - 2.3 * mm
+        c.setFillColor(_BOOK_RIBBON)
+        p = c.beginPath()
+        p.moveTo(rx, 1.2 * mm); p.lineTo(rx, -self.RIB + 0.2 * mm)
+        p.lineTo(rx + rw / 2, -self.RIB + 1.7 * mm); p.lineTo(rx + rw, -self.RIB + 0.2 * mm)
+        p.lineTo(rx + rw, 1.2 * mm); p.close()
+        c.drawPath(p, fill=1, stroke=0)
+
+        # cover + page stack
+        c.setFillColor(_BOOK_COVER)
+        c.roundRect(0, 0, W, hb, 2.6 * mm, fill=1, stroke=0)
+        c.setFillColor(colors.HexColor("#e7e2d6"))
+        c.roundRect(pad, pad * 0.5, W - 2 * pad, hb - pad * 1.5, 1.4 * mm, fill=1, stroke=0)
+
+        py0, py1 = pad + 0.7 * mm, hb - pad
+        ph = py1 - py0
+
+        # page shapes (rounded outer corners only)
+        c.setFillColor(_BOOK_PAGE)
+        c.roundRect(pad, py0, pw, ph, 1.2 * mm, fill=1, stroke=0)
+        c.roundRect(cx, py0, pw, ph, 1.2 * mm, fill=1, stroke=0)
+        c.rect(cx - 2 * mm, py0, 4 * mm, ph, fill=1, stroke=0)
+
+        # ── LEFT PAGE ───────────────────────────────────────────────────────
+        tl, title_h, hdr_h, band_h = self._left_parts()
+        c.saveState()
+        cp = c.beginPath(); cp.roundRect(pad, py0, pw, ph, 1.2 * mm)
+        cpr = c.beginPath(); cpr.rect(cx - 2 * mm, py0, 2 * mm, ph)
+        c.clipPath(cp, stroke=0, fill=0)
+        lx, top = pad, py1
+
+        # header
+        c.setFillColor(NAVY)
+        c.rect(lx, top - hdr_h, pw, hdr_h, fill=1, stroke=0)
+        nbox = 13 * mm
+        c.setFillColor(colors.HexColor("#0f1b33"))
+        c.rect(lx, top - title_h, nbox, title_h, fill=1, stroke=0)
+        c.setFillColor(WHITE); c.setFont("Lato-Bold", 15)
+        c.drawCentredString(lx + nbox / 2, top - title_h / 2 - 2.0 * mm, str(self.day_num))
+        ty = top - 6.4 * mm
+        c.setFont("Lato-Bold", 11.2)
+        for ln in tl:
+            c.drawString(lx + nbox + 4 * mm, ty, ln)
+            ty -= 4.9 * mm
+        if self.date_label:
+            c.setFillColor(colors.HexColor("#7dd3fc")); c.setFont("Lato", 7.2)
+            c.drawString(lx + nbox + 4 * mm, ty + 0.3 * mm, _raw(self.date_label).upper())
+        if self.stay_txt:
+            lab = self.stay_txt
+            maxw = pw - 7 * mm - 6.5 * mm
+            while pdfmetrics.stringWidth(lab, "Lato-Bold", 7.4) > maxw and len(lab) > 12:
+                lab = lab[:-2].rstrip() + "…"
+            bw = pdfmetrics.stringWidth(lab, "Lato-Bold", 7.4) + 6.5 * mm
+            by = top - title_h - 7.4 * mm
+            c.setFillColor(TEAL); c.roundRect(lx + 3 * mm, by, bw, 6.2 * mm, 2.2 * mm, fill=1, stroke=0)
+            c.setFillColor(colors.HexColor("#99f6e4")); c.circle(lx + 5.9 * mm, by + 3.1 * mm, 1.0 * mm, fill=1, stroke=0)
+            c.setFillColor(WHITE); c.setFont("Lato-Bold", 7.4)
+            c.drawString(lx + 8.2 * mm, by + 2.0 * mm, lab)
+
+        # route band
+        y = top - hdr_h
+        if band_h:
+            c.setFillColor(_BOOK_BAND)
+            c.rect(lx, y - band_h, pw, band_h, fill=1, stroke=0)
+            names = self.travel["stops"] if self.travel else [self.route]
+            a, b = _raw(names[0]), _raw(names[-1])
+            if len(names) == 1:
+                a, b = _raw(names[0]), ""
+            ry = y - 5.6 * mm
+            nw = pw * 0.34
+            def fit(s, w=nw, size=8.2):
+                while pdfmetrics.stringWidth(s, "Lato-Bold", size) > w and len(s) > 5:
+                    s = s[:-2].rstrip() + "…"
+                return s
+            c.setFont("Lato-Bold", 8.2); c.setFillColor(NAVY)
+            if b:
+                a, b = fit(a), fit(b)
+                c.setStrokeColor(SKY); c.setLineWidth(1.0); c.setFillColor(WHITE)
+                c.circle(lx + 4.2 * mm, ry + 1.0 * mm, 1.35 * mm, fill=1, stroke=1)
+                c.setFillColor(NAVY); c.drawString(lx + 7.2 * mm, ry - 0.2 * mm, a)
+                ex = lx + pw - 4.2 * mm
+                c.setFillColor(TEAL); c.circle(ex, ry + 1.0 * mm, 1.35 * mm, fill=1, stroke=0)
+                c.setFillColor(NAVY); c.drawRightString(ex - 3 * mm, ry - 0.2 * mm, b)
+                # dashed road with a little car in a ring between the two names
+                x1 = lx + 7.2 * mm + pdfmetrics.stringWidth(a, "Lato-Bold", 8.2) + 2.5 * mm
+                x2 = ex - 3 * mm - pdfmetrics.stringWidth(b, "Lato-Bold", 8.2) - 2.5 * mm
+                if x2 - x1 > 12 * mm:
+                    mx = (x1 + x2) / 2
+                    c.setStrokeColor(SKY); c.setLineWidth(0.9); c.setDash(1.6, 1.4)
+                    c.line(x1, ry + 1.0 * mm, mx - 3.4 * mm, ry + 1.0 * mm)
+                    c.line(mx + 3.4 * mm, ry + 1.0 * mm, x2, ry + 1.0 * mm); c.setDash()
+                    c.setFillColor(WHITE); c.setStrokeColor(SKY); c.setLineWidth(1.0)
+                    c.circle(mx, ry + 1.0 * mm, 3.0 * mm, fill=1, stroke=1)
+                    self._icon(c, "car", mx, ry + 1.0 * mm, SKY)
+            else:
+                c.setFillColor(NAVY); c.drawString(lx + 4 * mm, ry - 0.2 * mm, fit(a, pw - 8 * mm))
+            if self.travel and self.travel.get("km"):
+                chips = [(f"{self.travel['km']} km", "distance")]
+                if self.travel.get("hours"):
+                    chips.append(("~" + _raw(_fmt_drive_time(self.travel["hours"])).replace("about ", ""), "drive time"))
+                cxp = lx + 3.5 * mm
+                for val, lab in chips:
+                    cw = max(pdfmetrics.stringWidth(val, "Lato-Bold", 9) + 5 * mm, 16 * mm)
+                    cy0 = y - band_h + 2.4 * mm
+                    c.setFillColor(colors.Color(0, 0.2, 0.35, alpha=0.18))
+                    c.roundRect(cxp, cy0 - 0.5 * mm, cw, 9.2 * mm, 1.8 * mm, fill=1, stroke=0)
+                    c.setFillColor(WHITE); c.roundRect(cxp, cy0, cw, 9.2 * mm, 1.8 * mm, fill=1, stroke=0)
+                    c.setFillColor(TEAL); c.setFont("Lato-Bold", 9)
+                    c.drawCentredString(cxp + cw / 2, cy0 + 4.9 * mm, val)
+                    c.setFillColor(GRAY_600); c.setFont("Lato", 6.6)
+                    c.drawCentredString(cxp + cw / 2, cy0 + 1.7 * mm, lab)
+                    cxp += cw + 2.6 * mm
+            y -= band_h
+
+        # photo
+        foot = self.FOOT_H
+        ph_y0, ph_h = py0 + foot, (y - (py0 + foot))
+        c.saveState()
+        pp = c.beginPath(); pp.rect(lx, ph_y0, pw, ph_h); c.clipPath(pp, stroke=0, fill=0)
+        c.translate(lx, ph_y0)
+        if self.photo is not None:
+            iw, ih = self.photo.getSize()
+            sc = max(pw / iw, ph_h / ih)
+            dw, dh = iw * sc, ih * sc
+            c.drawImage(self.photo, -(dw - pw) / 2, -(dh - ph_h) * 0.5, width=dw, height=dh)
+        else:
+            self._landscape(c, pw, ph_h)
+        c.restoreState()
+        if self.photo_label:
+            txt = _raw(self.photo_label).upper()
+            tw = pdfmetrics.stringWidth(txt, "Lato-Bold", 7.6)
+            c.setFillColor(colors.Color(1, 1, 1, alpha=0.94))
+            c.roundRect(lx + 3.5 * mm, ph_y0 + 3 * mm, tw + 9 * mm, 6 * mm, 3 * mm, fill=1, stroke=0)
+            c.setFillColor(SKY); c.circle(lx + 6.6 * mm, ph_y0 + 6 * mm, 1.0 * mm, fill=1, stroke=0)
+            c.setFillColor(NAVY); c.setFont("Lato-Bold", 7.6)
+            c.drawString(lx + 8.8 * mm, ph_y0 + 4.9 * mm, txt)
+
+        # footer
+        c.setFillColor(_BOOK_PAGE); c.rect(lx, py0, pw, foot, fill=1, stroke=0)
+        c.setStrokeColor(GRAY_200); c.setLineWidth(0.4); c.line(lx + 3 * mm, py0 + foot, lx + pw - 3 * mm, py0 + foot)
+        c.setFillColor(GRAY_400); c.setFont("Lato", 6.3)
+        c.drawString(lx + 4 * mm, py0 + 2.4 * mm, f"Kashmir Tour Itinerary  |  Prepared for {_raw(self.client_name)}")
+        c.drawRightString(lx + pw - 4 * mm, py0 + 2.4 * mm, f"Day {self.day_num}")
+        c.restoreState()
+
+        # ── RIGHT PAGE ──────────────────────────────────────────────────────
+        rx0 = cx
+        f = self.f
+        body_top = py1 - 5.2 * mm
+        avail = (body_top - (py0 + foot + 4.4 * mm))
+        used = sum(self.row_h) - self.gap
+        extra = max(0, min((avail - used) / max(len(self.rows), 1), 4.5 * mm))
+        icx = rx0 + 5 * mm + self.LABEL_W + 2.6 * mm + self.ICON_R
+        txx = rx0 + self.tx_off
+        ys, y = [], body_top
+        for r, rh in zip(self.rows, self.row_h):
+            ys.append(y)
+            y -= rh + extra
+        # dashed spine between first and last icon
+        if len(self.rows) > 1:
+            c.setStrokeColor(TEAL); c.setLineWidth(0.9); c.setDash(1.5, 1.6)
+            c.line(icx, ys[0] - self.ICON_R, icx, ys[-1] - self.ICON_R); c.setDash()
+        for r, ry in zip(self.rows, ys):
+            ring, tint, tcol = _STEP_STYLE[r["kind"]]
+            icy = ry - self.ICON_R
+            # label column (right-aligned)
+            lx_r = rx0 + 5 * mm + self.LABEL_W
+            ky = ry - 2.4 * mm
+            c.setFillColor(ring if r["kind"] != "Transfer" else TEAL)
+            for ln in (simpleSplit(r["kicker"], "Lato-Bold", 7.6 * f, self.LABEL_W) or [""]):
+                c.setFont("Lato-Bold", 7.6 * f); c.drawRightString(lx_r, ky, ln); ky -= 3.3 * mm * f
+            c.setFillColor(GRAY_600); c.setFont("Lato", 6.6 * f)
+            for ln in (simpleSplit(r["sub"], "Lato", 6.6 * f, self.LABEL_W) if r["sub"] else []):
+                c.drawRightString(lx_r, ky, ln); ky -= 2.9 * mm * f
+            # icon medallion
+            c.setFillColor(WHITE); c.setStrokeColor(ring); c.setLineWidth(1.5)
+            c.circle(icx, icy, self.ICON_R, fill=1, stroke=1)
+            c.setFillColor(tint); c.circle(icx, icy, self.ICON_R - 0.9 * mm, fill=1, stroke=0)
+            self._icon(c, _STEP_ICON[r["kind"]], icx, icy, ring)
+            # title + tag pill
+            ty = ry - 3.0 * mm * f
+            c.setFillColor(tcol); c.setFont("Lato-Bold", self.hs)
+            for ln in r["h_lines"]:
+                c.drawString(txx, ty, ln); ty -= self.hl
+            ty += self.hl
+            px = txx + pdfmetrics.stringWidth(r["h_lines"][-1], "Lato-Bold", self.hs) + 2 * mm
+            py = ty - 0.95 * mm * f
+            if not r["pill_inline"]:
+                px, py = txx, ty - self.hl - 0.6 * mm * f
+                ty -= self.pill_h + 0.6 * mm
+            c.setFillColor(tint); c.roundRect(px, py, r["pill_w"], self.pill_h, self.pill_h / 2, fill=1, stroke=0)
+            c.setFillColor(ring if r["kind"] != "Transfer" else colors.HexColor("#0369a1"))
+            c.setFont("Lato-Bold", 6.3 * f)
+            c.drawCentredString(px + r["pill_w"] / 2, py + self.pill_h / 2 - 0.85 * mm * f, r["kind"])
+            # description
+            dy = ty - self.dl - 0.2 * mm
+            c.setFillColor(GRAY_600); c.setFont("Lato", self.ds)
+            for ln in r["d_lines"]:
+                c.drawString(txx, dy, ln); dy -= self.dl
+
+        # right footer
+        c.setStrokeColor(GRAY_200); c.setLineWidth(0.4)
+        c.line(rx0 + 3 * mm, py0 + foot, rx0 + pw - 3 * mm, py0 + foot)
+        c.setFillColor(GRAY_400); c.setFont("Lato", 6.3)
+        c.drawString(rx0 + 5 * mm, py0 + 2.4 * mm, "Kashmir Tour Itinerary")
+        c.drawRightString(rx0 + pw - 4 * mm, py0 + 2.4 * mm, f"Page {c.getPageNumber()}")
+
+        self._fold_shadow(c, cx, hb)
+        c.restoreState()
 
 
 class BgBlock(Flowable):
@@ -4360,7 +4815,6 @@ def generate_pdf(itinerary_data: dict) -> str:
         if ":" in title and title.split(":", 1)[1].strip().lower().startswith("overnight"):
             banner_title = title.split(":", 1)[0].strip()
 
-        block = []
         _hsel = itinerary_data.get("selected_hotels") or itinerary_data.get("hotelSelections") or {}
         def _banner_hotel(_i=idx, _sel=_hsel):
             if not isinstance(_sel, dict):
@@ -4371,90 +4825,54 @@ def generate_pdf(itinerary_data: dict) -> str:
             info = HOTEL_LOOKUP.get(str(hid), {}) if hid else {}
             if not info.get("name"):
                 return ""
-            return f"{info['name']}, {info['place']}" if info.get("place") else info["name"]
+            return f"{info['name']}, {info['place']}" if info.get("place") else info["name"]   # looked up at draw time: HOTEL_LOOKUP is defined below
+        def _stay_label(_ov=overnight, _h=_banner_hotel):
+            if not _ov or str(_ov).lower() in ("departure", ""):
+                return ""
+            return _h() or _ov
         _rows = getattr(route_map, "_rows", [])
         _travel = (_rows[idx - 1].get("travel") if idx - 1 < len(_rows) else None)
         _has_travel = bool(_travel and _travel.get("text"))
-        block.append(DayBanner(usable_w, idx, banner_title, overnight, _banner_hotel, _day_date(start_date, idx),
-                               travel=_travel))
-        block.append(Spacer(1, 2*mm))
 
-        # Only show the ROUTE strip when it adds something the banner doesn't say
-        # (the travel strip under the banner already carries the route when distances are known)
-        _route_show = route.split(":", 1)[0].strip() if ":" in str(route) else str(route).strip()   # "...: Overnight X" is in the Stay badge
-        if not _has_travel and _route_show and _route_show.lower() != str(banner_title).strip().lower():
-            block.append(RouteBadge(usable_w, _route_show))
-            block.append(Spacer(1, 2*mm))
+        # Only show a route line when the travel strip does not already carry it
+        _route_show = route.split(":", 1)[0].strip() if ":" in str(route) else str(route).strip()   # "...: Overnight X" is in the Stay pill
+        if _has_travel or not _route_show or _route_show.lower() == str(banner_title).strip().lower():
+            _route_show = ""
 
-        if schedule:
-            # Clean card: slim destination photo on top, then numbered steps on a light background.
-            day_bg = dest_bgs.get(_day_photo_key(day_info))
-            if day_bg is not None:
-                _pk = _day_photo_key(day_info)
-                block.append(DayPhotoStrip(usable_w, day_bg, KashmirRouteMap.DISPLAY.get(_pk, str(_pk).title())))
+        # Tidy the slots: drop empties and merge repeats (same heading twice -> one step, both descriptions).
+        steps = []
+        for slot in schedule:
+            time_txt = str(slot.get("time_slot") or slot.get("time") or "").strip()
+            if time_txt in ("***", "*", "\u2014", "\u2013", "-"):
+                time_txt = ""
+            head = str(slot.get("activity_title") or "").strip()
+            desc = str(slot.get("description") or slot.get("activity") or "").strip()
+            if not head and not desc:
+                continue
+            prev = steps[-1] if steps else None
+            if prev and head and prev["head"].lower() == head.lower() and prev["time"] == time_txt:
+                if desc and desc.lower() not in prev["desc"].lower():
+                    prev["desc"] = (prev["desc"] + " " + desc).strip()
+                continue
+            steps.append({"time": time_txt, "head": head, "desc": desc})
+        # A step with only a description (no heading) gets a short heading from its first words.
+        for s_ in steps:
+            if not s_["head"] and s_["desc"]:
+                first = re.split(r"(?<=[.!?])\s", s_["desc"], 1)[0]
+                words = first.split()
+                s_["head"] = " ".join(words[:5]).rstrip(".,;:") + ("\u2026" if len(words) > 5 else "")
 
-            # Tidy the slots: drop empties and merge repeats (same heading twice -> one step, both descriptions).
-            steps = []
-            for slot in schedule:
-                time_txt = str(slot.get("time_slot") or slot.get("time") or "").strip()
-                if time_txt in ("***", "*", "\u2014", "\u2013", "-"):
-                    time_txt = ""
-                head = str(slot.get("activity_title") or "").strip()
-                desc = str(slot.get("description") or slot.get("activity") or "").strip()
-                if not head and not desc:
-                    continue
-                prev = steps[-1] if steps else None
-                if prev and head and prev["head"].lower() == head.lower() and prev["time"] == time_txt:
-                    if desc and desc.lower() not in prev["desc"].lower():
-                        prev["desc"] = (prev["desc"] + " " + desc).strip()
-                    continue
-                steps.append({"time": time_txt, "head": head, "desc": desc})
-
-            has_real_label = any(s["time"] for s in steps)
-            head_style = ParagraphStyle("AH_card", fontName="Lato-Bold", fontSize=9, leading=12, textColor=NAVY, spaceAfter=1.5)
-            desc_style = ParagraphStyle("AD_card", fontName="Lato", fontSize=8.4, leading=12.2, textColor=GRAY_600)
-            time_style = ParagraphStyle("AT_card", fontName="Lato-Bold", fontSize=8, leading=11, textColor=SKY, alignment=TA_CENTER)
-
-            act_rows = []
-            for n, s in enumerate(steps, start=1):
-                marker = Paragraph(clean(s["time"]), time_style) if s["time"] else StepDot(n)
-                parts = []
-                if s["head"]:
-                    parts.append(Paragraph(clean(s["head"]), head_style))
-                if s["desc"]:
-                    parts.append(Paragraph(clean(s["desc"]), desc_style))
-                act_rows.append([marker, parts])
-
-            _lw = 0.15 if has_real_label else 0.075
-            act_table = Table(act_rows, colWidths=[usable_w * _lw, usable_w * (1 - _lw)], hAlign="LEFT")
-            act_table.setStyle(TableStyle([
-                ("ROWBACKGROUNDS", (0, 0), (-1, -1), [WHITE, GRAY_50]),
-                ("BOX",           (0, 0), (-1, -1), 0.5, GRAY_200),
-                ("LINEBELOW",     (0, 0), (-1, -2), 0.3, GRAY_200),
-                ("LINEBEFORE",    (0, 0), (0, -1), 2.5, SKY),
-                ("LEFTPADDING",   (0, 0), (0, -1), 3),
-                ("RIGHTPADDING",  (0, 0), (0, -1), 3),
-                ("LEFTPADDING",   (1, 0), (1, -1), 4),
-                ("RIGHTPADDING",  (1, 0), (1, -1), 8),
-                ("TOPPADDING",    (0, 0), (-1, -1), 6),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-                ("VALIGN",        (0, 0), (-1, -1), "TOP"),
-            ]))
-            block.append(act_table)
-        else:
-            block.append(Paragraph(
-                "<i>Details to be confirmed with your travel coordinator.</i>",
-                ParagraphStyle("na", fontName="Lato-Italic", fontSize=8,
-                               textColor=GRAY_400, leftIndent=6)
-            ))
-
-        block.append(Spacer(1, 5*mm))
+        day_bg = dest_bgs.get(_day_photo_key(day_info))
+        _pk = _day_photo_key(day_info)
+        spread = DayBookSpread(
+            usable_w, idx, banner_title, _day_date(start_date, idx), _stay_label,
+            travel=_travel, route=_route_show, photo=day_bg,
+            photo_label=KashmirRouteMap.DISPLAY.get(_pk, str(_pk).title()) if day_bg is not None else KashmirRouteMap.DISPLAY.get(_pk, str(_pk).title()),
+            steps=steps, client_name=client_name)
+        block = [spread, Spacer(1, 5*mm)]
         if idx == 1:
-            block = _day_title + block          # the heading never sits alone at the foot of a page
-        # A day card is NOT wrapped in KeepTogether: a tall day would jump whole to the next page and
-        # leave a big blank gap behind. Instead we only make sure the banner, photo and first steps
-        # fit before starting a day; the step table then flows (and splits by row) onto the next page.
-        story.append(CondPageBreak(DAY_MIN_START))
+            block = [KeepTogether(_day_title + [spread]), Spacer(1, 5*mm)]   # the heading never sits alone at the foot of a page
+        # Each spread is one unbroken book; platypus moves a spread that does not fit to the next page.
         story.extend(block)
 
     # Sections now flow straight on after the last day card (no forced page
