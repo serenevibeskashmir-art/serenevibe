@@ -4016,6 +4016,9 @@ def _wa_glyph(c, cx, cy, r):
     c.drawPath(ph, fill=0, stroke=1)
 
 
+from reportlab.pdfbase.pdfdoc import PDFString as _PDFString
+
+
 class PriceBand(Flowable):
     """Price per person, validity, 25% start amount and a one-tap WhatsApp confirm button."""
     def __init__(self, width, total, adults, kids, valid_until, first_amt, ref, show_per_person=False):
@@ -4140,7 +4143,10 @@ class PriceBand(Flowable):
         c.setFillColor(WHITE); c.setFont("Lato-Bold", 9.4)
         c.drawString(sx + gw + 2.2 * mm, by + bh / 2 - 3.2, label)
         msg = _up.quote(f"Hi, I would like to confirm my Kashmir trip, quote {self.ref}")
-        c.linkURL(f"https://wa.me/{SVK_WA_NUMBER}?text={msg}", (bx, by, bx + bw_, by + bh), relative=1, thickness=0)
+        # the whole navy panel is the tap target (easier on a phone); F=4 marks the link as a normal,
+        # printable annotation and Contents gives viewers / screen readers a label
+        c.linkURL(f"https://wa.me/{SVK_WA_NUMBER}?text={msg}", (px, py, px + pw, py + ph), relative=1,
+                  thickness=0, F=4, Contents=_PDFString("Confirm on WhatsApp"))
         c.setFillColor(colors.HexColor("#9fb0c8")); c.setFont("Lato", 6.4)
         c.drawCentredString(px + pw / 2, by - 3.6 * mm, "Opens a chat with your quote number typed in")
         if has_first:
