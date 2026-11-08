@@ -4050,25 +4050,37 @@ class PriceBand(Flowable):
         # per-person price is OPT-IN (itinerary builder switch); otherwise the headline is the package total
         per = round(self.total / n_adults) if (self.show_per_person and has_total and n_adults and not n_kids) else 0
         guests_txt = f"for {n_adults} adult" + ("s" if n_adults != 1 else "") + (f", {n_kids} child" + ("ren" if n_kids != 1 else "") if n_kids else "")
+        # ── left: label + hold pill on one row, price, inclusions, 25/25/50 steps (same 33 mm height) ──
+        left_r = lw - 4 * mm
+        row_y = h - 5.7 * mm                       # vertical centre of the label / pill row
         c.setFillColor(GOLD)
-        _spaced(c, x, h - 7 * mm, "PRICE PER PERSON" if per else "TOTAL PACKAGE PRICE", "Lato-Bold", 6.4, 1.0)
+        _spaced(c, x, row_y - 0.8 * mm, "PRICE PER PERSON" if per else "TOTAL PACKAGE PRICE", "Lato-Bold", 6.4, 1.0)
+        if self.valid_until:
+            txt = f"Price held until {self.valid_until}"
+            c.setFont("Lato-Bold", 6.6)
+            tw = c.stringWidth(txt, "Lato-Bold", 6.6) + 8.2 * mm
+            px0, ph0 = left_r - tw, 4.6 * mm
+            c.setFillColor(GOLD_LITE); c.setStrokeColor(colors.HexColor("#f6dfa0")); c.setLineWidth(0.5)
+            c.roundRect(px0, row_y - ph0 / 2, tw, ph0, ph0 / 2, fill=1, stroke=1)
+            _clock_icon(c, px0 + 3.0 * mm, row_y, 1.1 * mm, GOLD)
+            c.setFillColor(GOLD); c.setFont("Lato-Bold", 6.6)
+            c.drawString(px0 + 5.4 * mm, row_y - 2.2, txt)
+        base = h - 15.4 * mm
         amount = per if per else (self.total if has_total else 0)
         if amount:
             c.setFillColor(INK_SOFT); c.setFont("Lato-Bold", 10.5)
-            c.drawString(x, h - 16.2 * mm, "INR")
+            c.drawString(x, base, "INR")
             iw = c.stringWidth("INR", "Lato-Bold", 10.5) + 1.6 * mm
-            c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", 28)
-            c.drawString(x + iw, h - 16.2 * mm, f"{amount:,}")
-            nw = c.stringWidth(f"{amount:,}", "Lato-Bold", 28)
+            c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", 27)
+            c.drawString(x + iw, base, f"{amount:,}")
+            nw = c.stringWidth(f"{amount:,}", "Lato-Bold", 27)
             c.setFillColor(INK_SOFT); c.setFont("Lato", 8.4)
-            c.drawString(x + iw + nw + 2.4 * mm, h - 16.2 * mm, f"for {n_adults} adults" if per else guests_txt)
+            c.drawString(x + iw + nw + 2.4 * mm, base, f"for {n_adults} adults" if per else guests_txt)
         else:
             c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", 20)
-            c.drawString(x, h - 16 * mm, "Price on request")
+            c.drawString(x, base, "Price on request")
         if has_total:
-            c.setStrokeColor(colors.HexColor("#efe6d0")); c.setLineWidth(0.5)
-            c.line(x, h - 20.2 * mm, lw - 4 * mm, h - 20.2 * mm)
-            avail = lw - x - 4 * mm
+            avail = left_r - x
             if per:
                 a, b, d = "Trip total ", f"INR {self.total:,}", "  \u00b7  stay, car, driver, meals and taxes included"
             else:
@@ -4076,19 +4088,37 @@ class PriceBand(Flowable):
             sz = 7.4
             while sz > 5 and (c.stringWidth(a, "Lato", sz) + c.stringWidth(b, "Lato-Bold", sz) + c.stringWidth(d, "Lato", sz)) > avail:
                 sz -= 0.2
-            yy = h - 24.4 * mm; cx_ = x
+            yy = h - 20.2 * mm; cx_ = x
             c.setFillColor(SLATE); c.setFont("Lato", sz); c.drawString(cx_, yy, a); cx_ += c.stringWidth(a, "Lato", sz)
             c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", sz); c.drawString(cx_, yy, b); cx_ += c.stringWidth(b, "Lato-Bold", sz)
             c.setFillColor(SLATE); c.setFont("Lato", sz); c.drawString(cx_, yy, d)
-        if self.valid_until:
-            txt = f"Price held until {self.valid_until}"
-            c.setFont("Lato-Bold", 6.8)
-            tw = c.stringWidth(txt, "Lato-Bold", 6.8) + 8.4 * mm
-            c.setFillColor(GOLD_LITE); c.setStrokeColor(colors.HexColor("#f6dfa0")); c.setLineWidth(0.5)
-            c.roundRect(x, 3 * mm, tw, 5 * mm, 2.5 * mm, fill=1, stroke=1)
-            _clock_icon(c, x + 3.1 * mm, 5.5 * mm, 1.15 * mm, GOLD)
-            c.setFillColor(GOLD); c.setFont("Lato-Bold", 6.8)
-            c.drawString(x + 5.6 * mm, 5.5 * mm - 2.3, txt)
+            # payment steps: 25% now / 25% before arrival / 50% on arrival
+            c.setStrokeColor(colors.HexColor("#efe6d0")); c.setLineWidth(0.5)
+            c.line(x, h - 22.6 * mm, left_r, h - 22.6 * mm)
+            i1 = int(self.first_amt or round(self.total * 0.25))
+            i3 = int(self.total) - 2 * i1
+            steps = [
+                (SKY,                       f"25%  INR {i1:,}", "on confirmation"),
+                (colors.HexColor("#7c3aed"), f"25%  INR {i1:,}", "7 days before arrival"),
+                (EMERALD,                   f"50%  INR {i3:,}", "on arrival"),
+            ]
+            colw = (left_r - x) / 3.0
+            r_c = 2.1 * mm; cy_ = 5.6 * mm
+            for k, (col, l1, l2) in enumerate(steps):
+                sx0 = x + k * colw
+                c.setFillColor(col); c.circle(sx0 + r_c, cy_, r_c, fill=1, stroke=0)
+                c.setFillColor(WHITE); c.setFont("Lato-Bold", 7.2)
+                c.drawCentredString(sx0 + r_c, cy_ - 2.5, str(k + 1))
+                tx0 = sx0 + 2 * r_c + 1.6 * mm
+                maxw = colw - 2 * r_c - 2.6 * mm
+                f1 = 6.9
+                while f1 > 5.2 and c.stringWidth(l1, "Lato-Bold", f1) > maxw:
+                    f1 -= 0.2
+                f2 = 6.0
+                while f2 > 4.8 and c.stringWidth(l2, "Lato", f2) > maxw:
+                    f2 -= 0.2
+                c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", f1); c.drawString(tx0, cy_ + 0.5 * mm, l1)
+                c.setFillColor(INK_SOFT); c.setFont("Lato", f2); c.drawString(tx0, cy_ - 2.5 * mm, l2)
 
         # right: deep navy action panel
         px, py, pw, ph = lw, 2.2 * mm, w - lw - 2.2 * mm, h - 4.4 * mm
