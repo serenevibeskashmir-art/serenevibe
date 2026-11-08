@@ -810,7 +810,9 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
   const [endPoint,        setEndPoint]        = useState(quote?.meta_summary?.end_point   || DEFAULT_POINT);
 
   const [vehicleType, setVehicleType] = useState(quote?.meta_summary?.vehicle_type || quote?.vehicle_type || "Sedan");
-  const [includedExtras, setIncludedExtras] = useState(quote?.included_extras || []);   // union cab / gondola phases counted in the package
+  // Older saved drafts used one "union_cab" key; it meant Pahalgam and Gulmarg.
+  const legacyExtras = (ex) => (ex || []).flatMap((k) => (k === "union_cab" ? ["union_cab_pahalgam", "union_cab_gulmarg"] : [k]));
+  const [includedExtras, setIncludedExtras] = useState(legacyExtras(quote?.included_extras));   // union cabs per place / gondola phases counted in the package
   const toggleExtra = (k) => setIncludedExtras((a) => (a.includes(k) ? a.filter((x) => x !== k) : [...a, k]));
   const [mealPlan, setMealPlan] = useState(quote?.meta_summary?.meal_plan || "MAP");   // default MAP
   // Vehicle and meal plan are set in the trip form at the top; changing them there updates this quote.
@@ -1128,7 +1130,7 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
     if (d.endPoint) setEndPoint(d.endPoint);
     if (d.editableCost) setEditableCost(d.editableCost);
     if (typeof d.showPerPerson === "boolean") setShowPerPerson(d.showPerPerson);
-    if (Array.isArray(d.includedExtras)) setIncludedExtras(d.includedExtras);
+    if (Array.isArray(d.includedExtras)) setIncludedExtras(legacyExtras(d.includedExtras));
     if (d.vehicleType) setVehicleType(d.vehicleType);
     if (d.mealPlan) setMealPlan(d.mealPlan);
     setActiveDay(0); setPickDraft({}); setDraftOffer(null);
@@ -1142,6 +1144,7 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
 
   // ── PDF export (shared by the sticky bar and the footer button) ──
   const [pdfBusy, setPdfBusy] = useState(false);
+  const coupleOn = !!trip?.couple && Number(quote?.meta_summary?.adults || quote?.adults || 2) === 2;
   const generatePdf = async () => {
     setPdfBusy(true);
               try {
@@ -1159,7 +1162,8 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
                     trip_pace: quote?.meta_summary?.trip_pace || "Moderate",
                     custom_cost: editableCost,
                     show_per_person: showPerPerson,
-                    included_extras: includedExtras,
+                    included_extras: [...includedExtras, ...(coupleOn ? (trip?.coupleExtras || []) : [])],
+                    couple: coupleOn,
                     vehicle_type: vehicleType,
                     meal_plan: mealPlan,
                     return_pdf: true,
@@ -1506,10 +1510,11 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
             <button type="button" className={"sv-sw" + (showPerPerson ? " on" : "")} role="switch" aria-checked={showPerPerson} onClick={() => setShowPerPerson((v) => !v)}>
               <span>Show price per person</span><i className="box" /></button>
             <span className="sv-lbl">Included in the package</span>
-            {[["union_cab", "Union cab (Pahalgam ABC / snow chain)"], ["gondola_p1", "Gondola Phase 1"], ["gondola_p2", "Gondola Phase 2"]].map(([k, lab]) => (
+            {[["union_cab_pahalgam", "Union cab · Pahalgam"], ["union_cab_gulmarg", "Union cab · Gulmarg"], ["union_cab_other", "Union cab · Other places"], ["gondola_p1", "Gondola Phase 1"], ["gondola_p2", "Gondola Phase 2"]].map(([k, lab]) => (
               <button key={k} type="button" className={"sv-sw" + (includedExtras.includes(k) ? " on" : "")} role="switch" aria-checked={includedExtras.includes(k)} onClick={() => toggleExtra(k)}>
                 <span>{lab}</span><i className="box" /></button>
             ))}
+            {coupleOn && <div className="sv-sub">Couple add-ons from the Trip step: {(trip?.coupleExtras || []).length ? (trip.coupleExtras || []).map((k) => ({ couple_cake: "Cake Cutting Celebration", couple_bed: "Bed decoration", couple_candle: "Candle light dinner" })[k]).join(", ") : "none ticked"}.</div>}
             <div className="sv-sub">Anything switched off is listed under exclusions on the PDF.</div>
           </section>
 
