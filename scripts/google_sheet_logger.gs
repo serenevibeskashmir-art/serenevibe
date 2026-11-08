@@ -1,6 +1,6 @@
 // Google Apps Script - receives one row per generated quote PDF and writes it to the sheet.
 // Setup: see the steps in the chat / README. Columns: Name | Quote No | Cost | Travel Date | Generated At
-const SECRET = "CHANGE-ME";          // must equal GOOGLE_SHEET_SECRET in your server settings
+const SECRET = "June@2024";          // must equal GOOGLE_SHEET_SECRET in your server settings
 const SHEET_NAME = "Quotes";
 
 function doPost(e) {
