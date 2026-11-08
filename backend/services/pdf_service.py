@@ -884,97 +884,220 @@ _MEAL_SHORT = {"EP": ("EP", "Room only"), "CP": ("CP", "Breakfast"),
                "MAP": ("MAP", "Breakfast + dinner"), "AP": ("AP", "All meals")}
 
 
-class HotelStayCard(HotelPhotoStrip):
-    """One stay: hotel name, nights and dates, room type, rooms, meal plan, then its best photos.
+class HotelStayCard(Flowable):
+    """One stay as a hotel 'page': big hero photo with a bookmark ribbon for the nights, a second photo
+    (or a check-in / check-out strip), and four icon cells: stay, room type, rooms, meal plan.
 
-    Everything a guest wants to know about a hotel sits in one card, so nothing
-    has to be matched up between a table and a separate photo page."""
-    PAD       = 3 * mm
-    HEAD_H    = 10 * mm
-    INFO_H    = 12.5 * mm
+    Same book look as the day cards (navy cover, cream page, crimson ribbon). Same constructor as before."""
+    PAD    = 1.5 * mm
+    SPLIT  = 0.53          # share of the width taken by the hero photo
 
     def __init__(self, width, stay, readers):
-        Flowable.__init__(self)
-        self.width = width
-        self.stay = stay
-        self.readers = readers[:2]
-        self.gap = 3.5 * mm
-        inner = width - 2 * self.PAD
-        if len(self.readers) >= 2:
-            self.tile_w, self.photo_h = (inner - self.gap) / 2, ((inner - self.gap) / 2) * 0.46
-        elif len(self.readers) == 1:
-            self.tile_w, self.photo_h = inner, inner * 0.24
+        super().__init__()
+        self.width, self.stay = width, stay
+        self.readers = list(readers or [])[:2]
+        self.has_p2 = len(self.readers) >= 2
+        self.height = (64 if self.has_p2 else 56) * mm
+
+    def wrap(self, aw, ah):
+        return self.width, self.height
+
+    # ── small drawing helpers ───────────────────────────────────────────────
+    @staticmethod
+    def _cover_image(c, reader, x, y, w, h, focus=0.42):
+        iw, ih = reader.getSize()
+        sc = max(w / iw, h / ih)
+        dw, dh = iw * sc, ih * sc
+        c.drawImage(reader, x - (dw - w) / 2, y - (dh - h) * (1 - focus), width=dw, height=dh, mask="auto")
+
+    @staticmethod
+    def _moon(c, cx, cy, col, bg):
+        c.setFillColor(col); c.circle(cx, cy, 1.9 * mm, fill=1, stroke=0)
+        c.setFillColor(bg);  c.circle(cx + 1.0 * mm, cy + 0.7 * mm, 1.65 * mm, fill=1, stroke=0)
+
+    @staticmethod
+    def _key(c, cx, cy, col):
+        c.setStrokeColor(col); c.setFillColor(col); c.setLineWidth(0.8); c.setLineCap(1)
+        c.circle(cx - 1.2 * mm, cy + 0.9 * mm, 1.2 * mm, fill=0, stroke=1)
+        c.line(cx - 0.4 * mm, cy + 0.1 * mm, cx + 2.1 * mm, cy - 2.2 * mm)
+        c.line(cx + 1.0 * mm, cy - 1.1 * mm, cx + 1.9 * mm, cy - 0.2 * mm)
+        c.line(cx + 1.6 * mm, cy - 1.8 * mm, cx + 2.5 * mm, cy - 0.9 * mm)
+
+    def _medal(self, c, kind, cx, cy, ring, tint):
+        r = 3.5 * mm
+        c.setFillColor(WHITE); c.setStrokeColor(ring); c.setLineWidth(1.3)
+        c.circle(cx, cy, r, fill=1, stroke=1)
+        c.setFillColor(tint); c.circle(cx, cy, r - 0.8 * mm, fill=1, stroke=0)
+        if kind == "moon":
+            self._moon(c, cx - 0.2 * mm, cy, ring, tint)
+        elif kind == "key":
+            self._key(c, cx, cy, ring)
         else:
-            self.tile_w, self.photo_h = 0, 0
-        photos_h = (self.photo_h + 2 * self.PAD) if self.readers else 0
-        self.height = self.HEAD_H + self.INFO_H + photos_h
-        if not self.readers and stay.get("known"):
-            self.height += 6 * mm                      # room for the "photos on request" line
+            DayBookSpread._icon(None, c, kind, cx, cy, ring)
 
-    def _cell(self, c, x, y, label, value, w):
-        c.setFillColor(GRAY_400); c.setFont("Lato-Bold", 5.8)
-        c.drawString(x, y + 5.3 * mm, label)
-        size = 8.6
-        txt = _raw(value)
-        while c.stringWidth(txt, "Lato-Bold", size) > w - 3 * mm and size > 6.4:
+    def _cell(self, c, x, y, w, kind, ring, tint, label, value, sub=""):
+        self._medal(c, kind, x + 3.5 * mm, y + 5.0 * mm, ring, tint)
+        tx, tw = x + 8.3 * mm, w - 8.8 * mm
+        c.setFillColor(GRAY_400); c.setFont("Lato-Bold", 5.6)
+        c.drawString(tx, y + 8.6 * mm, label)
+        size, txt = 8.6, _raw(value)
+        while pdfmetrics.stringWidth(txt, "Lato-Bold", size) > tw and size > 6.4:
             size -= 0.3
+        while pdfmetrics.stringWidth(txt, "Lato-Bold", size) > tw and len(txt) > 6:
+            txt = txt[:-2].rstrip() + "…"
         c.setFillColor(NAVY); c.setFont("Lato-Bold", size)
-        c.drawString(x, y + 1.6 * mm, txt)
+        c.drawString(tx, y + 5.0 * mm, txt)
+        if sub:
+            s = _raw(sub)
+            while pdfmetrics.stringWidth(s, "Lato", 6.6) > tw and len(s) > 6:
+                s = s[:-2].rstrip() + "…"
+            c.setFillColor(GRAY_600); c.setFont("Lato", 6.6)
+            c.drawString(tx, y + 1.9 * mm, s)
 
+    # ── draw ────────────────────────────────────────────────────────────────
     def draw(self):
-        c, w, h, st = self.canv, self.width, self.height, self.stay
-        r = 2 * mm
-        # card body + border
-        c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.6)
-        c.roundRect(0, 0, w, h, r, fill=1, stroke=1)
-        # header
-        top = h - self.HEAD_H
-        c.setFillColor(NAVY); c.roundRect(0, top, w, self.HEAD_H, r, fill=1, stroke=0)
-        c.rect(0, top, w, r, fill=1, stroke=0)
-        n0, n1 = st["first"], st["last"]
-        pill = f"NIGHT {n0}" if n0 == n1 else f"NIGHTS {n0}–{n1}"
-        c.setFont("Lato-Bold", 7)
-        pw = c.stringWidth(pill, "Lato-Bold", 7) + 5 * mm
-        c.setFillColor(SKY); c.roundRect(3 * mm, top + 2.5 * mm, pw, 5 * mm, 2.5 * mm, fill=1, stroke=0)
-        c.setFillColor(WHITE); c.drawCentredString(3 * mm + pw / 2, top + 4.2 * mm, pill)
-        place = _raw(st["place"])
-        c.setFont("Lato", 8)
-        plw = c.stringWidth(place, "Lato", 8)
-        name, nx = _raw(st["name"]), 3 * mm + pw + 3 * mm
-        size = 10.5
-        while c.stringWidth(name, "Lato-Bold", size) > w - nx - plw - 8 * mm and size > 7.5:
-            size -= 0.4
-        c.setFillColor(WHITE); c.setFont("Lato-Bold", size)
-        c.drawString(nx, top + 3.4 * mm, name)
-        c.setFillColor(colors.HexColor("#93c5fd")); c.setFont("Lato", 8)
-        c.drawRightString(w - 3.5 * mm, top + 3.5 * mm, place)
+        c, W, H, st = self.canv, self.width, self.height, self.stay
+        pad = self.PAD
+        px0, py0, pw, ph = pad, pad, W - 2 * pad, H - 2 * pad
+        split = px0 + pw * self.SPLIT
 
-        # details row
-        iy = top - self.INFO_H
-        c.setFillColor(GRAY_50); c.rect(0.3, iy, w - 0.6, self.INFO_H, fill=1, stroke=0)
-        c.setStrokeColor(GRAY_200); c.setLineWidth(0.4); c.line(0, iy, w, iy)
-        cw = [0.25, 0.28, 0.19, 0.28]
-        xs = [self.PAD + sum(cw[:i]) * (w - 2 * self.PAD) for i in range(4)]
-        cells = [("STAY", st["stay_txt"]), ("ROOM TYPE", st["room_type"]),
-                 ("ROOMS", st["rooms_txt"]), ("MEAL PLAN", st["meal_txt"])]
-        for i, (lab, val) in enumerate(cells):
-            self._cell(c, xs[i], iy + 1.6 * mm, lab, val, cw[i] * (w - 2 * self.PAD))
-            if i:
-                c.setStrokeColor(GRAY_200); c.line(xs[i] - 2.2 * mm, iy + 2 * mm, xs[i] - 2.2 * mm, iy + self.INFO_H - 2 * mm)
+        # cover + page
+        c.setFillColor(_BOOK_COVER); c.roundRect(0, 0, W, H, 2.6 * mm, fill=1, stroke=0)
+        c.setFillColor(_BOOK_PAGE);  c.roundRect(px0, py0, pw, ph, 1.3 * mm, fill=1, stroke=0)
 
-        # photos
-        if not self.readers:
-            if st.get("known"):
-                c.setFillColor(GRAY_400); c.setFont("Lato-Italic", 7.5)
-                c.drawString(self.PAD, 2.2 * mm, "Photos of this property are shared on request.")
-            return
-        y = self.PAD
-        for i, rd in enumerate(self.readers):
-            x = self.PAD + i * (self.tile_w + self.gap)
+        # ── hero (left) ─────────────────────────────────────────────────────
+        hw = split - px0
+        c.saveState()
+        cp = c.beginPath(); cp.roundRect(px0, py0, pw, ph, 1.3 * mm); c.clipPath(cp, stroke=0, fill=0)
+        hp = c.beginPath(); hp.rect(px0, py0, hw, ph); c.clipPath(hp, stroke=0, fill=0)
+        c.translate(px0, py0)
+        if self.readers:
             try:
-                self._draw_photo(c, rd, x, y)
+                self._cover_image(c, self.readers[0], 0, 0, hw, ph)
             except Exception:
-                self._placeholder(c, x, y)
+                DayBookSpread._landscape(None, c, hw, ph)
+        else:
+            DayBookSpread._landscape(None, c, hw, ph)
+        for i in range(22):                                  # soft dark fade for the name
+            t = i / 21.0
+            c.setFillColor(colors.Color(0.03, 0.07, 0.14, alpha=0.82 * (1 - t) ** 1.7))
+            c.rect(0, i * ph * 0.62 / 22, hw, ph * 0.62 / 22 + 0.2, fill=1, stroke=0)
+        for i in range(10):                                  # and a light one up top
+            c.setFillColor(colors.Color(0.03, 0.07, 0.14, alpha=0.30 * (1 - i / 9.0) ** 1.5))
+            c.rect(0, ph - (i + 1) * ph * 0.22 / 10, hw, ph * 0.22 / 10 + 0.2, fill=1, stroke=0)
+        # hotel name, bottom left
+        name = _raw(st["name"])
+        size = 13.2
+        lines = simpleSplit(name, "Lato-Bold", size, hw - 8 * mm)
+        while len(lines) > 2 and size > 9:
+            size -= 0.6; lines = simpleSplit(name, "Lato-Bold", size, hw - 8 * mm)
+        lines = lines[:2]
+        y = 3.6 * mm + (len(lines) - 1) * (size * 0.43 * mm)
+        if not self.readers and st.get("known"):
+            c.setFillColor(colors.Color(1, 1, 1, alpha=0.9)); c.setFont("Lato-Italic", 6.8)
+            c.drawString(4 * mm, 3.4 * mm, "Photos shared on request"); y += 4.4 * mm
+        c.setFillColor(WHITE); c.setFont("Lato-Bold", size)
+        for ln in reversed(lines):
+            c.drawString(4 * mm, y, ln); y += size * 0.43 * mm * 1.02
+        # place pill (top right of hero)
+        place = _raw(st["place"]).upper()
+        tw = pdfmetrics.stringWidth(place, "Lato-Bold", 7.2)
+        bx = hw - tw - 11.5 * mm
+        c.setFillColor(colors.Color(1, 1, 1, alpha=0.94))
+        c.roundRect(bx, ph - 8.6 * mm, tw + 8 * mm, 5.6 * mm, 2.8 * mm, fill=1, stroke=0)
+        c.setFillColor(SKY); c.circle(bx + 3.1 * mm, ph - 5.8 * mm, 0.95 * mm, fill=1, stroke=0)
+        c.setFillColor(NAVY); c.setFont("Lato-Bold", 7.2); c.drawString(bx + 5.3 * mm, ph - 6.7 * mm, place)
+        c.restoreState()
+
+        # bookmark ribbon (nights), hanging from the top edge over the hero
+        n0, n1 = st["first"], st["last"]
+        top_txt = "NIGHT" if n0 == n1 else "NIGHTS"
+        num_txt = f"{n0}" if n0 == n1 else f"{n0}–{n1}"
+        rw, rh, rx = 12.5 * mm, 15.5 * mm, px0 + 4.5 * mm
+        c.setFillColor(colors.Color(0, 0, 0, alpha=0.18))
+        c.rect(rx + 0.6 * mm, H - rh - 0.2 * mm, rw, rh, fill=1, stroke=0)
+        c.setFillColor(_BOOK_RIBBON)
+        p = c.beginPath()
+        p.moveTo(rx, H); p.lineTo(rx, H - rh); p.lineTo(rx + rw / 2, H - rh + 3 * mm)
+        p.lineTo(rx + rw, H - rh); p.lineTo(rx + rw, H); p.close()
+        c.drawPath(p, fill=1, stroke=0)
+        c.setFillColor(colors.HexColor("#fecdd3")); c.setFont("Lato-Bold", 5.3)
+        c.drawCentredString(rx + rw / 2, H - 6.2 * mm, top_txt)
+        c.setFillColor(WHITE)
+        nsz = 11 if len(num_txt) <= 2 else 8.8
+        c.setFont("Lato-Bold", nsz); c.drawCentredString(rx + rw / 2, H - 6.2 * mm - nsz * 0.42 * mm - 1.2 * mm, num_txt)
+
+        # ── fold between hero and info page ─────────────────────────────────
+        for i in range(10):
+            c.setFillColor(colors.Color(0.05, 0.08, 0.15, alpha=0.13 * (1 - i / 9.0) ** 2))
+            c.rect(split + i * 0.38 * mm, py0, 0.42 * mm, ph, fill=1, stroke=0)
+        c.setFillColor(WHITE)                                # back to opaque (the last stripe has alpha 0)
+
+        # ── info page (right) ───────────────────────────────────────────────
+        ix0 = split + 4.5 * mm
+        iw = (px0 + pw) - ix0 - 4 * mm
+        top = py0 + ph - 4 * mm
+        top_h = 28 * mm if self.has_p2 else 20 * mm
+        ty0 = top - top_h
+        if self.has_p2:
+            c.saveState()
+            cp2 = c.beginPath(); cp2.roundRect(ix0, ty0, iw, top_h, 1.8 * mm); c.clipPath(cp2, stroke=0, fill=0)
+            try:
+                self._cover_image(c, self.readers[1], ix0, ty0, iw, top_h)
+            except Exception:
+                c.setFillColor(GRAY_100); c.rect(ix0, ty0, iw, top_h, fill=1, stroke=0)
+            c.restoreState()
+            c.setStrokeColor(GRAY_200); c.setLineWidth(0.6); c.roundRect(ix0, ty0, iw, top_h, 1.8 * mm, fill=0, stroke=1)
+        else:                                               # check-in -> check-out strip
+            c.setFillColor(_BOOK_BAND); c.roundRect(ix0, ty0, iw, top_h, 2 * mm, fill=1, stroke=0)
+            stay_full = _raw(st.get("stay_txt", ""))
+            parts = [s.strip() for s in stay_full.split("·")]
+            nights_txt = parts[0] if parts else ""
+            d_in = d_out = ""
+            if len(parts) > 1 and "–" in parts[1]:
+                d_in, d_out = [s.strip() for s in parts[1].split("–", 1)]
+            my = ty0 + top_h / 2
+            c.setFillColor(GRAY_600); c.setFont("Lato-Bold", 5.8)
+            if d_in:
+                c.drawString(ix0 + 4 * mm, my + 4.6 * mm, "CHECK-IN")
+                c.drawRightString(ix0 + iw - 4 * mm, my + 4.6 * mm, "CHECK-OUT")
+                c.setFillColor(NAVY); c.setFont("Lato-Bold", 11)
+                c.drawString(ix0 + 4 * mm, my - 1.2 * mm, d_in)
+                c.drawRightString(ix0 + iw - 4 * mm, my - 1.2 * mm, d_out)
+                lx1 = ix0 + 4 * mm + pdfmetrics.stringWidth(d_in, "Lato-Bold", 11) + 3 * mm
+                lx2 = ix0 + iw - 4 * mm - pdfmetrics.stringWidth(d_out, "Lato-Bold", 11) - 3 * mm
+            else:
+                lx1, lx2 = ix0 + 6 * mm, ix0 + iw - 6 * mm
+            if lx2 - lx1 > 14 * mm:
+                mx = (lx1 + lx2) / 2
+                c.setStrokeColor(SKY); c.setLineWidth(0.9); c.setDash(1.5, 1.4)
+                c.line(lx1, my + 0.2 * mm, mx - 3.8 * mm, my + 0.2 * mm)
+                c.line(mx + 3.8 * mm, my + 0.2 * mm, lx2, my + 0.2 * mm); c.setDash()
+                self._medal(c, "moon", mx, my + 0.2 * mm, SKY, SKY_LIGHT)
+            c.setFillColor(TEAL); c.setFont("Lato-Bold", 7.4)
+            c.drawCentredString(ix0 + iw / 2, ty0 + 2.6 * mm, nights_txt)
+
+        # icon cells, 2 x 2
+        cw, ch, gx = iw / 2, 11.5 * mm, 0
+        grid_top = ty0 - 3 * mm
+        stay_full = _raw(st.get("stay_txt", ""))
+        parts = [s.strip() for s in stay_full.split("·")]
+        meal = [s.strip() for s in _raw(st.get("meal_txt", "")).split("·", 1)]
+        cells = [
+            ("moon", SKY,       SKY_LIGHT,    "STAY",      parts[0] if parts else "", (parts[1] if (len(parts) > 1 and self.has_p2) else "")),
+            ("bed",  GOLD_MID,  GOLD_LITE,    "ROOM TYPE", st["room_type"], ""),
+            ("key",  EMERALD,   EMERALD_LITE, "ROOMS",     st["rooms_txt"], ""),
+            ("fork", colors.HexColor("#e11d48"), colors.HexColor("#ffe4e6"), "MEAL PLAN", meal[0], meal[1] if len(meal) > 1 else ""),
+        ]
+        for i, (kind, ring, tint, lab, val, sub) in enumerate(cells):
+            col, row = i % 2, i // 2
+            cx_ = ix0 + col * cw
+            cy_ = grid_top - (row + 1) * ch - row * 0.5 * mm
+            self._cell(c, cx_, cy_, cw - 1.5 * mm, kind, ring, tint, lab, val, sub)
+        c.setStrokeColor(GRAY_200); c.setLineWidth(0.4)
+        gy1, gy0 = grid_top - 0.6 * mm, grid_top - 2 * ch - 0.9 * mm
+        c.line(ix0 + cw - 1.2 * mm, gy0 + 1 * mm, ix0 + cw - 1.2 * mm, gy1 - 0.5 * mm)
+        c.line(ix0, grid_top - ch - 0.2 * mm, ix0 + iw, grid_top - ch - 0.2 * mm)
 
 
 # ─── Destination background photos (soft, faded, behind each day's activities) ─
@@ -1586,12 +1709,38 @@ class BgBlock(Flowable):
         c.setStrokeColor(GRAY_200); c.setLineWidth(0.5); c.rect(0, 0, w, h, fill=0, stroke=1)
 
 
+def _book_fold(c, cx, y0, y1, left=7 * mm, right=4.5 * mm):
+    """Soft shaded centre fold of an open book."""
+    nl, nr = 16, 12
+    for i in range(nl):
+        c.setFillColor(colors.Color(0.05, 0.08, 0.15, alpha=0.20 * (i / (nl - 1.0)) ** 2.2))
+        c.rect(cx - left + i * left / nl, y0, left / nl + 0.05 * mm, y1 - y0, fill=1, stroke=0)
+    for i in range(nr):
+        c.setFillColor(colors.Color(0.05, 0.08, 0.15, alpha=0.14 * (1 - i / (nr - 1.0)) ** 2.0))
+        c.rect(cx + i * right / nr, y0, right / nr + 0.05 * mm, y1 - y0, fill=1, stroke=0)
+    c.setStrokeColor(colors.Color(0.05, 0.08, 0.15, alpha=0.30)); c.setLineWidth(0.4)
+    c.line(cx, y0, cx, y1)
+    c.setFillColor(WHITE)                                    # back to opaque
+
+
+def _book_cover(c, x, y, w, h, pad=1.4 * mm, r=2.6 * mm):
+    c.setFillColor(_BOOK_COVER); c.roundRect(x, y, w, h, r, fill=1, stroke=0)
+    c.setFillColor(_BOOK_PAGE);  c.roundRect(x + pad, y + pad, w - 2 * pad, h - 2 * pad, r * 0.5, fill=1, stroke=0)
+
+
+def _check_tick(c, cx, cy, s, col):
+    c.setStrokeColor(col); c.setLineWidth(0.9); c.setLineCap(1); c.setLineJoin(1)
+    p = c.beginPath(); p.moveTo(cx - s * 0.9, cy); p.lineTo(cx - s * 0.2, cy - s * 0.7); p.lineTo(cx + s * 0.95, cy + s * 0.7)
+    c.drawPath(p, fill=0, stroke=1)
+
+
 class StayRouteStrip(Flowable):
-    """'Your stays at a glance': Start -> each stay (nights + hotel) -> End, drawn as a route line."""
+    """'Your stays at a glance': a journey page. Start -> each stay (numbered, nights, hotel) -> End,
+    joined by a dashed road with a little car between stops."""
     def __init__(self, width, start_point, end_point, segments):
         super().__init__()
         self.width, self.start_point, self.end_point, self.segs = width, start_point, end_point, segments
-        self.height = (40 if len(segments) <= 4 else 48) * mm
+        self.height = (44 if len(segments) <= 4 else 52) * mm
 
     @staticmethod
     def _wrap(c, text, font, size, max_w, max_lines=2):
@@ -1613,57 +1762,79 @@ class StayRouteStrip(Flowable):
 
     def draw(self):
         c, w, h = self.canv, self.width, self.height
-        c.setFillColor(GRAY_50); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
-        c.roundRect(0, 0, w, h, 2 * mm, fill=1, stroke=1)
-        c.setFillColor(SKY); c.roundRect(0, 0, 1.4 * mm, h, 0.7 * mm, fill=1, stroke=0)
+        _book_cover(c, 0, 0, w, h)
+        # header: title + nights-in-total chip
         total = sum(sg["nights"] for sg in self.segs)
-        c.setFillColor(NAVY); c.setFont("Lato-Bold", 8)
-        c.drawString(5 * mm, h - 6.2 * mm, "YOUR STAYS AT A GLANCE")
-        c.setFillColor(GRAY_600); c.setFont("Lato", 7.5)
-        c.drawRightString(w - 5 * mm, h - 6.2 * mm, f"{total} night{'s' if total != 1 else ''} in total")
+        hy = h - 7.4 * mm
+        c.setFillColor(SKY); c.roundRect(5 * mm, hy - 0.6 * mm, 1.3 * mm, 4.4 * mm, 0.6 * mm, fill=1, stroke=0)
+        c.setFillColor(NAVY); c.setFont("Lato-Bold", 8.6)
+        c.drawString(8 * mm, hy + 0.7 * mm, "YOUR STAYS AT A GLANCE")
+        lab = f"{total} night{'s' if total != 1 else ''} in total"
+        cw_ = c.stringWidth(lab, "Lato-Bold", 7) + 9 * mm
+        c.setFillColor(TEAL_LITE); c.roundRect(w - 5 * mm - cw_, hy - 1.2 * mm, cw_, 5.6 * mm, 2.8 * mm, fill=1, stroke=0)
+        HotelStayCard._moon(c, w - 5 * mm - cw_ + 3.6 * mm, hy + 1.6 * mm, TEAL, TEAL_LITE)
+        c.setFillColor(TEAL); c.setFont("Lato-Bold", 7)
+        c.drawString(w - 5 * mm - cw_ + 7 * mm, hy + 0.5 * mm, lab)
+        c.setStrokeColor(GRAY_200); c.setLineWidth(0.4); c.line(5 * mm, hy - 3.4 * mm, w - 5 * mm, hy - 3.4 * mm)
 
         nodes = [("START", self.start_point, None, KashmirRouteMap.START_COL)] + \
                 [(None, sg["city"], sg, KashmirRouteMap.PIN_COLORS.get(sg["city"].lower(), KashmirRouteMap.PIN_COLORS["srinagar"])[1])
                  for sg in self.segs] + \
                 [("END", self.end_point, None, KashmirRouteMap.END_COL)]
         n = len(nodes)
-        pad = 17 * mm
+        pad = 19 * mm
         xs = [pad + i * (w - 2 * pad) / max(n - 1, 1) for i in range(n)]
         cell = min(34 * mm, (w - 2 * pad) / max(n - 1, 1) - 2 * mm)
-        ly = h - 15 * mm
+        ly = h - 18.6 * mm
+        R = 4.3 * mm
 
-        c.setStrokeColor(SKY_MID); c.setLineWidth(1.3); c.setDash(3.2, 2.4)
-        c.line(xs[0], ly, xs[-1], ly); c.setDash()
-        for i in range(n - 1):                                    # direction arrows mid-way
-            mx = (xs[i] + xs[i + 1]) / 2
-            c.setFillColor(SKY_MID)
-            ap = c.beginPath(); ap.moveTo(mx + 1.6 * mm, ly); ap.lineTo(mx - 1.0 * mm, ly + 1.3 * mm); ap.lineTo(mx - 1.0 * mm, ly - 1.3 * mm); ap.close()
-            c.drawPath(ap, fill=1, stroke=0)
+        # road + little cars
+        for i in range(n - 1):
+            x1, x2 = xs[i] + R + 1 * mm, xs[i + 1] - R - 1 * mm
+            mx = (x1 + x2) / 2
+            c.setStrokeColor(SKY_MID); c.setLineWidth(1.1); c.setDash(2.2, 2.0)
+            c.line(x1, ly, mx - 3.5 * mm, ly); c.line(mx + 3.5 * mm, ly, x2, ly); c.setDash()
+            c.setFillColor(WHITE); c.setStrokeColor(SKY_MID); c.setLineWidth(0.9)
+            c.circle(mx, ly, 3.0 * mm, fill=1, stroke=1)
+            DayBookSpread._icon(None, c, "car", mx, ly, SKY)
 
-        for x, (tag, name, seg, col) in zip(xs, nodes):
-            c.setFillColor(WHITE); c.circle(x, ly, 3.9 * mm, fill=1, stroke=0)
-            c.setFillColor(col);   c.circle(x, ly, 3.1 * mm, fill=1, stroke=0)
-            c.setFillColor(WHITE); c.circle(x, ly, 1.1 * mm, fill=1, stroke=0)
-            y = ly - 7.4 * mm
-            if seg is None:                                       # start / end
-                c.setFillColor(col); c.setFont("Lato-Bold", 6.6); c.drawCentredString(x, y, tag)
-                y -= 3.6 * mm
-                c.setFillColor(BLACK)
-                for ln in self._wrap(c, name, "Lato-Bold", 7.2, cell, max_lines=3):
-                    c.setFont("Lato-Bold", 7.2); c.drawCentredString(x, y, ln); y -= 3.3 * mm
+        for i, (x, (tag, name, seg, col)) in enumerate(zip(xs, nodes)):
+            c.setFillColor(colors.Color(0, 0, 0.1, alpha=0.10)); c.circle(x + 0.3 * mm, ly - 0.5 * mm, R + 0.3 * mm, fill=1, stroke=0)
+            c.setFillColor(WHITE); c.setStrokeColor(col); c.setLineWidth(1.6); c.circle(x, ly, R, fill=1, stroke=1)
+            c.setFillColor(col); c.circle(x, ly, R - 1.0 * mm, fill=1, stroke=0)
+            c.setFillColor(WHITE); c.setStrokeColor(WHITE)
+            if tag == "START":
+                c.circle(x, ly, 1.25 * mm, fill=1, stroke=0)
+            elif tag == "END":                                      # little flag
+                c.setLineWidth(0.8); c.line(x - 1.0 * mm, ly - 1.9 * mm, x - 1.0 * mm, ly + 1.9 * mm)
+                fp = c.beginPath(); fp.moveTo(x - 1.0 * mm, ly + 1.9 * mm); fp.lineTo(x + 1.9 * mm, ly + 0.9 * mm); fp.lineTo(x - 1.0 * mm, ly - 0.1 * mm); fp.close()
+                c.drawPath(fp, fill=1, stroke=0)
             else:
-                c.setFillColor(BLACK); c.setFont("Lato-Bold", 8.4); c.drawCentredString(x, y, seg["city"])
-                y -= 3.0 * mm
+                c.setFont("Lato-Bold", 8.4); c.drawCentredString(x, ly - 1.0 * mm, str(i))
+            y = ly - 8.2 * mm
+            if seg is None:                                       # start / end
+                c.setFillColor(col); c.setFont("Lato-Bold", 6.4)
+                tw_ = c.stringWidth(tag, "Lato-Bold", 6.4) + 4 * mm
+                c.setFillColor(colors.Color(col.red, col.green, col.blue, alpha=0.13))
+                c.roundRect(x - tw_ / 2, y - 1.3 * mm, tw_, 4.1 * mm, 2 * mm, fill=1, stroke=0)
+                c.setFillColor(col); c.drawCentredString(x, y, tag)
+                y -= 4.4 * mm
+                c.setFillColor(NAVY)
+                for ln in self._wrap(c, name, "Lato-Bold", 7.4, cell, max_lines=3):
+                    c.setFont("Lato-Bold", 7.4); c.drawCentredString(x, y, ln); y -= 3.3 * mm
+            else:
+                c.setFillColor(NAVY); c.setFont("Lato-Bold", 8.8); c.drawCentredString(x, y, seg["city"])
+                y -= 2.6 * mm
                 lab = f"{seg['nights']} night{'s' if seg['nights'] != 1 else ''}"
-                pw = c.stringWidth(lab, "Lato-Bold", 6.6) + 4 * mm
-                c.setFillColor(WHITE); c.setStrokeColor(col); c.setLineWidth(0.6)
-                c.roundRect(x - pw / 2, y - 3.8 * mm, pw, 4.2 * mm, 2.1 * mm, fill=1, stroke=1)
-                c.setFillColor(col); c.setFont("Lato-Bold", 6.6); c.drawCentredString(x, y - 2.4 * mm, lab)
-                y -= 7.4 * mm
+                pw = c.stringWidth(lab, "Lato-Bold", 6.6) + 4.4 * mm
+                c.setFillColor(colors.Color(col.red, col.green, col.blue, alpha=0.14))
+                c.roundRect(x - pw / 2, y - 4.0 * mm, pw, 4.3 * mm, 2.15 * mm, fill=1, stroke=0)
+                c.setFillColor(col); c.setFont("Lato-Bold", 6.6); c.drawCentredString(x, y - 2.6 * mm, lab)
+                y -= 7.6 * mm
                 c.setFillColor(GRAY_600)
                 for hn in seg["hotels"][:2]:
-                    for ln in self._wrap(c, hn, "Lato", 6.5, cell, max_lines=2):
-                        c.setFont("Lato", 6.5); c.drawCentredString(x, y, ln); y -= 3.0 * mm
+                    for ln in self._wrap(c, hn, "Lato", 6.6, cell, max_lines=2):
+                        c.setFont("Lato", 6.6); c.drawCentredString(x, y, ln); y -= 3.0 * mm
 
 
 # One highlight per destination: (title, one-liner, tag, icon). Cities not listed are skipped.
@@ -1677,18 +1848,35 @@ SIGNATURE_EXPERIENCES = {
 
 
 class SignatureExperiences(Flowable):
-    """'Signature experiences': one highlight card per distinct destination, colour-matched to the stay strip."""
-    def __init__(self, width, segments):
+    """'Signature experiences': one postcard per destination (photo, place pill, icon medallion, one-liner, tag).
+    A tag is never 'extra' or 'pay locally' for something the quote already includes: it says 'included'."""
+    PHOTO_H = 21 * mm
+
+    def __init__(self, width, segments, extras=(), photos=None):
         super().__init__()
         self.width = width
+        self.photos = photos or {}
+        ex = set(extras or [])
         seen, self.items = set(), []
         for sg in segments:
             key = sg["city"].lower()
             if key in SIGNATURE_EXPERIENCES and key not in seen:
                 seen.add(key)
-                self.items.append((sg["city"], key) + SIGNATURE_EXPERIENCES[key])
+                title, desc, tag, icon = SIGNATURE_EXPERIENCES[key]
+                included = False
+                if key == "gulmarg" and ({"gondola_p1", "gondola_p2"} & ex):
+                    both = {"gondola_p1", "gondola_p2"} <= ex
+                    tag = "Gondola included" if both else ("Phase 1 included" if "gondola_p1" in ex else "Phase 2 included")
+                    included = True
+                elif key in ("pahalgam", "doodhpathri") and "union_cab" in ex:
+                    tag, included = "Union cab included", True
+                elif tag == "1 hour complimentary":
+                    included = True
+                self.items.append((sg["city"], key, title, desc, tag, icon, included))
         self.items = self.items[:4]
-        self.height = 46 * mm if self.items else 0
+        self.bar_h = 8 * mm
+        self.card_h = 49 * mm
+        self.height = (self.bar_h + 4 * mm + self.card_h) if self.items else 0
 
     @staticmethod
     def _icon(c, kind, cx, cy):
@@ -1717,8 +1905,7 @@ class SignatureExperiences(Flowable):
         if not self.items:
             return
         c, w, h = self.canv, self.width, self.height
-        # Section header bar (same look as SectionTitle)
-        bar_h = 8 * mm
+        bar_h = self.bar_h
         c.setFillColor(NAVY_DEEP); c.roundRect(0, h - bar_h, w, bar_h, 2 * mm, fill=1, stroke=0)
         c.setFillColor(SKY);       c.roundRect(0, h - bar_h, 3 * mm, bar_h, 1.2 * mm, fill=1, stroke=0)
         c.setFillColor(WHITE);     c.setFont("Lato-Bold", 9.5)
@@ -1726,35 +1913,72 @@ class SignatureExperiences(Flowable):
 
         n, gap = len(self.items), 3.5 * mm
         cw = (w - gap * (n - 1)) / n
-        ch = h - bar_h - 4 * mm
-        for i, (city, key, title, desc, tag, icon) in enumerate(self.items):
+        ch, pad = self.card_h, 1.3 * mm
+        ph = self.PHOTO_H
+        for i, (city, key, title, desc, tag, icon, included) in enumerate(self.items):
             x = i * (cw + gap)
-            col = KashmirRouteMap.PIN_COLORS[key][1]
-            c.setFillColor(GRAY_50); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
-            c.roundRect(x, 0, cw, ch, 2 * mm, fill=1, stroke=1)
-            c.setFillColor(col); c.roundRect(x, ch - 1.0 * mm, cw, 1.0 * mm, 0.5 * mm, fill=1, stroke=0)
-            cy = ch - 8.5 * mm
-            c.setFillColor(col); c.circle(x + 7 * mm, cy, 4.2 * mm, fill=1, stroke=0)
-            self._icon(c, icon, x + 7 * mm, cy)
-            c.setFillColor(NAVY); c.setFont("Lato-Bold", 7.6)
-            c.drawString(x + 13 * mm, cy - 1.2 * mm, city.upper())
-            ty = cy - 8 * mm
-            c.setFillColor(BLACK)
-            for ln in StayRouteStrip._wrap(c, title, "Lato-Bold", 8.6, cw - 6 * mm, max_lines=2):
-                c.setFont("Lato-Bold", 8.6); c.drawString(x + 3 * mm, ty, ln); ty -= 3.7 * mm
-            ty -= 0.6 * mm
+            col, dark = KashmirRouteMap.PIN_COLORS[key][1], KashmirRouteMap.PIN_COLORS[key][0]
+            _book_cover(c, x, 0, cw, ch, pad=pad, r=2.4 * mm)
+            # photo (or painted landscape) with rounded top corners
+            px, pw_, py = x + pad, cw - 2 * pad, ch - pad - ph
+            c.saveState()
+            cp = c.beginPath(); cp.roundRect(px, pad, pw_, ch - 2 * pad, 1.2 * mm); c.clipPath(cp, stroke=0, fill=0)
+            pp = c.beginPath(); pp.rect(px, py, pw_, ph); c.clipPath(pp, stroke=0, fill=0)
+            c.translate(px, py)
+            rd = self.photos.get(key)
+            if rd is not None:
+                try:
+                    iw, ih = rd.getSize(); sc = max(pw_ / iw, ph / ih)
+                    c.drawImage(rd, -(iw * sc - pw_) / 2, -(ih * sc - ph) * 0.5, width=iw * sc, height=ih * sc)
+                except Exception:
+                    DayBookSpread._landscape(None, c, pw_, ph)
+            else:
+                DayBookSpread._landscape(None, c, pw_, ph)
+            for k in range(12):                                          # light fade at the foot of the photo
+                c.setFillColor(colors.Color(0.03, 0.07, 0.14, alpha=0.30 * (1 - k / 11.0) ** 1.6))
+                c.rect(0, k * ph * 0.5 / 12, pw_, ph * 0.5 / 12 + 0.2, fill=1, stroke=0)
+            c.setFillColor(WHITE)
+            c.restoreState()
+            # place pill on the photo
+            ptxt = _raw(city).upper()
+            tw = pdfmetrics.stringWidth(ptxt, "Lato-Bold", 6.6)
+            c.setFillColor(colors.Color(1, 1, 1, alpha=0.94))
+            c.roundRect(px + 2.4 * mm, py + ph - 7.4 * mm, tw + 7.6 * mm, 5 * mm, 2.5 * mm, fill=1, stroke=0)
+            c.setFillColor(col); c.circle(px + 5.2 * mm, py + ph - 4.9 * mm, 0.9 * mm, fill=1, stroke=0)
+            c.setFillColor(NAVY); c.setFont("Lato-Bold", 6.6); c.drawString(px + 7.2 * mm, py + ph - 5.6 * mm, ptxt)
+            # icon medallion straddling the photo edge
+            mx, my = px + pw_ - 7.2 * mm, py
+            c.setFillColor(WHITE); c.circle(mx, my, 5.0 * mm, fill=1, stroke=0)
+            c.setFillColor(col);   c.circle(mx, my, 4.0 * mm, fill=1, stroke=0)
+            self._icon(c, icon, mx, my)
+            # text
+            tx, tw_ = px + 2.6 * mm, pw_ - 5.2 * mm
+            ty = py - 5.2 * mm
+            c.setFillColor(NAVY)
+            for ln in StayRouteStrip._wrap(c, title, "Lato-Bold", 8.6, tw_ - 2 * mm, max_lines=2):
+                c.setFont("Lato-Bold", 8.6); c.drawString(tx, ty, ln); ty -= 3.7 * mm
+            ty -= 0.5 * mm
             c.setFillColor(GRAY_600)
-            for ln in StayRouteStrip._wrap(c, desc, "Lato", 7.2, cw - 6 * mm, max_lines=3):
-                c.setFont("Lato", 7.2); c.drawString(x + 3 * mm, ty, ln); ty -= 3.2 * mm
-            tw = c.stringWidth(tag, "Lato-Bold", 6.6) + 4 * mm
-            c.setFillColor(WHITE); c.setStrokeColor(col); c.setLineWidth(0.6)
-            c.roundRect(x + 3 * mm, 2.6 * mm, tw, 4.2 * mm, 2.1 * mm, fill=1, stroke=1)
-            c.setFillColor(KashmirRouteMap.PIN_COLORS[key][0]); c.setFont("Lato-Bold", 6.6)
-            c.drawString(x + 5 * mm, 4.0 * mm, tag)
+            for ln in StayRouteStrip._wrap(c, desc, "Lato", 7.0, tw_, max_lines=3):
+                c.setFont("Lato", 7.0); c.drawString(tx, ty, ln); ty -= 3.15 * mm
+            # tag pill
+            ty0 = pad + 2.4 * mm
+            tw2 = pdfmetrics.stringWidth(tag, "Lato-Bold", 6.6) + (9.6 if included else 5) * mm
+            if included:
+                c.setFillColor(EMERALD_LITE); c.roundRect(tx, ty0, tw2, 4.6 * mm, 2.3 * mm, fill=1, stroke=0)
+                c.setFillColor(EMERALD); c.circle(tx + 2.9 * mm, ty0 + 2.3 * mm, 1.35 * mm, fill=1, stroke=0)
+                _check_tick(c, tx + 2.9 * mm, ty0 + 2.3 * mm, 0.62 * mm, WHITE)
+                c.setFillColor(colors.HexColor("#047857")); c.setFont("Lato-Bold", 6.6)
+                c.drawString(tx + 5.6 * mm, ty0 + 1.5 * mm, tag)
+            else:
+                c.setFillColor(WHITE); c.setStrokeColor(col); c.setLineWidth(0.6)
+                c.roundRect(tx, ty0, tw2, 4.6 * mm, 2.3 * mm, fill=1, stroke=1)
+                c.setFillColor(dark); c.setFont("Lato-Bold", 6.6); c.drawString(tx + 2.5 * mm, ty0 + 1.5 * mm, tag)
 
 
 class TravelEssentials(Flowable):
-    """'Before you travel': Good to know + Pack smart. Fills leftover page space only; draws nothing if it won't fit."""
+    """'Before you travel' as an open book: Good to know on the left page, Pack smart on the right.
+    Fills leftover page space only; draws nothing if it won't fit."""
     GOOD = [
         "Carry a valid photo ID for every guest. Hotels and checkpoints ask for it.",
         "Only postpaid SIMs work in J&K. Prepaid SIMs from other states do not.",
@@ -1768,48 +1992,80 @@ class TravelEssentials(Flowable):
         "Sunglasses, sunscreen and lip balm for the high-altitude sun.",
         "Power bank, camera and any personal medicines.",
     ]
+    PAD, RIB, BAR_H = 1.5 * mm, 4.0 * mm, 8 * mm
+    FS, LEAD = 7.2, 3.2 * mm
 
     def __init__(self, width):
         super().__init__()
         self.width = width
-        self.height = 60 * mm
+        self.tw = (width - 2 * self.PAD) / 2 - 15.5 * mm          # bullet text width
+        def need(items):
+            tot = 13.5 * mm + 4 * mm
+            for it in items:
+                tot += min(len(simpleSplit(it, "Lato", self.FS, self.tw)), 2) * self.LEAD + 1.9 * mm
+            return tot
+        self.book_h = max(need(self.GOOD), need(self.PACK), 56 * mm)
+        self.height = self.BAR_H + 4 * mm + self.book_h + self.RIB
         self._skip = False
 
     def wrap(self, aw, ah):
         self._skip = ah < self.height
         return (self.width, 0) if self._skip else (self.width, self.height)
 
-    def _card(self, c, x, y0, cw, ch, title, items, col, col_lite):
-        c.setFillColor(GRAY_50); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
-        c.roundRect(x, y0, cw, ch, 2 * mm, fill=1, stroke=1)
-        c.setFillColor(col); c.roundRect(x, y0, 1.4 * mm, ch, 0.7 * mm, fill=1, stroke=0)
-        tw = c.stringWidth(title, "Lato-Bold", 7.6) + 6 * mm
-        c.setFillColor(col_lite); c.roundRect(x + 4 * mm, y0 + ch - 7.6 * mm, tw, 5 * mm, 2.5 * mm, fill=1, stroke=0)
-        c.setFillColor(col); c.setFont("Lato-Bold", 7.6)
-        c.drawString(x + 7 * mm, y0 + ch - 6.1 * mm, title)
-        ty = y0 + ch - 12.8 * mm
+    def _page(self, c, x, pw, hb, title, sub, items, ring, tint, kind):
+        top = hb - self.PAD
+        # heading: medallion + title + subtitle
+        mx, my = x + 8.5 * mm, top - 7.4 * mm
+        c.setFillColor(WHITE); c.setStrokeColor(ring); c.setLineWidth(1.5); c.circle(mx, my, 4.2 * mm, fill=1, stroke=1)
+        c.setFillColor(tint); c.circle(mx, my, 3.3 * mm, fill=1, stroke=0)
+        c.setStrokeColor(ring); c.setFillColor(ring); c.setLineWidth(0.9); c.setLineCap(1)
+        if kind == "info":
+            c.circle(mx, my + 1.9 * mm, 0.5 * mm, fill=1, stroke=0); c.line(mx, my + 0.7 * mm, mx, my - 1.9 * mm)
+        else:                                                       # little suitcase
+            c.roundRect(mx - 2.2 * mm, my - 1.7 * mm, 4.4 * mm, 3.2 * mm, 0.6 * mm, fill=0, stroke=1)
+            c.line(mx - 0.9 * mm, my + 1.5 * mm, mx - 0.9 * mm, my + 2.3 * mm); c.line(mx + 0.9 * mm, my + 1.5 * mm, mx + 0.9 * mm, my + 2.3 * mm)
+            c.line(mx - 0.9 * mm, my + 2.3 * mm, mx + 0.9 * mm, my + 2.3 * mm)
+        c.setFillColor(NAVY); c.setFont("Lato-Bold", 9.4); c.drawString(x + 14.5 * mm, my + 0.6 * mm, title)
+        c.setFillColor(GRAY_400); c.setFont("Lato", 6.6); c.drawString(x + 14.5 * mm, my - 3.0 * mm, sub)
+        c.setStrokeColor(GRAY_200); c.setLineWidth(0.4); c.line(x + 4 * mm, my - 5.3 * mm, x + pw - 4 * mm, my - 5.3 * mm)
+        y = my - 10.0 * mm
         for it in items:
-            lines = StayRouteStrip._wrap(c, it, "Lato", 7.2, cw - 12 * mm, max_lines=2)
-            c.setFillColor(col); c.circle(x + 5.6 * mm, ty + 0.9 * mm, 0.8 * mm, fill=1, stroke=0)
-            c.setFillColor(GRAY_600)
+            lines = simpleSplit(it, "Lato", self.FS, self.tw)[:2]
+            c.setFillColor(tint); c.circle(x + 6.4 * mm, y + 1.0 * mm, 2.0 * mm, fill=1, stroke=0)
+            _check_tick(c, x + 6.4 * mm, y + 1.0 * mm, 0.95 * mm, ring)
+            c.setFillColor(GRAY_600); c.setFont("Lato", self.FS)
             for ln in lines:
-                c.setFont("Lato", 7.2); c.drawString(x + 8 * mm, ty, ln); ty -= 3.2 * mm
-            ty -= 1.5 * mm
+                c.drawString(x + 11.4 * mm, y, ln); y -= self.LEAD
+            y -= 1.9 * mm
 
     def draw(self):
         if self._skip:
             return
         c, w, h = self.canv, self.width, self.height
-        bar_h = 8 * mm
+        bar_h = self.BAR_H
         c.setFillColor(NAVY_DEEP); c.roundRect(0, h - bar_h, w, bar_h, 2 * mm, fill=1, stroke=0)
         c.setFillColor(SKY);       c.roundRect(0, h - bar_h, 3 * mm, bar_h, 1.2 * mm, fill=1, stroke=0)
         c.setFillColor(WHITE);     c.setFont("Lato-Bold", 9.5)
         c.drawString(7 * mm, h - bar_h + 2.7 * mm, "BEFORE YOU TRAVEL")
-        gap = 4 * mm
-        cw = (w - gap) / 2
-        ch = h - bar_h - 4 * mm
-        self._card(c, 0, 0, cw, ch, "GOOD TO KNOW", self.GOOD, SKY, SKY_LIGHT)
-        self._card(c, cw + gap, 0, cw, ch, "PACK SMART", self.PACK, TEAL, TEAL_LITE)
+
+        hb, pad = self.book_h, self.PAD
+        c.saveState(); c.translate(0, self.RIB)
+        cx = w / 2
+        rw, rx = 4.6 * mm, cx - 2.3 * mm                             # ribbon hanging from the fold
+        c.setFillColor(_BOOK_RIBBON)
+        p = c.beginPath(); p.moveTo(rx, 1.2 * mm); p.lineTo(rx, -self.RIB + 0.2 * mm); p.lineTo(rx + rw / 2, -self.RIB + 1.7 * mm)
+        p.lineTo(rx + rw, -self.RIB + 0.2 * mm); p.lineTo(rx + rw, 1.2 * mm); p.close(); c.drawPath(p, fill=1, stroke=0)
+        c.setFillColor(_BOOK_COVER); c.roundRect(0, 0, w, hb, 2.6 * mm, fill=1, stroke=0)
+        c.setFillColor(colors.HexColor("#e7e2d6")); c.roundRect(pad, pad * 0.5, w - 2 * pad, hb - pad * 1.5, 1.4 * mm, fill=1, stroke=0)
+        py0, ph = pad + 0.7 * mm, hb - 2 * pad - 0.7 * mm
+        pw = (w - 2 * pad) / 2
+        c.setFillColor(_BOOK_PAGE)
+        c.roundRect(pad, py0, pw, ph, 1.2 * mm, fill=1, stroke=0); c.roundRect(cx, py0, pw, ph, 1.2 * mm, fill=1, stroke=0)
+        c.rect(cx - 2 * mm, py0, 4 * mm, ph, fill=1, stroke=0)
+        self._page(c, pad, pw, hb, "Good to know", "Before you land", self.GOOD, SKY, SKY_LIGHT, "info")
+        self._page(c, cx, pw, hb, "Pack smart", "What to bring", self.PACK, TEAL, TEAL_LITE, "bag")
+        _book_fold(c, cx, py0, py0 + ph)
+        c.restoreState()
 
 
 # Nearest hospitals per destination: (hospital, phone). Phone is optional: fill in once verified.
@@ -4686,10 +4942,12 @@ def generate_pdf(itinerary_data: dict) -> str:
         ref=_quote_ref(client_name), route=_route_text(itinerary_data.get("timeline", []), start_point, end_point)
     ))
     story.append(Spacer(1, 3*mm))
-    story.append(Paragraph(clean(_trip_story(itinerary_data.get("timeline", []))),
-                           ParagraphStyle("story", fontName="Lato-Italic", fontSize=10.5, leading=13,
-                                          textColor=NAVY, alignment=TA_CENTER)))
-    story.append(Spacer(1, 3*mm))
+    _tagline = Paragraph(clean(_trip_story(itinerary_data.get("timeline", []))),
+                         ParagraphStyle("story", fontName="Lato-Italic", fontSize=10.5, leading=13,
+                                        textColor=NAVY, alignment=TA_CENTER))
+    _tagline_gap = Spacer(1, 3*mm)
+    story.append(_tagline)
+    story.append(_tagline_gap)
 
     # Decision block: price per person, WhatsApp confirm, what is included, our promise
     _total_now   = _amount_int(custom_cost)
@@ -4764,7 +5022,14 @@ def generate_pdf(itinerary_data: dict) -> str:
                 f.gap = 2 * mm; f._recalc()
             elif isinstance(f, TripSummary):
                 f.compact = True; f._recalc()
-    if _p1_used() > _p1_room:                             # 3) last resort: drop the proof strip
+    if _p1_used() > _p1_room:                             # 3) drop the italic tagline (the proof strip matters more)
+        story.remove(_tagline); story.remove(_tagline_gap)
+    if _p1_used() > _p1_room:                             # 4) slimmer proof strip + tighter gaps
+        _trust.height = 18 * mm
+        for f in story:
+            if isinstance(f, Spacer):
+                f.height = min(f.height, 1.5 * mm)
+    if _p1_used() > _p1_room:                             # 5) truly last resort: drop the proof strip
         story.remove(_trust)
         while story and isinstance(story[-1], Spacer):
             story.pop()
@@ -5068,7 +5333,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         if _segs:
             story.append(KeepTogether([StayRouteStrip(usable_w, start_point, end_point, _segs), Spacer(1, 5*mm)]))
             # Only for compact itineraries, so the page never overflows.
-            _exp = SignatureExperiences(usable_w, _segs)
+            _exp = SignatureExperiences(usable_w, _segs, extras=_extras, photos=dest_bgs)
             if _exp.items and len(timeline) <= 6 and len(_segs) <= 4:
                 story.append(KeepTogether([_exp, Spacer(1, 4*mm)]))
     story.append(TravelEssentials(usable_w))   # only drawn when it fits in the leftover space
