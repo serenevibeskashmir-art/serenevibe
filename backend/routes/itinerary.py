@@ -3,7 +3,8 @@ import os
 from flask import Blueprint, jsonify, request, send_file
 
 from backend.auth import admin_required
-from backend.services.pdf_service import generate_pdf
+from backend.services.pdf_service import generate_pdf, _quote_ref
+from backend.services.sheet_log import log_quote
 
 itinerary_bp = Blueprint("itinerary", __name__)
 
@@ -263,6 +264,9 @@ def generate_custom_itinerary():
     except Exception as pdf_error:
         print(f"PDF Generation Failed: {pdf_error}")
         return jsonify({"error": f"Failed to build file structure: {pdf_error}"}), 500
+
+    # Record the quote in the Google Sheet (no-op unless GOOGLE_SHEET_WEBHOOK_URL is set; never blocks the PDF).
+    log_quote(client_name, _quote_ref(client_name), calculated_cost, data.get("start_date", "Flexible"))
 
     # On serverless hosting a second request may land on a different instance that
     # doesn't have the file, so the admin asks for the PDF in this same response.
