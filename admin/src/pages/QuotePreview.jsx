@@ -809,6 +809,8 @@ export default function QuotePreview({ quote, trip }) {
   const [endPoint,        setEndPoint]        = useState(quote?.meta_summary?.end_point   || DEFAULT_POINT);
 
   const [vehicleType, setVehicleType] = useState(quote?.meta_summary?.vehicle_type || quote?.vehicle_type || "Sedan");
+  const [includedExtras, setIncludedExtras] = useState(quote?.included_extras || []);   // union cab / gondola phases counted in the package
+  const toggleExtra = (k) => setIncludedExtras((a) => (a.includes(k) ? a.filter((x) => x !== k) : [...a, k]));
   const [mealPlan, setMealPlan] = useState(quote?.meta_summary?.meal_plan || "MAP");   // default MAP
   // Vehicle and meal plan are set in the trip form at the top; changing them there updates this quote.
   useEffect(() => { if (trip?.vehicle) setVehicleType(trip.vehicle); }, [trip?.vehicle]);
@@ -1059,7 +1061,7 @@ export default function QuotePreview({ quote, trip }) {
   const draftKey = "qp-draft:" + (quote?.meta_summary?.client_name || "client");
   const saveDraft = (snap) => {
     try {
-      localStorage.setItem(draftKey, JSON.stringify({ ...snap, startPoint, endPoint, editableCost, showPerPerson, vehicleType, mealPlan, at: Date.now() }));
+      localStorage.setItem(draftKey, JSON.stringify({ ...snap, startPoint, endPoint, editableCost, showPerPerson, includedExtras, vehicleType, mealPlan, at: Date.now() }));
     } catch (e) { /* storage unavailable: undo still works */ }
   };
   useEffect(() => {
@@ -1126,6 +1128,7 @@ export default function QuotePreview({ quote, trip }) {
     if (d.endPoint) setEndPoint(d.endPoint);
     if (d.editableCost) setEditableCost(d.editableCost);
     if (typeof d.showPerPerson === "boolean") setShowPerPerson(d.showPerPerson);
+    if (Array.isArray(d.includedExtras)) setIncludedExtras(d.includedExtras);
     if (d.vehicleType) setVehicleType(d.vehicleType);
     if (d.mealPlan) setMealPlan(d.mealPlan);
     setActiveDay(0); setPickDraft({}); setDraftOffer(null);
@@ -1156,6 +1159,7 @@ export default function QuotePreview({ quote, trip }) {
                     trip_pace: quote?.meta_summary?.trip_pace || "Moderate",
                     custom_cost: editableCost,
                     show_per_person: showPerPerson,
+                    included_extras: includedExtras,
                     vehicle_type: vehicleType,
                     meal_plan: mealPlan,
                     return_pdf: true,
@@ -1974,6 +1978,15 @@ export default function QuotePreview({ quote, trip }) {
               />
               Show price per person on PDF
             </label>
+            <div style={{ marginTop: 8, fontSize: "0.85rem" }}>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Included in package (otherwise listed as exclusions):</div>
+              {[["union_cab", "Union cab (Pahalgam ABC / snow chain)"], ["gondola_p1", "Gondola Phase 1"], ["gondola_p2", "Gondola Phase 2"]].map(([k, lab]) => (
+                <label key={k} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", marginTop: 3 }}>
+                  <input type="checkbox" checked={includedExtras.includes(k)} onChange={() => toggleExtra(k)} />
+                  {lab}
+                </label>
+              ))}
+            </div>
           </div>
 
           <button
