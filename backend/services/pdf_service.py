@@ -1868,7 +1868,11 @@ class SignatureExperiences(Flowable):
                     both = {"gondola_p1", "gondola_p2"} <= ex
                     tag = "Gondola included" if both else ("Phase 1 included" if "gondola_p1" in ex else "Phase 2 included")
                     included = True
-                elif key in ("pahalgam", "doodhpathri") and "union_cab" in ex:
+                elif key == "pahalgam" and "union_cab_pahalgam" in ex:
+                    tag, included = "Union cab included", True
+                elif key == "gulmarg" and "union_cab_gulmarg" in ex:
+                    tag, included = "Union cab included", True
+                elif key == "doodhpathri" and "union_cab_other" in ex:
                     tag, included = "Union cab included", True
                 elif tag == "1 hour complimentary":
                     included = True
@@ -4211,16 +4215,48 @@ DAY_MIN_START = 82 * mm   # room a day needs before it may start on the current 
 _P1_SLACK = 3 * mm      # safety margin so page 1 never spills onto page 2
 
 
-_EXTRA_LABELS = {
-    "union_cab":  "Union cabs (Pahalgam ABC & snow-chain vehicle)",
-    "gondola_p1": "Gondola Phase 1",
-    "gondola_p2": "Gondola Phase 2",
-}
+# Optional items the admin can switch into the package. Keys are stored in included_extras.
+UNION_CAB_PLACES = (
+    ("union_cab_pahalgam", "Pahalgam"),
+    ("union_cab_gulmarg", "Gulmarg"),
+    ("union_cab_other", "others"),
+)
+COUPLE_EXTRAS = (
+    ("couple_cake", "Cake Cutting Celebration"),
+    ("couple_bed", "Bed decoration"),
+    ("couple_candle", "Candle light dinner"),
+)
+_GONDOLA_LABELS = {"gondola_p1": "Gondola Phase 1", "gondola_p2": "Gondola Phase 2"}
+EXTRA_KEYS = tuple(k for k, _ in UNION_CAB_PLACES) + tuple(_GONDOLA_LABELS) + tuple(k for k, _ in COUPLE_EXTRAS)
+
+
+def normalize_extras(value):
+    """Known extra keys only, in a fixed order. The old single 'union_cab' key meant Pahalgam and Gulmarg."""
+    if not isinstance(value, (list, tuple, set)):
+        return []
+    ex = {str(v) for v in value}
+    if "union_cab" in ex:
+        ex |= {"union_cab_pahalgam", "union_cab_gulmarg"}
+    return [k for k in EXTRA_KEYS if k in ex]
+
+
+def _join_places(names):
+    names = list(names)
+    if len(names) <= 1:
+        return "".join(names)
+    return ", ".join(names[:-1]) + " & " + names[-1]
 
 
 def _extras_list(itinerary_data):
-    ex = itinerary_data.get("included_extras") or []
-    return [k for k in ("union_cab", "gondola_p1", "gondola_p2") if k in ex]
+    """Ticked extras that apply to this quote. Couple items only count for a couple (exactly 2 adults)."""
+    ex = normalize_extras(itinerary_data.get("included_extras") or [])
+    try:
+        adults = int(itinerary_data.get("adults", 2))
+    except (TypeError, ValueError):
+        adults = 2
+    couple_on = bool(itinerary_data.get("couple")) and adults == 2
+    keep = set(EXTRA_KEYS) - ({k for k, _ in COUPLE_EXTRAS} if not couple_on else set())
+    return [k for k in ex if k in keep]
 
 
 class BackdropGroup(Flowable):
@@ -5715,8 +5751,9 @@ def generate_pdf(itinerary_data: dict) -> str:
         ("Shikara ride", "1 hour, on us"),
         ("All taxes", "toll, fuel, parking"),
     ]
-    if "union_cab" in _extras:
-        _tiles.append(("Union cab", "Pahalgam & snow chain", "cab"))
+    _union_on = [name for key, name in UNION_CAB_PLACES if key in _extras]
+    if _union_on:
+        _tiles.append(("Union cab", _join_places(_union_on), "cab"))
     for _k, _ph in (("gondola_p1", "Phase 1"), ("gondola_p2", "Phase 2")):
         if _k in _extras:
             _tiles.append(("Gondola", _ph, "gondola"))
@@ -6092,14 +6129,20 @@ def generate_pdf(itinerary_data: dict) -> str:
         "Sightseeing tours as per the itinerary by individual car",
         "Stay at the hotels mentioned in the itinerary or similar",
         _MEAL_INCLUSION.get(str(itinerary_data.get("meal_plan") or "MAP").strip().upper(), _MEAL_INCLUSION["MAP"]),
-        "Celebration Cake",
         _sharing_text(adults),
         "01 Hour complimentary Shikara ride",
         "Toll taxes, fuel charges, parking fees and driver's allowance",
     ]
     _extras = _extras_list(itinerary_data)
-    for _k in _extras:
-        inc_items.append(_EXTRA_LABELS[_k])
+    _union_on = [name for key, name in UNION_CAB_PLACES if key in _extras]
+    if _union_on:
+        inc_items.append("Union cabs for " + _join_places(_union_on))
+    for _k, _label in COUPLE_EXTRAS:
+        if _k in _extras:
+            inc_items.append(_label)
+    for _k in ("gondola_p1", "gondola_p2"):
+        if _k in _extras:
+            inc_items.append(_GONDOLA_LABELS[_k])
     _gondola_inc = [k for k in _extras if k.startswith("gondola")]
     _act = "Activities: River Rafting, Paragliding and Skiing"
     if len(_gondola_inc) == 2:
@@ -6116,8 +6159,9 @@ def generate_pdf(itinerary_data: dict) -> str:
         _act,
         "All personal expenses such as tips, laundry, telephone bills, beverages and camera fees",
     ]
-    if "union_cab" not in _extras:
-        exc_items.append("Union cabs for ABC Pahalgam and snow chain vehicle if required for Gulmarg")
+    _union_off = [name for key, name in UNION_CAB_PLACES if key not in _extras]
+    if _union_off:
+        exc_items.append("Union cabs for " + _join_places(_union_off) + " if required")
     exc_items.append("Any claim due to road blocks, curfews, accidents etc.")
 
     # Calculate payment milestones dynamically (25% / 25% / 50% split per policy)
