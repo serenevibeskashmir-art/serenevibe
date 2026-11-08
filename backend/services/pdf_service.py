@@ -1995,9 +1995,10 @@ class TravelEssentials(Flowable):
     PAD, RIB, BAR_H = 1.5 * mm, 4.0 * mm, 8 * mm
     FS, LEAD = 7.2, 3.2 * mm
 
-    def __init__(self, width):
+    def __init__(self, width, show_bar=True):
         super().__init__()
         self.width = width
+        self.show_bar = show_bar
         self.tw = (width - 2 * self.PAD) / 2 - 15.5 * mm          # bullet text width
         def need(items):
             tot = 13.5 * mm + 4 * mm
@@ -2005,7 +2006,7 @@ class TravelEssentials(Flowable):
                 tot += min(len(simpleSplit(it, "Lato", self.FS, self.tw)), 2) * self.LEAD + 1.9 * mm
             return tot
         self.book_h = max(need(self.GOOD), need(self.PACK), 56 * mm)
-        self.height = self.BAR_H + 4 * mm + self.book_h + self.RIB
+        self.height = (self.BAR_H + 4 * mm if show_bar else 0) + self.book_h + self.RIB
         self._skip = False
 
     def wrap(self, aw, ah):
@@ -2044,10 +2045,11 @@ class TravelEssentials(Flowable):
             return
         c, w, h = self.canv, self.width, self.height
         bar_h = self.BAR_H
-        c.setFillColor(NAVY_DEEP); c.roundRect(0, h - bar_h, w, bar_h, 2 * mm, fill=1, stroke=0)
-        c.setFillColor(SKY);       c.roundRect(0, h - bar_h, 3 * mm, bar_h, 1.2 * mm, fill=1, stroke=0)
-        c.setFillColor(WHITE);     c.setFont("Lato-Bold", 9.5)
-        c.drawString(7 * mm, h - bar_h + 2.7 * mm, "BEFORE YOU TRAVEL")
+        if self.show_bar:
+            c.setFillColor(NAVY_DEEP); c.roundRect(0, h - bar_h, w, bar_h, 2 * mm, fill=1, stroke=0)
+            c.setFillColor(SKY);       c.roundRect(0, h - bar_h, 3 * mm, bar_h, 1.2 * mm, fill=1, stroke=0)
+            c.setFillColor(WHITE);     c.setFont("Lato-Bold", 9.5)
+            c.drawString(7 * mm, h - bar_h + 2.7 * mm, "BEFORE YOU TRAVEL")
 
         hb, pad = self.book_h, self.PAD
         c.saveState(); c.translate(0, self.RIB)
@@ -5046,6 +5048,520 @@ class PaymentPlan(Flowable):
 
 
 
+def _fit_font(c, text, font, size, max_w, min_size=6.2):
+    while size > min_size and c.stringWidth(text, font, size) > max_w:
+        size -= 0.2
+    return size
+
+
+class CancellationLadder(Flowable):
+    """Refund schedule as four step cards (green to red) plus a force-majeure strip.
+    tiers: [(when, charge, refund_pct_int, refund_text, processing)]"""
+    GAP = 3 * mm
+    TONES = [(EMERALD, EMERALD_LITE), (colors.HexColor("#65a30d"), colors.HexColor("#ecfccb")),
+             (GOLD_MID, GOLD_LITE), (ROSE, colors.HexColor("#ffe4e6"))]
+
+    def __init__(self, width, tiers, note_title, note_text, compact=False):
+        super().__init__()
+        self.width, self.tiers = width, tiers
+        self.note_title, self.note_text = _raw(note_title), _raw(note_text)
+        self.compact = compact
+        self._recalc()
+
+    def _recalc(self):
+        self.cw = (self.width - 3 * self.GAP) / 4
+        self.card_h = 38 * mm if self.compact else 42 * mm
+        self.strip_h = 10 * mm
+        self.height = self.card_h + 3 * mm + self.strip_h
+
+    def wrap(self, aw, ah):
+        return (self.width, self.height)
+
+    def draw(self):
+        c, ch, cw = self.canv, self.card_h, self.cw
+        y0 = self.strip_h + 3 * mm
+        c.saveState(); c.translate(0, y0)
+        for i, (when, charge, pct, rtxt, proc) in enumerate(self.tiers[:4]):
+            x = i * (cw + self.GAP)
+            ring, tint = self.TONES[i]
+            c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+            c.roundRect(x, 0, cw, ch, 2 * mm, fill=1, stroke=1)
+            c.setFillColor(ring); c.roundRect(x, ch - 1.4 * mm, cw, 1.4 * mm, 0.7 * mm, fill=1, stroke=0)
+            tw = cw - 8 * mm
+            c.setFillColor(GRAY_400); c.setFont("Lato-Bold", 6.2); c.drawString(x + 4 * mm, ch - 6 * mm, "IF YOU CANCEL")
+            c.setFillColor(NAVY); c.setFont("Lato-Bold", 8.2)
+            y = ch - 10.2 * mm
+            for ln in simpleSplit(_raw(when), "Lato-Bold", 8.2, tw)[:2]:
+                c.drawString(x + 4 * mm, y, ln); y -= 3.5 * mm
+            c.setStrokeColor(GRAY_200); c.setLineWidth(0.4)
+            c.line(x + 4 * mm, ch - 17.2 * mm, x + cw - 4 * mm, ch - 17.2 * mm)
+            c.setFillColor(ring); c.setFont("Lato-Bold", 17); c.drawString(x + 4 * mm, ch - 24.6 * mm, rtxt)
+            rw = c.stringWidth(rtxt, "Lato-Bold", 17)
+            c.setFillColor(GRAY_400); c.setFont("Lato-Bold", 6.2); c.drawString(x + 4 * mm + rw + 1.6 * mm, ch - 24.6 * mm, "REFUND")
+            c.setFillColor(tint); c.roundRect(x + 4 * mm, ch - 28.6 * mm, tw, 1.8 * mm, 0.9 * mm, fill=1, stroke=0)
+            if pct > 0:
+                c.setFillColor(ring); c.roundRect(x + 4 * mm, ch - 28.6 * mm, max(tw * pct / 100.0, 1.8 * mm), 1.8 * mm, 0.9 * mm, fill=1, stroke=0)
+            c.setFillColor(GRAY_600); c.setFont("Lato", 7)
+            y = ch - 32.4 * mm
+            for ln in simpleSplit(_raw(charge), "Lato", 7, tw)[:2]:
+                c.drawString(x + 4 * mm, y, ln); y -= 3.1 * mm
+            c.setFillColor(GRAY_400); c.setFont("Lato-Italic", 6.4)
+            c.drawString(x + 4 * mm, 3 * mm, _raw(proc))
+        c.restoreState()
+        sh = self.strip_h
+        c.setFillColor(GRAY_50); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+        c.roundRect(0, 0, self.width, sh, 2 * mm, fill=1, stroke=1)
+        c.setFillColor(SKY); c.roundRect(0, 0, 1.4 * mm, sh, 0.7 * mm, fill=1, stroke=0)
+        mx, my = 8 * mm, sh / 2                                     # shield medallion
+        c.setFillColor(WHITE); c.setStrokeColor(SKY); c.setLineWidth(1.2); c.circle(mx, my, 3.4 * mm, fill=1, stroke=1)
+        c.setFillColor(SKY_LIGHT); c.circle(mx, my, 2.6 * mm, fill=1, stroke=0)
+        c.setStrokeColor(SKY); c.setLineWidth(0.9); c.setLineJoin(1)
+        pth = c.beginPath(); pth.moveTo(mx, my + 1.7 * mm); pth.lineTo(mx + 1.5 * mm, my + 1.0 * mm); pth.lineTo(mx + 1.3 * mm, my - 0.6 * mm)
+        pth.lineTo(mx, my - 1.8 * mm); pth.lineTo(mx - 1.3 * mm, my - 0.6 * mm); pth.lineTo(mx - 1.5 * mm, my + 1.0 * mm); pth.close()
+        c.drawPath(pth, fill=0, stroke=1)
+        c.setFillColor(NAVY); c.setFont("Lato-Bold", 8); c.drawString(14 * mm, my + 0.6 * mm, self.note_title)
+        c.setFillColor(GRAY_600); c.setFont("Lato", 7); c.drawString(14 * mm, my - 2.9 * mm, self.note_text)
+
+
+def _note_icon(c, kind, cx, cy, col):
+    c.setStrokeColor(col); c.setFillColor(col); c.setLineWidth(0.9); c.setLineCap(1); c.setLineJoin(1)
+    if kind == "id":
+        c.roundRect(cx - 2.3 * mm, cy - 1.6 * mm, 4.6 * mm, 3.2 * mm, 0.5 * mm, fill=0, stroke=1)
+        c.circle(cx - 0.9 * mm, cy + 0.3 * mm, 0.55 * mm, fill=1, stroke=0)
+        c.line(cx + 0.4 * mm, cy + 0.5 * mm, cx + 1.7 * mm, cy + 0.5 * mm); c.line(cx + 0.4 * mm, cy - 0.6 * mm, cx + 1.7 * mm, cy - 0.6 * mm)
+    elif kind == "shield":
+        pth = c.beginPath(); pth.moveTo(cx, cy + 2.2 * mm); pth.lineTo(cx + 2 * mm, cy + 1.3 * mm); pth.lineTo(cx + 1.7 * mm, cy - 0.8 * mm)
+        pth.lineTo(cx, cy - 2.3 * mm); pth.lineTo(cx - 1.7 * mm, cy - 0.8 * mm); pth.lineTo(cx - 2 * mm, cy + 1.3 * mm); pth.close()
+        c.drawPath(pth, fill=0, stroke=1); _check_tick(c, cx, cy, 0.9 * mm, col)
+    elif kind == "health":
+        c.line(cx, cy - 2 * mm, cx, cy + 2 * mm); c.line(cx - 2 * mm, cy, cx + 2 * mm, cy)
+    elif kind == "weather":
+        c.circle(cx - 1.0 * mm, cy - 0.4 * mm, 1.1 * mm, fill=0, stroke=1); c.circle(cx + 0.7 * mm, cy + 0.3 * mm, 1.4 * mm, fill=0, stroke=1)
+        c.line(cx - 1.0 * mm, cy - 1.5 * mm, cx + 1.9 * mm, cy - 1.5 * mm)
+    elif kind == "signal":
+        for k, hh in enumerate((1.0, 2.0, 3.0)):
+            c.line(cx - 1.8 * mm + k * 1.8 * mm, cy - 1.5 * mm, cx - 1.8 * mm + k * 1.8 * mm, cy - 1.5 * mm + hh * mm)
+    else:                                                           # camera
+        c.roundRect(cx - 2.3 * mm, cy - 1.5 * mm, 4.6 * mm, 3.0 * mm, 0.6 * mm, fill=0, stroke=1)
+        c.circle(cx, cy, 0.9 * mm, fill=0, stroke=1)
+
+
+class TravelNotesGrid(Flowable):
+    """Important travel notes: six note cards in two columns, each with a medallion icon."""
+    GAP = 3 * mm
+    KINDS = ["id", "shield", "health", "weather", "signal", "camera"]
+    RINGS = [(SKY, SKY_LIGHT), (TEAL, TEAL_LITE), (ROSE, colors.HexColor("#ffe4e6")),
+             (GOLD_MID, GOLD_LITE), (SKY, SKY_LIGHT), (TEAL, TEAL_LITE)]
+
+    def __init__(self, width, notes, compact=False):
+        super().__init__()
+        self.width = width
+        self.notes = [(_raw(h), _raw(b)) for h, b in notes]
+        self.compact = compact
+        self._recalc()
+
+    def _recalc(self):
+        self.fs = 7.0 if self.compact else 7.5
+        self.lead = 3.0 * mm if self.compact else 3.3 * mm
+        self.cw = (self.width - self.GAP) / 2
+        self.tw = self.cw - 13 * mm - 4 * mm
+        n = len(self.notes)
+        self.rows = (n + 1) // 2
+        self.row_h = []
+        for r in range(self.rows):
+            hs = []
+            for k in (2 * r, 2 * r + 1):
+                if k < n:
+                    lines = min(len(simpleSplit(self.notes[k][1], "Lato", self.fs, self.tw)), 6)
+                    hs.append(5.6 * mm + lines * self.lead + 3.4 * mm)
+            self.row_h.append(max(hs))
+        self.height = sum(self.row_h) + (self.rows - 1) * self.GAP
+
+    def wrap(self, aw, ah):
+        return (self.width, self.height)
+
+    def draw(self):
+        c = self.canv
+        y_top = self.height
+        for r in range(self.rows):
+            rh = self.row_h[r]
+            for col in (0, 1):
+                k = 2 * r + col
+                if k >= len(self.notes):
+                    continue
+                head, body = self.notes[k]
+                x = col * (self.cw + self.GAP)
+                ring, tint = self.RINGS[k % 6]
+                c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+                c.roundRect(x, y_top - rh, self.cw, rh, 2 * mm, fill=1, stroke=1)
+                c.setFillColor(ring); c.roundRect(x, y_top - rh, 1.4 * mm, rh, 0.7 * mm, fill=1, stroke=0)
+                mx, my = x + 8.6 * mm, y_top - 6.6 * mm
+                c.setFillColor(WHITE); c.setStrokeColor(ring); c.setLineWidth(1.4); c.circle(mx, my, 4.0 * mm, fill=1, stroke=1)
+                c.setFillColor(tint); c.circle(mx, my, 3.1 * mm, fill=1, stroke=0)
+                _note_icon(c, self.KINDS[k % 6], mx, my, ring)
+                c.setFillColor(NAVY); c.setFont("Lato-Bold", 8.2)
+                c.drawString(x + 14 * mm, y_top - 5.4 * mm, head)
+                c.setFillColor(GRAY_600); c.setFont("Lato", self.fs)
+                y = y_top - 9.4 * mm
+                for ln in simpleSplit(body, "Lato", self.fs, self.tw)[:6]:
+                    c.drawString(x + 14 * mm, y, ln); y -= self.lead
+            y_top -= rh + self.GAP
+
+
+class ContactCard(Flowable):
+    """'Get in touch' as a dark brand card (same family as the hero and section bars) with six contact tiles."""
+    def __init__(self, width, phones, email, website, hours, address, gst=""):
+        super().__init__()
+        self.width = width
+        self.phones, self.email, self.website, self.hours = phones, email, website, hours
+        self.address, self.gst = _raw(address), _raw(gst)
+        self.height = 48 * mm
+
+    def wrap(self, aw, ah):
+        return (self.width, self.height)
+
+    def _icon(self, c, kind, cx, cy):
+        c.setStrokeColor(SKY_MID); c.setFillColor(SKY_MID); c.setLineWidth(0.9); c.setLineCap(1); c.setLineJoin(1)
+        if kind == "phone":
+            c.roundRect(cx - 1.3 * mm, cy - 2.1 * mm, 2.6 * mm, 4.2 * mm, 0.6 * mm, fill=0, stroke=1)
+            c.circle(cx, cy - 1.3 * mm, 0.28 * mm, fill=1, stroke=0)
+        elif kind == "mail":
+            c.roundRect(cx - 2.2 * mm, cy - 1.5 * mm, 4.4 * mm, 3.0 * mm, 0.5 * mm, fill=0, stroke=1)
+            c.line(cx - 2.2 * mm, cy + 1.5 * mm, cx, cy - 0.3 * mm); c.line(cx + 2.2 * mm, cy + 1.5 * mm, cx, cy - 0.3 * mm)
+        elif kind == "globe":
+            c.circle(cx, cy, 2.2 * mm, fill=0, stroke=1); c.ellipse(cx - 0.9 * mm, cy - 2.2 * mm, cx + 0.9 * mm, cy + 2.2 * mm, fill=0, stroke=1)
+            c.line(cx - 2.2 * mm, cy, cx + 2.2 * mm, cy)
+        elif kind == "clock":
+            c.circle(cx, cy, 2.2 * mm, fill=0, stroke=1); c.line(cx, cy, cx, cy + 1.3 * mm); c.line(cx, cy, cx + 1.0 * mm, cy - 0.5 * mm)
+        else:                                                       # pin
+            c.circle(cx, cy + 0.5 * mm, 1.5 * mm, fill=0, stroke=1); c.line(cx, cy - 0.9 * mm, cx, cy - 2.2 * mm)
+
+    def draw(self):
+        c, w, h = self.canv, self.width, self.height
+        c.setFillColor(NAVY_DEEP); c.roundRect(0, 0, w, h, 2.6 * mm, fill=1, stroke=0)
+        c.setFillColor(SKY); c.roundRect(0, 0, 3 * mm, h, 1.4 * mm, fill=1, stroke=0)
+        # brand block
+        bx = 9 * mm
+        c.setFillColor(WHITE); c.setFont("Lato-Bold", 14); c.drawString(bx, h - 13 * mm, "SERENE VIBES")
+        c.setFillColor(SKY_MID); c.setFont("Lato-Bold", 14); c.drawString(bx, h - 19 * mm, "KASHMIR")
+        c.setFillColor(GOLD_LITE); c.setFont("Lato-Italic", 8.2); c.drawString(bx, h - 25 * mm, "A Poem In Motion")
+        c.setFillColor(GRAY_400); c.setFont("Lato", 6.6)
+        c.drawString(bx, h - 31 * mm, "Your local team in Srinagar,")
+        c.drawString(bx, h - 34.2 * mm, "with you from pickup to drop.")
+        if self.gst:
+            c.setFillColor(GRAY_400); c.setFont("Lato-Bold", 6.6); c.drawString(bx, 5 * mm, "GST  " + self.gst)
+        divx = 56 * mm
+        c.setStrokeColor(SLATE); c.setLineWidth(0.5); c.line(divx, 5 * mm, divx, h - 5 * mm)
+        # tiles
+        gx = divx + 5 * mm
+        cw = (w - gx - 4 * mm) / 2
+        tiles = [
+            ("phone", "CALL / WHATSAPP", self.phones[0], "tel:" + re.sub(r"[^0-9+]", "", self.phones[0])),
+            ("phone", "ALTERNATE LINE", self.phones[1] if len(self.phones) > 1 else self.phones[0],
+             "tel:" + re.sub(r"[^0-9+]", "", self.phones[1] if len(self.phones) > 1 else self.phones[0])),
+            ("mail", "EMAIL", self.email, "mailto:" + self.email),
+            ("globe", "WEBSITE", self.website, "https://" + self.website),
+            ("clock", "OPERATING HOURS", self.hours, None),
+            ("pin", "OFFICE", self.address, None),
+        ]
+        rh = (h - 8 * mm) / 3
+        for i, (kind, lab, val, url) in enumerate(tiles):
+            col, row = i % 2, i // 2
+            x = gx + col * cw
+            ty = h - 4 * mm - row * rh
+            mx, my = x + 3.6 * mm, ty - rh / 2
+            c.setFillColor(SLATE); c.circle(mx, my, 3.6 * mm, fill=1, stroke=0)
+            self._icon(c, kind, mx, my)
+            tx, tw = x + 9 * mm, cw - 10 * mm
+            c.setFillColor(GRAY_400); c.setFont("Lato-Bold", 5.8); c.drawString(tx, my + 1.6 * mm, lab)
+            c.setFillColor(WHITE)
+            if kind == "pin" and c.stringWidth(val, "Lato", 7.4) > tw:
+                lines = simpleSplit(val, "Lato", 6.8, tw)[:2]
+                c.setFont("Lato", 6.8)
+                yy = my - 1.2 * mm
+                for ln in lines:
+                    c.drawString(tx, yy, ln); yy -= 2.9 * mm
+            else:
+                fs = _fit_font(c, val, "Lato-Bold", 7.6, tw)
+                c.setFont("Lato-Bold", fs); c.drawString(tx, my - 2.0 * mm, val)
+                if url:
+                    c.linkURL(url, (tx, my - 3.2 * mm, tx + min(c.stringWidth(val, "Lato-Bold", fs), tw), my - 0.4 * mm), relative=1)
+
+
+
+class TermsGrid(Flowable):
+    """Terms & conditions as numbered cards in two balanced columns (same card family as the other pages)."""
+    GAP = 3 * mm
+
+    def __init__(self, width, items, compact=False):
+        super().__init__()
+        self.width = width
+        self.items = [(_raw(h), _raw(b)) for h, b in items]
+        self.compact = compact
+        self._recalc()
+
+    def _recalc(self):
+        self.fs = 6.9 if self.compact else 7.3
+        self.lead = 2.95 * mm if self.compact else 3.2 * mm
+        self.cw = (self.width - self.GAP) / 2
+        self.tw = self.cw - 14 * mm - 4 * mm
+        self.hs, self.ls = [], []
+        for h, b in self.items:
+            lines = simpleSplit(b, "Lato", self.fs, self.tw)
+            self.ls.append(lines)
+            self.hs.append(5.6 * mm + len(lines) * self.lead + 3.2 * mm)
+        best = None
+        for k in range(1, len(self.items)):                       # split that makes the two columns most even
+            lh = sum(self.hs[:k]) + (k - 1) * self.GAP
+            rh = sum(self.hs[k:]) + (len(self.hs) - k - 1) * self.GAP
+            if best is None or max(lh, rh) < best[0]:
+                best = (max(lh, rh), k)
+        self.split = best[1] if best else len(self.items)
+        self.height = best[0] if best else 0
+
+    def wrap(self, aw, ah):
+        return (self.width, self.height)
+
+    def draw(self):
+        c = self.canv
+        for col, (lo, hi) in enumerate(((0, self.split), (self.split, len(self.items)))):
+            x = col * (self.cw + self.GAP)
+            y_top = self.height
+            for k in range(lo, hi):
+                head, _ = self.items[k]
+                h = self.hs[k]
+                c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+                c.roundRect(x, y_top - h, self.cw, h, 2 * mm, fill=1, stroke=1)
+                c.setFillColor(SKY); c.roundRect(x, y_top - h, 1.4 * mm, h, 0.7 * mm, fill=1, stroke=0)
+                mx, my = x + 8.2 * mm, y_top - 5.2 * mm
+                c.setFillColor(NAVY_DEEP); c.circle(mx, my, 3.1 * mm, fill=1, stroke=0)
+                c.setFillColor(WHITE); c.setFont("Lato-Bold", 7.6); c.drawCentredString(mx, my - 1.0 * mm, str(k + 1))
+                c.setFillColor(NAVY); c.setFont("Lato-Bold", 8.3); c.drawString(x + 14 * mm, my - 0.9 * mm, head)
+                c.setFillColor(GRAY_600); c.setFont("Lato", self.fs)
+                y = y_top - 10 * mm
+                for ln in self.ls[k]:
+                    c.drawString(x + 14 * mm, y, ln); y -= self.lead
+                y_top -= h + self.GAP
+
+
+class GeneralTermsCard(Flowable):
+    """General terms: one card, bullets in two columns."""
+    def __init__(self, width, bullets, compact=False):
+        super().__init__()
+        self.width = width
+        self.bullets = [_raw(b) for b in bullets]
+        self.compact = compact
+        self._recalc()
+
+    def _recalc(self):
+        self.fs = 6.9 if self.compact else 7.3
+        self.lead = 2.95 * mm if self.compact else 3.2 * mm
+        self.cw = (self.width - 12 * mm) / 2
+        self.tw = self.cw - 5 * mm
+        n = len(self.bullets)
+        k = (n + 1) // 2
+        self.cols = [self.bullets[:k], self.bullets[k:]]
+        def hh(col):
+            return sum(len(simpleSplit(b, "Lato", self.fs, self.tw)) * self.lead + 1.8 * mm for b in col)
+        self.head_h = 11 * mm
+        self.height = self.head_h + max(hh(self.cols[0]), hh(self.cols[1])) + 2.4 * mm
+
+    def wrap(self, aw, ah):
+        return (self.width, self.height)
+
+    def draw(self):
+        c, w, h = self.canv, self.width, self.height
+        c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+        c.roundRect(0, 0, w, h, 2 * mm, fill=1, stroke=1)
+        c.setFillColor(TEAL); c.roundRect(0, 0, 1.4 * mm, h, 0.7 * mm, fill=1, stroke=0)
+        mx, my = 9 * mm, h - 5.8 * mm
+        c.setFillColor(WHITE); c.setStrokeColor(TEAL); c.setLineWidth(1.4); c.circle(mx, my, 3.6 * mm, fill=1, stroke=1)
+        c.setFillColor(TEAL_LITE); c.circle(mx, my, 2.8 * mm, fill=1, stroke=0)
+        _check_tick(c, mx, my, 1.1 * mm, TEAL)
+        c.setFillColor(NAVY); c.setFont("Lato-Bold", 9); c.drawString(15 * mm, my + 0.2 * mm, "General terms")
+        c.setFillColor(GRAY_400); c.setFont("Lato", 6.4); c.drawString(15 * mm, my - 3.0 * mm, "Good to know about your stay")
+        c.setStrokeColor(GRAY_200); c.setLineWidth(0.4); c.line(5 * mm, h - self.head_h + 0.6 * mm, w - 4 * mm, h - self.head_h + 0.6 * mm)
+        for ci, col in enumerate(self.cols):
+            x = 6 * mm + ci * (self.cw + 2 * mm)
+            y = h - self.head_h - 3.0 * mm
+            for b in col:
+                c.setFillColor(TEAL); c.circle(x + 1.0 * mm, y + 0.9 * mm, 0.7 * mm, fill=1, stroke=0)
+                c.setFillColor(GRAY_600); c.setFont("Lato", self.fs)
+                for ln in simpleSplit(b, "Lato", self.fs, self.tw):
+                    c.drawString(x + 4 * mm, y, ln); y -= self.lead
+                y -= 1.8 * mm
+
+
+
+class AgreementCard(Flowable):
+    """The acknowledgement text as a card: medallion heading, the wording, then quote reference and validity pills."""
+    def __init__(self, width, text, ref, valid):
+        super().__init__()
+        self.width, self.text, self.ref, self.valid = width, _raw(text), ref, valid
+        self.tw = width - 12 * mm
+        self.lines = simpleSplit(self.text, "Lato", 7.8, self.tw)
+        self.height = 14 * mm + len(self.lines) * 3.7 * mm + 12 * mm
+
+    def wrap(self, aw, ah):
+        return (self.width, self.height)
+
+    def draw(self):
+        c, w, h = self.canv, self.width, self.height
+        c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+        c.roundRect(0, 0, w, h, 2 * mm, fill=1, stroke=1)
+        c.setFillColor(SKY); c.roundRect(0, 0, 1.4 * mm, h, 0.7 * mm, fill=1, stroke=0)
+        mx, my = 9 * mm, h - 7 * mm
+        c.setFillColor(WHITE); c.setStrokeColor(SKY); c.setLineWidth(1.5); c.circle(mx, my, 4.0 * mm, fill=1, stroke=1)
+        c.setFillColor(SKY_LIGHT); c.circle(mx, my, 3.1 * mm, fill=1, stroke=0)
+        c.setStrokeColor(SKY); c.setLineWidth(0.9); c.setLineCap(1)                       # little pen
+        c.line(mx - 1.6 * mm, my - 1.6 * mm, mx + 1.4 * mm, my + 1.4 * mm); c.line(mx - 1.6 * mm, my - 1.6 * mm, mx - 1.6 * mm, my - 0.6 * mm)
+        c.line(mx - 1.6 * mm, my - 1.6 * mm, mx - 0.6 * mm, my - 1.6 * mm)
+        c.setFillColor(NAVY); c.setFont("Lato-Bold", 9.4); c.drawString(15 * mm, my + 0.6 * mm, "Your agreement")
+        c.setFillColor(GRAY_400); c.setFont("Lato", 6.6); c.drawString(15 * mm, my - 3.0 * mm, "Please read, sign and return a copy")
+        c.setStrokeColor(GRAY_200); c.setLineWidth(0.4); c.line(5 * mm, my - 5.6 * mm, w - 4 * mm, my - 5.6 * mm)
+        y = my - 10 * mm
+        c.setFillColor(GRAY_600); c.setFont("Lato", 7.8)
+        for ln in self.lines:
+            c.drawString(6 * mm, y, ln); y -= 3.7 * mm
+        x = 6 * mm
+        for lab, val, col, lite in (("QUOTE", self.ref, SKY, SKY_LIGHT), ("VALID UNTIL", self.valid, GOLD, GOLD_LITE)):
+            t = f"{lab}   {val}"
+            tw = c.stringWidth(t, "Lato-Bold", 7.2) + 6 * mm
+            c.setFillColor(lite); c.roundRect(x, 2.8 * mm, tw, 5 * mm, 2.5 * mm, fill=1, stroke=0)
+            c.setFillColor(col); c.setFont("Lato-Bold", 7.2); c.drawString(x + 3 * mm, 4.4 * mm, t)
+            x += tw + 3 * mm
+        c.setFillColor(GRAY_400); c.setFont("Lato-Italic", 6.6)
+        c.drawRightString(w - 4 * mm, 4.4 * mm, "Rates may change after this date (hotel availability, season).")
+
+
+class SignatureRow(Flowable):
+    """Three signing cards: client, date, and Serene Vibes (with the company stamp when auth_stamp.png exists)."""
+    GAP = 3 * mm
+
+    def __init__(self, width, client_name, stamp_path=None):
+        super().__init__()
+        self.width, self.client_name, self.stamp_path = width, _raw(client_name), stamp_path
+        self.height = 40 * mm
+        self._stamp = None
+        try:
+            if stamp_path:
+                self._stamp = ImageReader(stamp_path)
+        except Exception:
+            self._stamp = None
+
+    def wrap(self, aw, ah):
+        return (self.width, self.height)
+
+    def draw(self):
+        c, h = self.canv, self.height
+        cw = (self.width - 2 * self.GAP) / 3
+        specs = [("CLIENT", "Client name & signature", SKY), ("DATE", "Date of agreement", TEAL), ("FOR SERENE VIBES KASHMIR", "Authorised signatory", NAVY)]
+        for i, (cap, lab, col) in enumerate(specs):
+            x = i * (cw + self.GAP)
+            c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+            c.roundRect(x, 0, cw, h, 2 * mm, fill=1, stroke=1)
+            c.setFillColor(col); c.roundRect(x, h - 1.4 * mm, cw, 1.4 * mm, 0.7 * mm, fill=1, stroke=0)
+            c.setFillColor(GRAY_400); c.setFont("Lato-Bold", 6.2); c.drawString(x + 4 * mm, h - 6 * mm, cap)
+            line_y = 12 * mm
+            if i == 2:
+                if self._stamp:
+                    try:
+                        iw, ih = self._stamp.getSize()
+                        bw = min(cw - 12 * mm, 34 * mm); bh = bw * ih / iw
+                        if bh > 17 * mm:
+                            bh = 17 * mm; bw = bh * iw / ih
+                        c.drawImage(self._stamp, x + (cw - bw) / 2, line_y + 2 * mm, bw, bh, mask="auto")
+                    except Exception:
+                        pass
+                else:
+                    c.setFillColor(colors.HexColor("#163078")); c.setFont("Lato-Bold", 8.6)
+                    c.drawCentredString(x + cw / 2, line_y + 8 * mm, "SERENE VIBES KASHMIR")
+            elif i == 1:
+                c.setFillColor(GRAY_200); c.setFont("Lato", 9)
+                c.drawCentredString(x + cw / 2, line_y + 2.6 * mm, "DD  /  MM  /  YYYY")
+            else:
+                c.setFillColor(GRAY_200); c.setFont("Lato-Italic", 7)
+                c.drawString(x + 4 * mm, line_y + 14 * mm, "Sign here")
+            c.setStrokeColor(NAVY); c.setLineWidth(0.6); c.line(x + 4 * mm, line_y, x + cw - 4 * mm, line_y)
+            if i == 0:
+                c.setFillColor(NAVY); c.setFont("Lato-Bold", 8.4)
+                c.drawString(x + 4 * mm, line_y - 4.4 * mm, self.client_name[:34])
+                c.setFillColor(GRAY_600); c.setFont("Lato", 6.8); c.drawString(x + 4 * mm, line_y - 8.2 * mm, lab)
+            else:
+                c.setFillColor(GRAY_600); c.setFont("Lato-Bold", 7.4); c.drawCentredString(x + cw / 2, line_y - 4.4 * mm, lab)
+
+
+class NextStepCards(Flowable):
+    """'What happens next': three numbered step cards joined by arrows."""
+    GAP = 3 * mm
+
+    def __init__(self, width, steps):
+        super().__init__()
+        self.width, self.steps = width, steps
+        self.cw = (width - 2 * self.GAP) / 3
+        self.tw = self.cw - 8 * mm
+        self.ls = [simpleSplit(_raw(b), "Lato", 7.2, self.tw)[:3] for _, b in steps]
+        self.height = 14 * mm + max(len(l) for l in self.ls) * 3.2 * mm + 3 * mm
+
+    def wrap(self, aw, ah):
+        return (self.width, self.height)
+
+    def draw(self):
+        c, h = self.canv, self.height
+        palette = [SKY, TEAL, NAVY]
+        for i, ((head, _), lines) in enumerate(zip(self.steps, self.ls)):
+            x = i * (self.cw + self.GAP)
+            ring = palette[i]
+            c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
+            c.roundRect(x, 0, self.cw, h, 2 * mm, fill=1, stroke=1)
+            c.setFillColor(ring); c.roundRect(x, h - 1.4 * mm, self.cw, 1.4 * mm, 0.7 * mm, fill=1, stroke=0)
+            mx, my = x + 8 * mm, h - 8 * mm
+            c.setFillColor(WHITE); c.setStrokeColor(ring); c.setLineWidth(1.5); c.circle(mx, my, 4.0 * mm, fill=1, stroke=1)
+            c.setFillColor(ring); c.circle(mx, my, 3.1 * mm, fill=1, stroke=0)
+            c.setFillColor(WHITE); c.setFont("Lato-Bold", 9); c.drawCentredString(mx, my - 1.2 * mm, str(i + 1))
+            c.setFillColor(NAVY); c.setFont("Lato-Bold", 8.4); c.drawString(x + 14 * mm, my - 1.0 * mm, _raw(head))
+            c.setFillColor(GRAY_600); c.setFont("Lato", 7.2)
+            y = my - 7.4 * mm
+            for ln in lines:
+                c.drawString(x + 4 * mm, y, ln); y -= 3.2 * mm
+            if i < 2:
+                ax = x + self.cw + self.GAP / 2
+                c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5); c.circle(ax, h / 2, 2.0 * mm, fill=1, stroke=1)
+                c.setStrokeColor(GRAY_400); c.setLineWidth(0.8); c.setLineCap(1)
+                c.line(ax - 0.5 * mm, h / 2 + 0.9 * mm, ax + 0.5 * mm, h / 2); c.line(ax + 0.5 * mm, h / 2, ax - 0.5 * mm, h / 2 - 0.9 * mm)
+
+
+class HelpStrip(Flowable):
+    """Dark brand strip: 'Questions? Talk to us' with the call / WhatsApp / Instagram (/ Facebook) buttons."""
+    def __init__(self, width, client_name="", ref=""):
+        super().__init__()
+        self.width, self.height = width, 19 * mm
+        self.client_name, self.ref = client_name, ref
+
+    def wrap(self, aw, ah):
+        return (self.width, self.height)
+
+    def draw(self):
+        c, w, h = self.canv, self.width, self.height
+        c.setFillColor(NAVY_DEEP); c.roundRect(0, 0, w, h, 2.6 * mm, fill=1, stroke=0)
+        c.setFillColor(SKY); c.roundRect(0, 0, 3 * mm, h, 1.4 * mm, fill=1, stroke=0)
+        c.setFillColor(WHITE); c.setFont("Lato-Bold", 10); c.drawString(8 * mm, h / 2 + 1.2 * mm, "Questions? Talk to us")
+        c.setFillColor(GRAY_400); c.setFont("Lato", 7); c.drawString(8 * mm, h / 2 - 3.2 * mm, "Call or message us directly.")
+        bh, gap = 8 * mm, 3 * mm
+        btns = [
+            (20 * mm, lambda x, y, bw: _draw_call_button(c, x, y, bw, bh)),
+            (27 * mm, lambda x, y, bw: _draw_whatsapp_button(c, x, y, bw, bh, _whatsapp_url(self.client_name, self.ref), label="WhatsApp")),
+            (27 * mm, lambda x, y, bw: _draw_instagram_button(c, x, y, bw, bh, label="Instagram")),
+        ]
+        if FACEBOOK_URL:
+            btns.append((27 * mm, lambda x, y, bw: _draw_facebook_button(c, x, y, bw, bh, FACEBOOK_URL)))
+        x = w - 5 * mm - sum(b[0] for b in btns) - gap * (len(btns) - 1)
+        for bw, draw in btns:
+            draw(x, (h - bh) / 2, bw)
+            x += bw + gap
+
+
+
 def generate_pdf(itinerary_data: dict) -> str:
     import os as _os; _out = _os.environ.get("OUTPUT_DIR", "/tmp/output"); Path(_out).mkdir(exist_ok=True)
     client_name = str(itinerary_data.get("client_name", "Client"))
@@ -5571,25 +6087,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     story.append(CondPageBreak(doc.height - 14))   # the cancellation page starts fresh, never beside these three
 
     # ── 7–9. Cancellation Policy + Travel Notes + Contact Card ────────────────
-    # Rule 2: These three sections always live on ONE page together.
-    page_block_2 = []
-    page_block_2.append(SectionTitle(usable_w, "CANCELLATION POLICY", icon=""))
-    page_block_2.append(Spacer(1, 4*mm))
-
-    canc_header_st = ParagraphStyle("cnh", fontName="Lato-Bold",
-                                    fontSize=8.5, textColor=WHITE)
-    canc_body_st   = ParagraphStyle("cnb", fontName="Lato",
-                                    fontSize=8.5, textColor=BLACK, alignment=TA_CENTER)
-    canc_pct_st    = ParagraphStyle("cnp", fontName="Lato-Bold",
-                                    fontSize=9, textColor=ROSE, alignment=TA_CENTER)
-
-    canc_rows = [[
-        Paragraph("<b>Cancellation Timeline</b>",   canc_header_st),
-        Paragraph("<b>Cancellation Charge</b>",     canc_header_st),
-        Paragraph("<b>Refund %</b>",               canc_header_st),
-        Paragraph("<b>Processing Time</b>",         canc_header_st),
-    ]]
-
+    # Rule 2: these three sections ALWAYS share one page, in the same card look as the pages before.
     canc_data = [
         ("30 days or more before departure",  "Nil (Token forfeited)",          "70%",  "7–10 working days"),
         ("15–29 days before departure",       "25% of total tour cost",          "45%",  "7–10 working days"),
@@ -5597,46 +6095,14 @@ def generate_pdf(itinerary_data: dict) -> str:
         ("Less than 7 days / No Show",        "100% of total tour cost",         "Nil",  "Not applicable"),
         ("Natural Calamity / Force Majeure",  "Credit note for future travel",   "—",    "As per T&C"),
     ]
-
-    for i, (timeline_txt, charge, refund, proc) in enumerate(canc_data):
-        row_bg = colors.HexColor("#fff1f2") if refund == "Nil" else WHITE
-        canc_rows.append([
-            Paragraph(clean(timeline_txt), ParagraphStyle("cntl", fontName="Lato",
-                      fontSize=8.5, textColor=BLACK)),
-            Paragraph(clean(charge),  canc_body_st),
-            Paragraph(f"<b>{clean(refund)}</b>", canc_pct_st),
-            Paragraph(clean(proc),    canc_body_st),
-        ])
-
-    canc_col_w = [usable_w*0.34, usable_w*0.28, usable_w*0.16, usable_w*0.22]
-    canc_table = Table(canc_rows, colWidths=canc_col_w, hAlign="LEFT")
-    canc_table.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, 0), colors.HexColor("#7f1d1d")),
-        ("LINEBEFORE",    (0, 0), (0, 0), 3, colors.HexColor("#fca5a5")),
-        ("TEXTCOLOR",     (0, 0), (-1, 0), WHITE),
-        ("ROWBACKGROUNDS",(0, 1), (-1, -1), [GRAY_50, WHITE]),
-        ("BACKGROUND",    (0, 4), (-1, 4), colors.HexColor("#fff1f2")),
-        ("BOX",           (0, 0), (-1, -1), 0.5, GRAY_200),
-        ("INNERGRID",     (0, 0), (-1, -1), 0.3, GRAY_200),
-        ("TOPPADDING",    (0, 0), (-1, -1), 7),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
-        ("LEFTPADDING",   (0, 0), (-1, -1), 8),
-        ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
-        ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
-    ]))
-    page_block_2.append(canc_table)
-    page_block_2.append(Spacer(1, 5*mm))
-
-    # ── 8. Important Travel Notes ─────────────────────────────────────────────
-    story.append(KeepTogether(page_block_2)); page_block_2 = []
-    page_block_2.append(SectionTitle(usable_w, "IMPORTANT TRAVEL NOTES", icon=""))
-    page_block_2.append(Spacer(1, 4*mm))
-
-    note_heading_st = ParagraphStyle("noh", fontName="Lato-Bold",
-                                     fontSize=8.2, textColor=GOLD, spaceBefore=6, spaceAfter=1.5)
-    note_body_st    = ParagraphStyle("nob", fontName="Lato",
-                                     fontSize=8, textColor=BLACK, leading=12, spaceAfter=3)
-
+    # the cards are built from canc_data, so editing that list above changes the PDF (and the AI assistant)
+    canc_tiers = []
+    for _when, _chg, _ref, _proc in canc_data[:4]:
+        _pct = int(re.sub(r"[^0-9]", "", _ref) or 0)
+        canc_tiers.append((_when, "Charge: " + _chg, _pct, _ref,
+                           ("Refund in " + _proc) if _pct else "No refund applicable"))
+    _fm = canc_data[4]
+    _canc = CancellationLadder(usable_w, canc_tiers, _fm[0], _fm[1] + ", " + _fm[3].lower() + ".")
     travel_notes = [
         ("ID & Documentation",
          "Every guest must carry a valid government-issued photo ID (Aadhaar / Passport / Voter ID) "
@@ -5663,131 +6129,34 @@ def generate_pdf(itinerary_data: dict) -> str:
          "under Indian law. Please follow all instructions from local authorities and your guide."),
     ]
 
-    # Two-column layout for notes
-    # Each outer cell has 10pt padding on both sides, so the inner column
-    # tables must be 20pt narrower than the cell or text spills over the edge.
-    note_cell_w = usable_w / 2
-    note_col_w  = note_cell_w - 20
-    left_notes  = travel_notes[:3]
-    right_notes = travel_notes[3:]
-
-    def make_note_col(notes):
-        items = []
-        for heading, body in notes:
-            items.append(Paragraph(heading, note_heading_st))
-            items.append(Paragraph(clean(body), note_body_st))
-        rows = [[item] for item in items]
-        t = Table(rows, colWidths=[note_col_w])
-        t.setStyle(TableStyle([
-            ("LEFTPADDING",  (0,0),(-1,-1), 0),
-            ("RIGHTPADDING", (0,0),(-1,-1), 0),
-            ("TOPPADDING",   (0,0),(-1,-1), 0),
-            ("BOTTOMPADDING",(0,0),(-1,-1), 0),
-        ]))
-        return t
-
-    notes_outer = Table(
-        [[make_note_col(left_notes), make_note_col(right_notes)]],
-        colWidths=[note_cell_w, note_cell_w],
-        hAlign="LEFT"
-    )
-    notes_outer.setStyle(TableStyle([
-        ("BACKGROUND",   (0,0),(-1,-1), GOLD_LITE),
-        ("BOX",          (0,0),(-1,-1), 0.5, colors.HexColor("#fde68a")),
-        ("LINEAFTER",    (0,0),(0,-1), 0.4, colors.HexColor("#fde68a")),
-        ("VALIGN",       (0,0),(-1,-1), "TOP"),
-        ("TOPPADDING",   (0,0),(-1,-1), 8),
-        ("BOTTOMPADDING",(0,0),(-1,-1), 8),
-        ("LEFTPADDING",  (0,0),(-1,-1), 10),
-        ("RIGHTPADDING", (0,0),(-1,-1), 10),
-    ]))
-    page_block_2.append(notes_outer)
-    page_block_2.append(Spacer(1, 5*mm))
-
-    # ── 9. Contact Card ───────────────────────────────────────────────────────
-    story.append(KeepTogether(page_block_2)); page_block_2 = []
-    page_block_2.append(SectionTitle(usable_w, "GET IN TOUCH WITH US", icon=""))
-    page_block_2.append(Spacer(1, 3*mm))
-
-    contact_label_st = ParagraphStyle("ctl", fontName="Lato-Bold",
-                                      fontSize=7.5, textColor=GRAY_600)
-    contact_val_st   = ParagraphStyle("ctv", fontName="Lato",
-                                      fontSize=8.5, textColor=BLACK)
-    contact_link_st  = ParagraphStyle("ctlnk", fontName="Lato",
-                                      fontSize=8.5, textColor=SKY)
-
-    contact_rows = [
-        [
-            Paragraph("Company", contact_label_st),
-            Paragraph("Serene Vibes Kashmir", ParagraphStyle("cvb", fontName="Lato-Bold",
-                      fontSize=9, textColor=NAVY)),
-            Paragraph("Tagline", contact_label_st),
-            Paragraph("A Poem In Motion", ParagraphStyle("cvi", fontName="Lato-Italic",
-                      fontSize=8.5, textColor=SKY)),
-        ],
-        [
-            Paragraph("Email", contact_label_st),
-            Paragraph('<link href="mailto:serenevibeskashmir@gmail.com">serenevibeskashmir@gmail.com</link>', contact_link_st),
-            Paragraph("Website", contact_label_st),
-            Paragraph('<link href="https://www.serenevibeskashmir.com">www.serenevibeskashmir.com</link>', contact_link_st),
-        ],
-        [
-            Paragraph("Phone / WhatsApp", contact_label_st),
-            Paragraph('<link href="tel:+919419766510">+91-9419766510</link>,  <link href="tel:+919858355260">+91-9858355260</link>', contact_val_st),
-            Paragraph("Operating Hours", contact_label_st),
-            Paragraph("Mon–Sat, 9:00 AM – 7:00 PM IST", contact_val_st),
-        ],
-        [
-            Paragraph("Office Address", contact_label_st),
-            Paragraph("NH-44, Lethpora, Jammu &amp; Kashmir – 192122", contact_val_st),
-            Paragraph("GST No." if BUSINESS_GST_NO else "", contact_label_st),
-            Paragraph(BUSINESS_GST_NO, contact_val_st),
-        ],
+    _notes = TravelNotesGrid(usable_w, travel_notes)
+    _contact = ContactCard(usable_w, ["+91-9419766510", "+91-9858355260"], "serenevibeskashmir@gmail.com",
+                           "www.serenevibeskashmir.com", "Mon–Sat, 9:00 AM – 7:00 PM IST",
+                           "NH-44, Lethpora, Jammu & Kashmir – 192122", BUSINESS_GST_NO or "")
+    _p2_parts = lambda: [
+        SectionTitle(usable_w, "CANCELLATION POLICY", icon=""), Spacer(1, 3*mm), _canc, Spacer(1, 5*mm),
+        SectionTitle(usable_w, "IMPORTANT TRAVEL NOTES", icon=""), Spacer(1, 3*mm), _notes, Spacer(1, 5*mm),
+        SectionTitle(usable_w, "GET IN TOUCH WITH US", icon=""), Spacer(1, 3*mm), _contact,
     ]
-
-    contact_col_w = [usable_w*0.15, usable_w*0.35, usable_w*0.15, usable_w*0.35]
-    contact_table = Table(contact_rows, colWidths=contact_col_w)
-    contact_table.setStyle(TableStyle([
-        ("BACKGROUND",   (0,0),(-1,-1), SKY_LIGHT),
-        ("BACKGROUND",   (0,0),(0,-1), colors.HexColor("#bae6fd")),
-        ("BACKGROUND",   (2,0),(2,-1), colors.HexColor("#bae6fd")),
-        ("BOX",          (0,0),(-1,-1), 0.5, colors.HexColor("#7dd3fc")),
-        ("INNERGRID",    (0,0),(-1,-1), 0.3, colors.HexColor("#bae6fd")),
-        ("LINEBEFORE",   (0,0),(0,-1), 3, SKY),
-        ("TOPPADDING",   (0,0),(-1,-1), 7),
-        ("BOTTOMPADDING",(0,0),(-1,-1), 7),
-        ("LEFTPADDING",  (0,0),(-1,-1), 10),
-        ("RIGHTPADDING", (0,0),(-1,-1), 10),
-        ("VALIGN",       (0,0),(-1,-1), "MIDDLE"),
-    ]))
-    page_block_2.append(contact_table)
-    # Flush page_block_2 (Cancellation + Travel Notes + Contact) to story
-    story.append(KeepTogether(page_block_2))
+    if sum(f.wrap(usable_w, 10000)[1] for f in _p2_parts()) > _room:     # tighten so all three still fit one page
+        _canc.compact = True; _canc._recalc()
+        _notes.compact = True; _notes._recalc()
+    story.append(KeepTogether(_p2_parts()))
 
     # ── 10. Terms & Conditions — always on its own page (Rule 3) ──────────────
-    story.append(CondPageBreak(70 * mm))      # start Terms on the leftover space when there is room
-    story.append(SectionTitle(usable_w, "TERMS & CONDITIONS", icon=""))
-    story.append(Spacer(1, 5*mm))
-
-    # Compact style definitions for T&C
-    tc_heading = ParagraphStyle("tch",
-        fontName="Lato-Bold", fontSize=8.5, textColor=SKY,
-        spaceBefore=8, spaceAfter=2.5)
-    tc_body = ParagraphStyle("tcb",
-        fontName="Lato", fontSize=7.6, textColor=GRAY_600,
-        leading=12.6, spaceAfter=1)
-
-    # T&C data: (heading, body_text)
+    story.append(CondPageBreak(doc.height - 14))   # Terms always start on a fresh page
+    # T&C data: (heading, body_text)   (plain text only: the AI assistant reads this list)
     tc_sections = [
-        ("Bookings",
-         "All bookings are processed after receiving the token amount. This amount is refundable "
-         "in case The Traveler is unable to confirm your booking on the requested date."),
+        ("Bookings & Payments",
+         "Your booking is confirmed once the 1st instalment (25%) is received. The 2nd instalment (25%) is due "
+         "7 days before arrival and the balance (50%) on arrival, as shown in the Payment Schedule. If we cannot "
+         "confirm your booking on the requested dates, the amount paid is refunded in full."),
 
         ("Travel Plan / Itinerary",
-         "This itinerary is planned for you. External "
-         "factors such as weather, road conditions, natural hazards and physical ability of participants "
-         "may require changes before or during the trip, and we will always rearrange sightseeing for you. Serene Vibes is not responsible for delays or "
-         "expenses incurred due to natural calamities, flight cancellations, accidents, transport "
+         "This itinerary is planned for you. External factors such as weather, road conditions, natural hazards "
+         "and physical ability of participants may require changes before or during the trip, and we will always "
+         "rearrange sightseeing for you. Serene Vibes is not responsible for delays or expenses incurred due to "
+         "natural calamities, delays or cancellations of your own flights or trains, accidents, transport "
          "breakdown, sickness, political closures or any untoward incidents."),
 
         ("Child Policy",
@@ -5795,42 +6164,35 @@ def generate_pdf(itinerary_data: dict) -> str:
          "but meal charges apply. Children aged 11 and above are considered adults and charged accordingly."),
 
         ("Hotel Policy",
-         "Extra bed requests (adult/child) may be fulfilled with a rollaway bed or mattress subject "
-         "to availability. Adjacent/adjoining room requests are also subject to availability. "
-         "Twin or double bed allocation is at the hotel's discretion."),
+         "Hotels are as mentioned in the itinerary, or similar if not available. Extra bed requests (adult/child) "
+         "may be fulfilled with a rollaway bed or mattress subject to availability. Adjacent/adjoining room "
+         "requests are also subject to availability. Twin or double bed allocation is at the hotel's discretion."),
 
         ("Check-In & Check-Out",
          "Standard check-in/out time is 12:00 Noon. Early check-in or late check-out requests can "
          "be made directly with hotel management and settled on-site."),
 
         ("Documents Required",
-         "Government-issued ID (Aadhar Card / Passport) is mandatory for all guests. Age proof is "
-         "required for children aged 2-10 years and infants below 2 years."),
+         "A government-issued photo ID (Aadhaar / Passport) is mandatory for every guest. Age proof is "
+         "required for every child."),
 
         ("Billing",
          "In case of billing errors the agency reserves the right to re-invoice. Dishonoured cheques "
          "attract a penalty of INR 500 per instance; the agency reserves the right to take legal action."),
 
-        ("Alterations / Cancellations",
-         "Any alteration or cancellation after commencement of the holiday may incur penalties. "
-         "Refunds are not applicable for unused services."),
-
-        ("Refunds",
-         "All refund claims must be raised within 7 days of booking completion via email to "
-         "serenevibeskashmir@gmail.com. Requests after trip commencement will not be entertained. "
-         "Amounts held by airlines or hotels are refunded only upon recovery from the respective vendor."),
+        ("Cancellations & Refunds",
+         "Cancellation charges and refunds follow the Cancellation Policy in this document. Any alteration or "
+         "cancellation after the tour begins may incur penalties, and refunds are not applicable for unused "
+         "services. Send refund requests to serenevibeskashmir@gmail.com before the trip starts. Amounts held by "
+         "hotels are refunded only upon recovery from the respective vendor."),
 
         ("Pandemic Limitation",
          "If the tour cannot be availed due to a pandemic, the agency will provide either a refund or "
-         "a credit note for future travel, subject to third-party vendor (airline/hotel) conditions."),
+         "a credit note for future travel, subject to third-party vendor (hotel / transport) conditions."),
 
         ("Extra Costs",
          "If the Government of India revises taxes or fuel costs after tour finalisation, the incremental "
          "amount will be added to the tour cost after due intimation to the guests."),
-
-        ("Telecom Services",
-         "Only post-paid mobile connections are operable in Kashmir. Please verify with your provider "
-         "before departure."),
 
         ("Law & Jurisdiction",
          "All disputes, claims, and legal suits relating to any services offered by Serene Vibes are "
@@ -5841,237 +6203,59 @@ def generate_pdf(itinerary_data: dict) -> str:
          "serenevibeskashmir@gmail.com. We will resolve your concern at the earliest."),
     ]
 
-    # General terms as a compact bulleted block
-    _flights_in_quote = bool(itinerary_data.get("include_flights") or itinerary_data.get("flights_included"))
+    # General terms (plain text only: the AI assistant reads this list). Airfare is never sold by us
+    # (see Exclusions), so no airline lines here.
     general_bullets = [
-        "All flight tickets are booked on minimum available fare.",
-        "Please reach the airport 3 hours prior to scheduled departure.",
-        "Government-issued IDs are required to process reservations.",
         "Carry a confirmed hotel voucher at the time of check-in.",
         "Number of meals corresponds to number of nights booked; breakfast not provided on day of arrival.",
         "The hotel has the right to claim damages incurred by guests.",
         "Mini-bar (if available) is on a chargeable basis.",
         "Cost of additional services outside the package must be settled directly at the hotel.",
-        "Face mask / cover is mandatory during boarding and travel on airlines.",
-        "No seat is provided to infants on airlines.",
     ]
-    if not _flights_in_quote:      # road-only tour: drop the airline lines (list above stays plain text)
-        general_bullets = [b for b in general_bullets
-                           if not re.search(r"flight|airport|airlines", b, re.I)]
 
-    # Render in 2-column grid for compactness
-    col_w = (usable_w - 5*mm) / 2
+    _tc_grid = TermsGrid(usable_w, tc_sections)
+    _tc_gen = GeneralTermsCard(usable_w, general_bullets)
+    _tc_parts = lambda: [SectionTitle(usable_w, "TERMS & CONDITIONS", icon=""), Spacer(1, 4*mm), _tc_grid,
+                         Spacer(1, 4*mm), _tc_gen]
+    if sum(f.wrap(usable_w, 10000)[1] for f in _tc_parts()) > _room:
+        _tc_grid.compact = True; _tc_grid._recalc()
+        _tc_gen.compact = True; _tc_gen._recalc()
+    story.append(KeepTogether(_tc_parts()))
+    story.append(Spacer(1, 2*mm))
 
-    left_sections  = tc_sections[:7]
-    right_sections = tc_sections[7:]
-
-    def make_tc_items(sections):
-        items = []
-        for heading, body in sections:
-            items.append(Paragraph(heading, tc_heading))
-            items.append(Paragraph(clean(body), tc_body))
-        return items
-
-    left_items  = make_tc_items(left_sections)
-    right_items = make_tc_items(right_sections)
-    inner_col_w = col_w - 9*mm          # keeps text clear of the divider line
-
-
-    # Wrap each column in a single-cell Table to control width
-    def wrap_col(items, w):
-        rows = [[item] for item in items]
-        t = Table(rows, colWidths=[w])
-        t.setStyle(TableStyle([
-            ("LEFTPADDING",  (0,0),(-1,-1), 0),
-            ("RIGHTPADDING", (0,0),(-1,-1), 0),
-            ("TOPPADDING",   (0,0),(-1,-1), 0),
-            ("BOTTOMPADDING",(0,0),(-1,-1), 0),
-        ]))
-        return t
-
-    two_col = Table(
-        [[wrap_col(left_items, inner_col_w), wrap_col(right_items, inner_col_w)]],
-        colWidths=[col_w, col_w],
-        hAlign="LEFT"
-    )
-    two_col.setStyle(TableStyle([
-        ("VALIGN",        (0,0),(-1,-1), "TOP"),
-        ("LEFTPADDING",   (0,0),(-1,-1), 0),
-        ("RIGHTPADDING",  (0,0),(-1,-1), 0),
-        ("TOPPADDING",    (0,0),(-1,-1), 0),
-        ("BOTTOMPADDING", (0,0),(-1,-1), 0),
-        ("LINEAFTER",     (0,0),(0,-1), 0.4, GRAY_200),
-        ("RIGHTPADDING",  (0,0),(0,-1), 9*mm),
-        ("LEFTPADDING",   (1,0),(1,-1), 5*mm),
-    ]))
-    story.append(two_col)
-    story.append(Spacer(1, 6*mm))
-
-    # General Terms compact box
-    story.append(Paragraph(
-        "<b>GENERAL TERMS</b>",
-        ParagraphStyle("gth", fontName="Lato-Bold", fontSize=8,
-                       textColor=NAVY, spaceAfter=4)
-    ))
-    bullet_rows = []
-    for b in general_bullets:
-        bullet_rows.append([
-            Paragraph("-", ParagraphStyle("bd", fontName="Lato-Bold",
-                      fontSize=8, textColor=SKY, alignment=TA_CENTER)),
-            Paragraph(clean(b), tc_body),
-        ])
-    gen_table = Table(bullet_rows, colWidths=[5*mm, usable_w - 5*mm])
-    gen_table.setStyle(TableStyle([
-        ("BACKGROUND",   (0,0),(-1,-1), GRAY_50),
-        ("BOX",          (0,0),(-1,-1), 0.4, GRAY_200),
-        ("LEFTPADDING",  (0,0),(-1,-1), 4),
-        ("RIGHTPADDING", (0,0),(-1,-1), 6),
-        ("TOPPADDING",   (0,0),(-1,-1), 3),
-        ("BOTTOMPADDING",(0,0),(-1,-1), 3),
-        ("VALIGN",       (0,0),(-1,-1), "TOP"),
-    ]))
-    story.append(gen_table)
-    story.append(Spacer(1, 5*mm))
-
-    # ── Client Acknowledgement / Signature Block ──────────────────────────────
+    # ── Client Acknowledgement / Signature Block (last page, one page, same card look) ──
     story.append(PageBreak())
-    story.append(SectionTitle(usable_w, "CLIENT ACKNOWLEDGEMENT", icon=""))
-    story.append(Spacer(1, 5*mm))
-
-    ack_body_st = ParagraphStyle("ackb", fontName="Lato", fontSize=8,
-                                 textColor=GRAY_600, leading=12, spaceAfter=4)
-    story.append(Paragraph(
-        "I / We, the undersigned, confirm that I / We have read, understood, and agree to all the "
-        "terms and conditions, cancellation policy, and payment schedule outlined in this itinerary "
-        "document issued by Serene Vibes Kashmir. I / We understand that this constitutes a binding "
-        "booking agreement upon payment of the token amount.",
-        ack_body_st
-    ))
-    story.append(Spacer(1, 10*mm))
-
-    # Signature boxes — 3 columns: client name, signature, date
-    sig_label_st = ParagraphStyle("sigl", fontName="Lato-Bold",
-                                  fontSize=7.5, textColor=GRAY_600, alignment=TA_CENTER)
-    sig_line_st  = ParagraphStyle("sigln", fontName="Lato",
-                                  fontSize=9, textColor=BLACK, alignment=TA_CENTER)
-
-    sig_col_w = usable_w / 3 - 4*mm
-
-    def sig_box(label, prefill=""):
-        """Standard blank signature box for client name / date columns."""
-        inner = Table(
-            [[Paragraph("&nbsp;" * 30, sig_line_st)],
-             [Paragraph(clean(prefill) if prefill else "&nbsp;", sig_line_st)],
-             [Paragraph(label, sig_label_st)]],
-            colWidths=[sig_col_w]
-        )
-        inner.setStyle(TableStyle([
-            ("LINEABOVE",    (0,1),(0,1), 0.6, NAVY),
-            ("TOPPADDING",   (0,0),(-1,-1), 4),
-            ("BOTTOMPADDING",(0,0),(-1,-1), 4),
-            ("ALIGN",        (0,0),(-1,-1), "CENTER"),
-        ]))
-        return inner
-
-    # ── Authorised Signatory box — company stamp above a clear signing space ──
-    from reportlab.platypus import Image as RLImage
-    _stamp_w = 46 * mm
+    ts_gen = datetime.datetime.now(IST)
+    ts_valid = (ts_gen + datetime.timedelta(days=7)).strftime("%d %b %Y")
     _stamp_path = next((pp for pp in (
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "auth_stamp.png"),
         os.path.join(os.getcwd(), "backend", "services", "auth_stamp.png"),
         os.path.join(os.getcwd(), "auth_stamp.png"),
     ) if os.path.exists(pp)), None)
-    try:
-        _sw, _sh = ImageReader(_stamp_path).getSize()
-        stamp_flow = RLImage(_stamp_path, width=_stamp_w, height=_stamp_w * _sh / _sw)
-    except Exception:                       # never let a missing image break the PDF
-        stamp_flow = Paragraph("<b>FOR SERENE VIBES KASHMIR</b>",
-                               ParagraphStyle("stmp", fontName="Lato-Bold", fontSize=10,
-                                              textColor=colors.HexColor("#163078"), alignment=TA_CENTER))
-    _stamp_cell = Table([[stamp_flow], [Spacer(1, 15 * mm)]], colWidths=[sig_col_w])   # stamp + signing space
-    _stamp_cell.setStyle(TableStyle([
-        ("ALIGN", (0,0),(-1,-1), "CENTER"),
-        ("TOPPADDING", (0,0),(-1,-1), 0), ("BOTTOMPADDING", (0,0),(-1,-1), 0),
-    ]))
-    auth_box = Table(
-        [
-            [_stamp_cell],                                                    # "For Serene Vibes Kashmir" + sign here
-            [Paragraph("&nbsp;", sig_line_st)],                               # same row layout as the other two boxes
-            [Paragraph("Authorised Signatory", sig_label_st)],                # label under the line
-        ],
-        colWidths=[sig_col_w]
-    )
-    auth_box.setStyle(TableStyle([
-        ("ALIGN",        (0,0),(-1,-1), "CENTER"),
-        ("VALIGN",       (0,0),(-1,-1), "BOTTOM"),
-        ("LINEABOVE",    (0,1),(0,1), 0.6, NAVY),
-        ("TOPPADDING",   (0,0),(-1,-1), 4),
-        ("BOTTOMPADDING",(0,0),(-1,-1), 4),
-    ]))
-
-    sig_row = Table([[
-        sig_box("Client Name &amp; Signature", clean(client_name)),
-        sig_box("Date of Agreement"),
-        auth_box,
-    ]], colWidths=[sig_col_w + 4*mm, sig_col_w + 4*mm, sig_col_w + 4*mm])
-    sig_row.setStyle(TableStyle([
-        ("LEFTPADDING",  (0,0),(-1,-1), 4),
-        ("RIGHTPADDING", (0,0),(-1,-1), 4),
-        ("VALIGN",       (0,0),(-1,-1), "BOTTOM"),
-    ]))
-    story.append(sig_row)
-    story.append(Spacer(1, 8*mm))
-
-    # Quote validity notice
-    validity_st = ParagraphStyle("vld", fontName="Lato-Italic", fontSize=7.5,
-                                 textColor=GRAY_400, alignment=TA_CENTER)
-    ts_gen = datetime.datetime.now(IST)
-    ts_valid = (ts_gen + datetime.timedelta(days=7)).strftime("%d %b %Y")
-    story.append(Paragraph(
-        f"This quotation is valid until <b>{ts_valid}</b>. Rates are subject to change after this date "
-        "due to hotel availability and seasonal pricing. Please confirm your booking to lock in the quoted price.",
-        validity_st
-    ))
-    story.append(Spacer(1, 7*mm))
-
+    _ack_text = ("I / We, the undersigned, confirm that I / We have read, understood, and agree to all the "
+                 "terms and conditions, cancellation policy, and payment schedule outlined in this itinerary "
+                 "document issued by Serene Vibes Kashmir. I / We understand that this constitutes a binding "
+                 "booking agreement upon payment of the 1st instalment (25%).")
     # What happens next (uses only terms already stated in this document)
-    story.append(Paragraph("<b>WHAT HAPPENS NEXT</b>",
-                 ParagraphStyle("nxh", fontName="Lato-Bold", fontSize=8.5, textColor=NAVY, spaceAfter=4)))
-    step_h = ParagraphStyle("nsh", fontName="Lato-Bold", fontSize=8.5, textColor=NAVY, leading=11)
-    step_b = ParagraphStyle("nsb", fontName="Lato", fontSize=7.8, textColor=GRAY_600, leading=11.5)
-    step_n = ParagraphStyle("nsn", fontName="Lato-Bold", fontSize=15, textColor=SKY, leading=16)
-    steps = [
-        ("1", "Review &amp; sign", "Check the itinerary, hotels and terms, then sign and date this page."),
-        ("2", "Pay the first instalment", "Confirm the booking with the 1st instalment (25%) by NEFT / UPI / Cheque."),
-        ("3", "Receive your vouchers", "We share confirmed hotel and transfer details ahead of your travel date."),
+    _steps3 = [
+        ("Review & sign", "Check the itinerary, hotels and terms, then sign and date this page."),
+        ("Pay the 1st instalment", "Confirm the booking with the 1st instalment (25%) by NEFT / UPI / Cheque."),
+        ("Receive your vouchers", "We share confirmed hotel and transfer details ahead of your travel date."),
     ]
-    sw = usable_w / 3
-    step_cells = [[Table([[Paragraph(n, step_n)], [Paragraph(h, step_h)], [Paragraph(b, step_b)]],
-                         colWidths=[sw - 10]) for n, h, b in steps]]
-    step_tbl = Table(step_cells, colWidths=[sw, sw, sw], hAlign="LEFT")
-    step_tbl.setStyle(TableStyle([
-        ("BACKGROUND", (0,0),(-1,-1), GRAY_50),
-        ("BOX",        (0,0),(0,0), 0.5, GRAY_200), ("BOX", (1,0),(1,0), 0.5, GRAY_200), ("BOX", (2,0),(2,0), 0.5, GRAY_200),
-        ("LINEABOVE",  (0,0),(-1,0), 2, SKY),
-        ("VALIGN",     (0,0),(-1,-1), "TOP"),
-        ("LEFTPADDING",(0,0),(-1,-1), 6), ("RIGHTPADDING",(0,0),(-1,-1), 6),
-        ("TOPPADDING", (0,0),(-1,-1), 6), ("BOTTOMPADDING",(0,0),(-1,-1), 8),
-    ]))
-    story.append(step_tbl)
-    story.append(Spacer(1, 7*mm))
-    story.append(SocialButtons(usable_w, client_name, _quote_ref(client_name)))
-    story.append(Spacer(1, 6*mm))
-    story.append(TravelEssentials(usable_w))      # last page has room; keeps every earlier page full
-    story.append(Spacer(1, 5*mm))
-
-    # Timestamp
     ts = ts_gen.strftime("%d %b %Y, %I:%M %p") + " IST"
-    story.append(HRFlowable(width=usable_w, thickness=0.4, color=GRAY_200))
-    story.append(Spacer(1, 3*mm))
-    story.append(Paragraph(
-        f"Document generated on {ts}  |  Serene Vibes Kashmir  |  serenevibeskashmir@gmail.com",
-        styles["footer_note"]
-    ))
+    _last_parts = [
+        SectionTitle(usable_w, "CLIENT ACKNOWLEDGEMENT", icon=""), Spacer(1, 3*mm),
+        AgreementCard(usable_w, _ack_text, _quote_ref(client_name), ts_valid), Spacer(1, 3*mm),
+        SignatureRow(usable_w, client_name, _stamp_path), Spacer(1, 5*mm),
+        SectionTitle(usable_w, "WHAT HAPPENS NEXT", icon=""), Spacer(1, 3*mm),
+        NextStepCards(usable_w, _steps3), Spacer(1, 3*mm),
+        HelpStrip(usable_w, client_name, _quote_ref(client_name)), Spacer(1, 5*mm),
+        SectionTitle(usable_w, "BEFORE YOU TRAVEL", icon=""), Spacer(1, 3*mm),
+        TravelEssentials(usable_w, show_bar=False), Spacer(1, 4*mm),
+        Paragraph(f"Document generated on {ts}  |  Serene Vibes Kashmir  |  serenevibeskashmir@gmail.com",
+                  styles["footer_note"]),
+    ]
+    story.extend(_last_parts)
 
     # ── Build PDF ─────────────────────────────────────────────────────────────
     doc._svk_running = (_raw(f"Kashmir Tour Itinerary  |  Prepared for {client_name}"),
