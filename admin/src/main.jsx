@@ -4,6 +4,7 @@ import App from './App.jsx';
 import './index.css';
 import './website-photos.css';
 import './site-packages.css';
+import './admin-mobile.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
