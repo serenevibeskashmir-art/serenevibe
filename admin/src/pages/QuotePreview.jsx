@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { apiFetch } from "../api.js";
+import { Icon, Sheet, Stepper, PickRow } from "../components/ui.jsx";
 
 const UI_THEME = {
   colors: {
@@ -754,7 +755,7 @@ function HotelImageManager() {
 }
 
 // ── Main QuotePreview export ───────────────────────────────────────────────
-export default function QuotePreview({ quote, trip }) {
+export default function QuotePreview({ quote, trip, step = "days", onStep = () => {} }) {
   const [timeline,        setTimeline]        = useState(quote?.itinerary_timeline || []);
   const [activeDay,       setActiveDay]       = useState(0);
   const [editableCost,    setEditableCost]    = useState(quote?.financial_summary?.total_payable_inr || 38500);
@@ -931,7 +932,6 @@ export default function QuotePreview({ quote, trip }) {
   const aiRewriteDay = async () => {
     const day = timeline[activeDay];
     if (!day) return;
-    if ((day.schedule || []).length && !window.confirm("Replace all activities for this day with AI-written ones?")) return;
     setAiBusy("day"); setAiError("");
     try {
       const items = await describeCall("day");
@@ -1207,797 +1207,430 @@ export default function QuotePreview({ quote, trip }) {
     setTimeline(updatedTimeline);
   };
 
+
+  // ══ Mobile builder UI (Days step + Review step) ═══════════════════════════
+  // The Trip step is the LeadForm; App.jsx decides which step shows. All state and
+  // logic above is unchanged: this part only draws it as tap-friendly screens.
+  const [sheet, setSheet]     = useState(null);   // { type, step? }  one bottom sheet at a time
+  const [openAct, setOpenAct] = useState(0);      // expanded activity (-1 = none)
+  const touch = useRef(null);
+  useEffect(() => { setOpenAct(0); }, [activeDay, quote]);
+
+  const closeSheet = () => { setSheet(null); setAddText(""); setAddErr(""); setAddOpen(null); };
+  const goStep = (s) => { onStep(s); window.scrollTo({ top: 0, behavior: "smooth" }); };
+
+  const day = timeline[activeDay];
+  if (!day) return <div className="sv-empty">No days yet. Go back to Trip and build the itinerary.</div>;
+
+  // Route picker state (From / To / Stay), same rules as before.
+  const dep       = isDepDay(day);
+  const parsed    = parseRoute(day.transit_route);
+  const draft     = pickDraft[activeDay] || {};
+  const prevNight = activeDay > 0 ? (timeline[activeDay - 1]?.overnight_stay || "") : "";
+  const autoFrom  = activeDay === 0 ? "Airport" : (isFromPlace(prevNight) ? prevNight : "Srinagar");
+  const rFrom     = draft.from ?? parsed?.from ?? autoFrom;
+  const rTo       = draft.to   ?? parsed?.to   ?? "";
+  const rIsDep    = rTo === "Departure";
+  const rNight    = rIsDep ? "" : (draft.night ?? parsed?.night ?? "");
+  const customRoute = !parsed && !!day.transit_route;
+
+  const pick = (patch) => {
+    const next = { from: rFrom, to: rTo, night: rNight, ...patch };
+    // Day 1 starts where guests are collected, so a real place becomes the tour start point.
+    if (activeDay === 0 && patch.from !== undefined) {
+      const wantStart = patch.from === "Airport" ? DEFAULT_POINT : patch.from;
+      if (wantStart !== startPoint) changeStart(wantStart);
+    }
+    if (patch.to !== undefined && patch.night === undefined) next.night = patch.to === "Departure" ? "" : defaultNightFor(patch.to, next.from);
+    if (next.to === "Departure" || (next.to && next.night)) applyRoute(routeTitle(next.from, next.to, next.night));
+    else setPickDraft((prev) => ({ ...prev, [activeDay]: next }));
+  };
+  const pickNight = (city) => {
+    if (customRoute || (!rTo && day.transit_route)) {
+      setDayField(activeDay, "overnight_stay", city);
+      setHotelSelections((prev) => ({ ...prev, [activeDay]: null }));
+    } else pick({ night: city });
+  };
+  const choose = (step, value) => {
+    if (step === "from") pick({ from: value });
+    else if (step === "to") pick({ to: value });
+    else pickNight(value);
+    closeSheet();
+  };
+
+  const stayValue  = dep ? "" : (rNight || day.overnight_stay || "");
+  const heading    = day.transit_route ? shortRoute(day).replace(" to ", " → ") : (rTo ? `${rFrom} → ${rTo}` : "Choose where this day goes");
+  const hotelList  = dep ? [] : (HOTEL_KB[getHotelGroup(day.overnight_stay)] || []);
+  const hotelName  = hotelSelections[activeDay] ? ALL_HOTELS_FLAT[hotelSelections[activeDay]]?.name : "";
+  const dayIssues  = issues.filter((q) => q.day === activeDay);
+  const rooms      = Math.max(1, Math.min(20, Number(day.rooms ?? 1) || 1));
+  const ebs        = Math.max(0, Math.min(20, Number(day.eb ?? 0) || 0));
+
+  // Activities (immutable updates)
+  const setAct = (idx, patch) => setTimeline((prev) => prev.map((d, i) => i !== activeDay ? d : {
+    ...d, schedule: d.schedule.map((x, j) => j === idx ? { ...x, ...patch } : x),
+  }));
+  const moveAct = (idx, dir) => setTimeline((prev) => prev.map((d, i) => {
+    if (i !== activeDay) return d;
+    const s = [...d.schedule], j = idx + dir;
+    if (j < 0 || j >= s.length) return d;
+    [s[idx], s[j]] = [s[j], s[idx]];
+    return { ...d, schedule: s };
+  }));
+  const delAct = (idx) => { setTimeline((prev) => prev.map((d, i) => i !== activeDay ? d : { ...d, schedule: d.schedule.filter((_, j) => j !== idx) })); setOpenAct(-1); };
+  const addAct = () => {
+    setTimeline((prev) => prev.map((d, i) => i !== activeDay ? d : { ...d, schedule: [...d.schedule, { time_slot: "***", activity_title: "New activity", description: "" }] }));
+    setOpenAct(day.schedule.length);
+  };
+
+  // Swipe left / right on the day to change day.
+  const onTouchStart = (e) => { const t = e.touches[0]; touch.current = { x: t.clientX, y: t.clientY }; };
+  const onTouchEnd = (e) => {
+    const s = touch.current; touch.current = null;
+    if (!s || e.target.closest("input, textarea, select, .sv-chips")) return;
+    const t = e.changedTouches[0], dx = t.clientX - s.x, dy = t.clientY - s.y;
+    if (Math.abs(dx) > 70 && Math.abs(dy) < 50) {
+      const n = activeDay + (dx < 0 ? 1 : -1);
+      if (n >= 0 && n < timeline.length) { setActiveDay(n); window.scrollTo({ top: 0 }); }
+    }
+  };
+
+  const runFix = (q) => {
+    q.fix();
+    if (q.btn === "Open day") onStep("days");
+  };
+
+  const optionList = (step) => step === "from" ? fromOptions() : step === "to" ? toOptions() : nightOptions();
+  const optionValue = (step) => step === "from" ? rFrom : step === "to" ? rTo : stayValue;
+  const sheetTitle = { from: "Starting from", to: "Going to", stay: "Stay overnight in" };
+  const endOptions = [...POINT_PRESETS, ...fromOptions().filter((o) => o !== "Airport" && o !== "Srinagar")];
+
+  const dockTotal = fmtINR(Number(editableCost) || 0);
+
   return (
-    <>
-      <style>{`
-        .qp-wrap {
-          padding: clamp(14px, 4vw, 24px);
-          background: ${UI_THEME.colors.background};
-          min-height: 100vh;
-          font-family: system-ui, sans-serif;
-          box-sizing: border-box;
-        }
-        .qp-meta-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-          gap: 16px;
-          background: ${UI_THEME.colors.cardBg};
-          padding: 16px 20px;
-          border-radius: 12px;
-          box-shadow: ${UI_THEME.shadows.sm};
-          border: 1px solid ${UI_THEME.colors.border};
-          margin-bottom: 24px;
-        }
-        .qp-active-day {
-          padding: clamp(14px, 4vw, 20px);
-          background: #f8fafc;
-          border-radius: 6px;
-          border: 1px solid #e2e8f0;
-        }
-        .qp-route-select {
-          width: 100%;
-          max-width: 480px;
-          padding: 8px 12px;
-          border-radius: 6px;
-          border: 1px solid #cbd5e1;
-          background: #fff;
-          font-size: 0.9rem;
-          color: #1e293b;
-          cursor: pointer;
-          box-sizing: border-box;
-        }
-        .qp-hotel-select {
-          width: 100%;
-          max-width: 480px;
-          padding: 8px 12px;
-          border-radius: 6px;
-          border: 1px solid #cbd5e1;
-          background: #fff;
-          font-size: 0.85rem;
-          font-weight: 500;
-          color: #1e293b;
-          cursor: pointer;
-          box-sizing: border-box;
-        }
-        .qp-city-btns {
-          display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
-          margin-top: 8px;
-        }
-        .qp-activity-row {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 8px;
-          flex-wrap: wrap;
-        }
-        .qp-time-input {
-          padding: 4px 8px;
-          width: 90px;
-          border: 1px solid #cbd5e1;
-          border-radius: 4px;
-          min-height: 36px;
-          box-sizing: border-box;
-          flex-shrink: 0;
-        }
-        .qp-title-input {
-          padding: 4px 8px;
-          flex: 1;
-          min-width: 120px;
-          border: 1px solid #cbd5e1;
-          border-radius: 4px;
-          min-height: 36px;
-          box-sizing: border-box;
-        }
-        .qp-sticky { position: sticky; top: 0; z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px;
-          background: #0f172a; color: #fff; padding: 12px 18px; border-radius: 12px; margin-bottom: 18px; box-shadow: ${UI_THEME.shadows.md}; }
-        .qp-sticky .k { font-size: 0.68rem; letter-spacing: .06em; text-transform: uppercase; color: #cbd5e1; }
-        .qp-sticky .v { font-size: 0.95rem; font-weight: 700; }
-        .qp-sticky .grow { flex: 1 1 120px; font-size: 0.8rem; color: #cbd5e1; }
-        .qp-ghost { border: 1px solid #475569; background: transparent; color: #fff; border-radius: 8px; min-height: 40px; padding: 0 14px; font-weight: 600; cursor: pointer; }
-        .qp-ghost:disabled { opacity: .4; cursor: not-allowed; }
-        .qp-gen { border: 0; background: #b4690a; color: #fff; border-radius: 8px; min-height: 40px; padding: 0 18px; font-weight: 700; cursor: pointer; }
-        .qp-gen:disabled { opacity: .6; cursor: wait; }
-        .qp-badge { display: inline-block; background: #fbbf24; color: #1c1917; border-radius: 999px; font-size: 0.72rem; font-weight: 800; padding: 2px 9px; margin-left: 8px; }
-        .qp-badge.ok { background: #4ade80; color: #052e16; }
-        .qp-ov { display: flex; gap: 12px; overflow-x: auto; padding: 4px 4px 12px; margin-bottom: 8px; }
-        .qp-ovcard { background: #fff; border: 2px solid #e2e8f0; border-radius: 12px; flex: 0 0 160px; display: flex; flex-direction: column; overflow: hidden; }
-        .qp-ovcard.on { border-color: #2563eb; box-shadow: 0 0 0 3px #dbeafe; }
-        .qp-ovmain { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; padding: 12px; cursor: pointer; min-height: 108px; flex: 1 1 auto; }
-        .qp-ovmain:focus-visible { outline: 3px solid #2563eb; outline-offset: -3px; }
-        .qp-ovdn { font-size: 0.72rem; font-weight: 800; color: #475569; letter-spacing: .05em; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; }
-        .qp-ovrt { font-size: 0.92rem; font-weight: 800; line-height: 1.25; color: #0f172a; }
-        .qp-ovnt { font-size: 0.8rem; color: #334155; }
-        .qp-ovhot { font-size: 0.74rem; font-weight: 700; border-radius: 6px; padding: 3px 7px; background: #e0f2fe; color: #075985; align-self: flex-start; }
-        .qp-ovhot.bad { background: #fee2e2; color: #991b1b; }
-        .qp-ovdot { width: 10px; height: 10px; border-radius: 50%; background: #f59e0b; }
-        .qp-ovacts { display: flex; border-top: 1px solid #e2e8f0; }
-        .qp-ovacts button { flex: 1; border: 0; border-right: 1px solid #e2e8f0; background: #f8fafc; color: #334155; min-height: 40px; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
-        .qp-ovacts button:last-child { border-right: 0; }
-        .qp-ovacts button:hover:not(:disabled) { background: #e2e8f0; }
-        .qp-ovacts button:disabled { opacity: .35; cursor: not-allowed; }
-        .qp-ovadd { all: unset; box-sizing: border-box; flex: 0 0 112px; min-height: 150px; border: 2px dashed #94a3b8; border-radius: 12px; display: flex; align-items: center; justify-content: center; text-align: center; color: #334155; font-weight: 700; font-size: 0.85rem; cursor: pointer; background: #f8fafc; }
-        .qp-ovadd:hover { border-color: #2563eb; color: #1d4ed8; }
-        .qp-ovadd:focus-visible { outline: 3px solid #2563eb; }
-        .qp-checks { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px; }
-        .qp-warn { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; background: #fffbeb; border: 1px solid #fcd34d; border-radius: 10px; padding: 8px 12px; }
-        .qp-warn span { font-size: 0.85rem; color: #78350f; font-weight: 600; }
-        .qp-fix { border: 1px solid #b45309; background: #fff; color: #78350f; border-radius: 8px; min-height: 38px; padding: 0 12px; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
-        .qp-fix:hover { background: #fef3c7; }
-        .qp-draft { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; background: #eff6ff; border: 1px solid #93c5fd; color: #1e3a8a; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: 0.88rem; font-weight: 600; }
-        .qp-daypills { display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding: 2px 0 12px; margin-bottom: 6px; background: #f8fafc; }
-        .qp-daypills::-webkit-scrollbar { display: none; }
-        .qp-daypill { position: relative; flex: 0 0 auto; border: 0; border-radius: 999px; min-height: 44px; padding: 0 18px; font-size: 0.9rem; font-weight: 700; cursor: pointer; background: #e2e8f0; color: #1e293b; }
-        .qp-daypill.on { background: #1e293b; color: #fff; }
-        .qp-daypill .pd { position: absolute; top: 6px; right: 7px; width: 9px; height: 9px; border-radius: 50%; background: #f59e0b; border: 1px solid #fff; }
-        .qp-daypill.plus { background: #fff; border: 2px dashed #94a3b8; color: #334155; }
-        .qp-active-day { scroll-margin-top: 12px; }
-        .qp-set:empty { display: none; }
-        .qp-set { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px 14px 12px; margin-bottom: 14px; box-shadow: ${UI_THEME.shadows.sm}; }
-        .qp-set-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
-        .qp-set-grid label { display: block; font-size: 0.74rem; font-weight: 700; color: #475569; margin-bottom: 3px; }
-        .qp-set-grid .qp-route-select { max-width: 100%; width: 100%; min-height: 38px; padding: 6px 8px; font-size: 0.84rem; }
-        @media (max-width: 900px) { .qp-set-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-        @media (max-width: 480px) { .qp-set-grid { grid-template-columns: 1fr; } }
-        .qp-more { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 14px; box-shadow: ${UI_THEME.shadows.sm}; }
-        .qp-more > summary { cursor: pointer; padding: 14px 18px; font-weight: 700; font-size: 0.92rem; color: #1e293b; list-style: none; min-height: 24px; }
-        .qp-more > summary::-webkit-details-marker { display: none; }
-        .qp-more > summary::after { content: "Show ▾"; float: right; font-weight: 600; font-size: 0.78rem; color: #2563eb; }
-        .qp-more[open] > summary::after { content: "Hide ▴"; }
-        .qp-more .qp-sub { display: block; font-weight: 500; font-size: 0.76rem; color: #64748b; margin-top: 2px; }
-        @media (max-width: 640px) {
-          .qp-sticky { position: static; padding: 12px 14px; gap: 8px 16px; }
-          .qp-sticky .grow { flex-basis: 100%; order: 5; }
-          .qp-gen, .qp-ghost { flex: 1 1 auto; }
-          .qp-ovcard { flex-basis: 140px; }
-          .qp-daypills { position: sticky; top: 0; z-index: 25; margin: -2px -2px 8px; padding: 8px 2px 10px; border-bottom: 1px solid #e2e8f0; }
-        }
-        .qp-footer-bar {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          gap: 16px;
-          margin-top: 20px;
-          border-top: 2px solid #e2e8f0;
-          padding-top: 16px;
-          flex-wrap: wrap;
-        }
-        .qp-footer-cost {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          flex-wrap: wrap;
-        }
-        .qp-cost-input {
-          padding: 6px 12px;
-          font-size: 1.1rem;
-          width: 130px;
-          border: 1px solid #cbd5e1;
-          border-radius: 4px;
-          min-height: 40px;
-          box-sizing: border-box;
-        }
-        .qp-hotel-assignments {
-          font-size: 0.78rem;
-          color: #475569;
-          line-height: 1.7;
-          max-width: 260px;
-          flex: 1 1 200px;
-        }
-        .qp-save-btn {
-          padding: 12px 20px;
-          background: #10b981;
-          color: #fff;
-          border: none;
-          border-radius: 5px;
-          cursor: pointer;
-          font-weight: bold;
-          min-height: 48px;
-          white-space: nowrap;
-          align-self: flex-end;
-        }
-        @media (max-width: 600px) {
-          .qp-footer-bar {
-            flex-direction: column;
-            align-items: stretch;
-          }
-          .qp-footer-cost { flex-direction: column; align-items: flex-start; }
-          .qp-cost-input { width: 100%; }
-          .qp-hotel-assignments { max-width: 100%; }
-          .qp-save-btn { width: 100%; text-align: center; }
-          .qp-route-select, .qp-hotel-select { max-width: 100%; }
-          .qp-time-input { width: 80px; }
-        }
-        
+    <div className="sv-qp" id="qp-top">
+      {/* Undo / redo strip */}
+      <div className="sv-tools">
+        <span aria-live="polite">{saveState === "saving" ? "Saving…" : "All changes saved"}</span>
+        <button type="button" className="sv-ib sv-ib-soft" onClick={undo} disabled={!canUndo} aria-label="Undo last change"><Icon name="undo" /></button>
+        <button type="button" className="sv-ib sv-ib-soft" onClick={redo} disabled={!canRedo} aria-label="Redo"><Icon name="redo" /></button>
+      </div>
 
-        /* ===== Compact design layer ===== */
-        .qp-wrap { padding: 12px clamp(10px, 3vw, 20px) 20px; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
-        .qp-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; margin: 0 0 8px; }
-        .qp-head h2 { margin: 0; font-size: 1.15rem; font-weight: 800; letter-spacing: -.01em; color: #0f172a; }
-        .qp-head span { font-size: 0.78rem; color: #64748b; }
-        .qp-sticky { padding: 7px 12px; border-radius: 10px; margin-bottom: 8px; gap: 4px 18px; background: #111827; }
-        .qp-sticky .k { font-size: 0.6rem; }
-        .qp-sticky .v { font-size: 0.85rem; }
-        .qp-sticky .grow { font-size: 0.74rem; }
-        .qp-ghost, .qp-gen { min-height: 32px; font-size: 0.8rem; padding: 0 12px; border-radius: 8px; }
-        .qp-gen { background: #1b5666; }
-        .qp-badge { font-size: 0.66rem; padding: 1px 7px; margin-left: 6px; }
-        .qp-set { padding: 8px 10px; margin-bottom: 8px; border-radius: 10px; }
-        .qp-set-grid { gap: 6px 10px; }
-        .qp-set-grid label { font-size: 0.66rem; text-transform: uppercase; letter-spacing: .05em; color: #64748b; margin-bottom: 2px; }
-        .qp-set-grid .qp-route-select { min-height: 32px; padding: 3px 8px; font-size: 0.82rem; border-radius: 8px; }
-        .qp-daysbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin: 4px 0 2px; }
-        .qp-daysbar h3 { margin: 0; font-size: 0.95rem; font-weight: 800; color: #0f172a; }
-        .qp-daysbar h3 span { font-size: 0.72rem; font-weight: 500; color: #64748b; margin-left: 6px; }
-        .qp-chk { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-        .qp-chk-ok { font-size: 0.78rem; font-weight: 700; color: #166534; background: #dcfce7; border-radius: 999px; padding: 3px 10px; }
-        .qp-chk-warn { font-size: 0.78rem; font-weight: 800; color: #92400e; background: #fef3c7; border-radius: 999px; padding: 3px 10px; }
-        .qp-fix { min-height: 28px; padding: 0 10px; font-size: 0.74rem; border-radius: 999px; border-color: #d6d3d1; color: #44403c; }
-        .qp-checks { padding: 8px; margin: 4px 0 6px; gap: 6px; border-radius: 10px; }
-        .qp-warn { padding: 4px 8px; border-radius: 8px; }
-        .qp-warn span { font-size: 0.8rem; }
-        .qp-ov { gap: 8px; padding: 4px 2px 8px; margin-bottom: 4px; }
-        .qp-ovcard { flex: 0 0 142px; border-width: 1.5px; border-radius: 10px; }
-        .qp-ovcard.on { border-color: #1b5666; box-shadow: 0 0 0 3px #d3e4e7; }
-        .qp-ovmain { padding: 8px 10px; gap: 3px; min-height: 84px; }
-        .qp-ovdn { font-size: 0.64rem; }
-        .qp-ovrt { font-size: 0.82rem; line-height: 1.2; }
-        .qp-ovnt { font-size: 0.72rem; color: #475569; }
-        .qp-ovhot { font-size: 0.68rem; padding: 2px 6px; max-width: 100%; box-sizing: border-box; }
-        .qp-ovacts button { min-height: 30px; font-size: 0.85rem; }
-        .qp-ovadd { flex: 0 0 64px; min-height: 0; font-size: 0.78rem; border-radius: 10px; }
-        .qp-active-day { padding: 10px 12px 12px; background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgb(0 0 0 / .04); }
-        .qp-daypills { gap: 6px; padding: 0 0 8px; margin-bottom: 4px; background: #fff; }
-        .qp-daypill { min-height: 32px; padding: 0 14px; font-size: 0.8rem; }
-        .qp-daypill.on { background: #1b5666; }
-        .qp-daytitle { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-bottom: 8px; }
-        .qp-daytitle h3 { margin: 0; font-size: 1rem; font-weight: 800; color: #0f172a; }
-        .qp-route-select.qp-preset { max-width: 320px; min-height: 32px; padding: 3px 8px; font-size: 0.8rem; border-radius: 8px; }
-        .qp-row { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; border-top: 1px solid #f1f5f9; }
-        .qp-rl { flex: 0 0 76px; padding-top: 6px; font-size: 0.74rem; font-weight: 800; color: #334155; text-transform: uppercase; letter-spacing: .04em; }
-        .qp-rl small { display: block; font-size: 0.64rem; font-weight: 500; color: #94a3b8; text-transform: none; letter-spacing: 0; line-height: 1.2; }
-        .qp-rc { flex: 1 1 auto; min-width: 0; }
-        .qp-city-btns { margin-top: 0; gap: 6px; }
-        .qp-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 8px; align-items: start; margin: 6px 0 2px; padding-top: 8px; border-top: 1px solid #f1f5f9; }
-        .qp-pair .qp-hotel-select { max-width: 100%; min-height: 34px; padding: 4px 8px; border-radius: 8px; }
-        .qp-ai { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-        .qp-ai input { flex: 1; min-width: 140px; max-width: none; min-height: 34px; padding: 4px 8px; font-size: 0.8rem; border-radius: 8px; }
-        .qp-ai button { padding: 0 12px; border-radius: 8px; border: none; background: #1b5666; color: #fff; font-weight: 700; font-size: 0.8rem; min-height: 34px; cursor: pointer; }
-        .qp-act { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; }
-        .qp-act .qp-activity-row { margin-bottom: 6px; gap: 6px; }
-        .qp-time-input, .qp-title-input { min-height: 32px; font-size: 0.82rem; border-radius: 6px; }
-        .qp-title-input { font-weight: 700; }
-        .qp-time-input { width: 84px; }
-        .qp-more { margin-bottom: 8px; border-radius: 10px; }
-        .qp-more > summary { display: flex; align-items: center; gap: 8px; padding: 9px 14px; font-size: 0.85rem; }
-        .qp-more > summary::after { margin-left: auto; float: none; font-size: 0.72rem; }
-        .qp-more .qp-sub { display: inline; margin: 0; font-size: 0.72rem; }
-        .qp-footer-bar { margin-top: 10px; padding-top: 10px; align-items: center; }
-        .qp-save-btn { background: #1b5666; min-height: 40px; padding: 8px 16px; border-radius: 8px; font-size: 0.88rem; }
-        .qp-cost-input { min-height: 36px; font-size: 1rem; border-radius: 8px; }
-        .qp-daypill { padding: 0 18px 0 14px; }
-        .qp-daypill .pd { top: 50%; right: 6px; transform: translateY(-50%); }
-        .qp-pair { grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.4fr); }
-        .qp-daypills { flex-wrap: wrap; overflow-x: visible; }
-        .qp-daypill { min-height: 32px; }
-        @media (max-width: 720px) {
-          .qp-set-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-          .qp-act .qp-activity-row { flex-wrap: nowrap; }
-          .qp-act .qp-time-input { width: 78px; }
-          .qp-act .qp-title-input { width: auto; min-width: 0; flex: 1; }
-        }
-        @media (max-width: 720px) {
-          .qp-pair { grid-template-columns: 1fr; }
-          .qp-row { flex-direction: column; gap: 2px; }
-          .qp-rl { flex: none; padding-top: 4px; }
-          .qp-rl small { display: inline; margin-left: 6px; }
-          .qp-route-select.qp-preset { max-width: 100%; width: 100%; }
-        }
-
-        /* ===== Two-column layout, hotel + rooms on the day cards ===== */
-        .qp-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
-        .qp-hotline { display: flex; align-items: center; gap: 6px 8px; flex-wrap: wrap; width: 100%; }
-        .qp-hotline > input { min-height: 34px; padding: 3px 8px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; }
-        .qp-hotline > select:not(.qp-h-wide) { min-height: 34px; width: auto; max-width: 190px; }
-        .qp-hotline .qp-stp span { flex: none; }
-        @media (max-width: 720px) {
-          .qp-hotline { display: grid; grid-template-columns: 1fr 1fr; }
-          .qp-hotline .qp-h-wide { grid-column: 1 / -1; width: 100%; }
-          .qp-hotline > select:not(.qp-h-wide) { width: 100%; max-width: none; min-width: 0; text-overflow: ellipsis; }
-          .qp-hotline .qp-stp { justify-content: space-between; border: 1px solid #e2e8f0; border-radius: 8px; padding: 2px 4px 2px 8px; }
-          .qp-hotline .qp-stp button { width: 30px; height: 30px; }
-          .qp-ai > div { gap: 6px !important; }
-          .qp-ai input.qp-route-select { min-width: 0 !important; flex: 1 1 120px !important; }
-          .qp-daytitle { gap: 4px 8px; }
-          .qp-daytitle h3 { font-size: 0.92rem; flex: 1 1 100%; }
-          .qp-daytitle .qp-preset { flex: 1 1 0; min-width: 0; }
-          .qp-row { padding: 3px 0; }
-          .qp-city-btns button { min-height: 28px !important; padding: 2px 10px !important; font-size: 0.76rem !important; }
-          .qp-act { padding: 6px; }
-          .qp-act textarea { min-height: 44px; }
-        }
-        .qp-hotline select { min-height: 36px; padding: 3px 8px; font-size: 0.82rem; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1e293b; width: 210px; max-width: 100%; box-sizing: border-box; }
-        .qp-hotline select.bad { border-color: #fca5a5; background: #fef2f2; color: #991b1b; }
-        .qp-hotline .qp-stp button { width: 28px; height: 28px; font-size: 1rem; }
-        .qp-dayacts { display: flex; gap: 4px; margin-left: auto; }
-        .qp-dayacts button { width: 30px; height: 30px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1e293b; cursor: pointer; font-weight: 700; }
-        .qp-dayacts button:disabled { opacity: .35; cursor: not-allowed; }
-        .qp-side { position: static !important; max-height: none !important; }
-        .qp-side { position: sticky; top: 56px; max-height: calc(100vh - 68px); overflow-y: auto; padding-right: 2px; }
-        .qp-main { min-width: 0; }
-        .qp-pair.qp-pair1 { grid-template-columns: 1fr; }
-        .qp-ov { flex-direction: column; overflow: visible; gap: 8px; padding: 4px 2px 8px; }
-        .qp-ovcard { flex: none; width: auto; border-left-width: 4px; }
-        .qp-ovcard.ok { border-left-color: #22c55e; }
-        .qp-ovcard.warn { border-left-color: #f59e0b; }
-        .qp-ovcard.on { border-color: #1b5666; border-left-color: #1b5666; }
-        .qp-ovmain { min-height: 0; padding: 7px 10px 4px; gap: 2px; }
-        .qp-ovrt { font-size: 0.86rem; }
-        .qp-ovok { color: #16a34a; font-weight: 800; font-size: 0.8rem; }
-        .qp-ovdrop { margin: 2px 10px 8px; font-size: 0.72rem; font-weight: 700; color: #0369a1; background: #e0f2fe; border-radius: 6px; padding: 3px 7px; align-self: flex-start; }
-        .qp-ovhot2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-items: center; padding: 2px 10px 8px; }
-        .qp-ovhot2 select { grid-column: 1 / -1; min-height: 32px; padding: 3px 6px; font-size: 0.8rem; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #1e293b; width: 100%; box-sizing: border-box; }
-        .qp-ovhot2 select.bad { border-color: #fca5a5; background: #fef2f2; color: #991b1b; }
-        .qp-ovhot2 label { font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #64748b; display: flex; align-items: center; gap: 6px; }
-        .qp-ovhot2 label input { flex: 1; min-width: 0; width: 100%; min-height: 28px; padding: 2px 4px; text-align: center; font-size: 0.85rem; border: 1px solid #cbd5e1; border-radius: 6px; box-sizing: border-box; background: #f8fafc; }
-        .qp-ovadd { flex: none; width: 100%; min-height: 34px; }
-        .qp-stp { display: flex; align-items: center; gap: 6px; font-size: 0.62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #64748b; }
-        .qp-stp span { flex: 1 1 auto; }
-        .qp-stp b { min-width: 22px; text-align: center; font-size: 0.95rem; color: #0f172a; }
-        .qp-stp button { width: 34px; height: 34px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-size: 1.1rem; font-weight: 700; color: #1e293b; cursor: pointer; touch-action: manipulation; }
-        .qp-stp button:disabled { opacity: .35; cursor: not-allowed; }
-        .qp-stp button:active:not(:disabled) { background: #d3e4e7; }
-        @media (max-width: 959px) {
-          .qp-layout { grid-template-columns: 1fr; }
-          .qp-side { position: static; max-height: none; overflow: visible; }
-          .qp-ov { flex-direction: column; overflow: visible; }
-          .qp-ovcard { flex: none; width: auto; }
-          .qp-ovadd { flex: none; width: 100%; min-height: 36px; }
-          .qp-footer-bar { position: sticky; bottom: 0; z-index: 30; background: #fff; padding: 8px 10px; margin-top: 8px; box-shadow: 0 -4px 12px rgb(0 0 0 / .08); border-radius: 10px 10px 0 0; flex-direction: row !important; flex-wrap: nowrap; align-items: center !important; gap: 8px; }
-          .qp-footer-cost { flex-direction: row !important; align-items: center !important; gap: 6px; flex: 0 0 auto; }
-          .qp-footer-cost h3 { font-size: 0.72rem !important; line-height: 1.1; max-width: 62px; }
-          .qp-cost-input { width: 92px !important; min-height: 38px; font-size: 0.95rem; }
-          .qp-save-btn { flex: 1 1 auto; width: auto !important; min-height: 38px; padding: 6px 8px; font-size: 0.8rem; white-space: normal; align-self: center; }
-        }
-      
-        /* ===== Visual layer: Dal Lake dusk (ink teal, lake blue, saffron) ===== */
-        #qp-top { scroll-margin-top: 12px; --ink: #10272e; --lake: #1b5666; --lake-soft: #e8f0f1; --saffron: #c98a14; --line: #dbe5e4; --mute: #5b7479; }
-        #qp-top .qp-head h2 { font-family: Georgia, "Iowan Old Style", "Times New Roman", serif; font-weight: 700; font-size: 1.3rem; color: var(--ink); letter-spacing: 0; }
-        #qp-top .qp-head span { color: var(--mute); }
-        #qp-top .qp-sticky { background: linear-gradient(120deg, #10272e 0%, #17414d 100%); border-bottom: 3px solid var(--saffron); border-radius: 12px; box-shadow: 0 10px 24px -14px rgb(16 39 46 / .7); padding: 10px 16px; }
-        #qp-top .qp-sticky .k { color: #9fc0c6; letter-spacing: .05em; }
-        #qp-top .qp-sticky .v { font-family: Georgia, "Iowan Old Style", serif; font-weight: 700; font-size: 1.02rem; }
-        #qp-top .qp-set, #qp-top .qp-more { border-color: var(--line); border-radius: 14px; box-shadow: 0 12px 28px -24px rgb(16 39 46 / .5); }
-        #qp-top .qp-fix { border-color: #c9dde0; color: var(--lake); }
-        #qp-top .qp-chk-warn { background: #fff3d6; color: #8a5a00; }
-        #qp-top .qp-save-btn { background: var(--ink); border: 0; border-bottom: 3px solid var(--saffron); }
-
-        /* Day editor: one calm sheet */
-        #qp-top .qp-active-day { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 14px 18px 18px; box-shadow: 0 1px 0 rgb(16 39 46 / .04), 0 18px 40px -30px rgb(16 39 46 / .55); }
-        #qp-top .qp-daypills { background: transparent; gap: 4px; padding: 0 0 10px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
-        #qp-top .qp-daypill { background: transparent; border: 0; border-radius: 999px; color: var(--mute); font-weight: 600; min-height: 32px; padding: 0 22px 0 14px; transition: background .15s, color .15s; }
-        #qp-top .qp-daypill:hover:not(.on) { background: var(--lake-soft); color: var(--ink); }
-        #qp-top .qp-daypill.on { background: var(--ink); color: #fff; box-shadow: none; }
-        #qp-top .qp-daypill .pd { background: var(--saffron); }
-        #qp-top .qp-daypill.plus { border: 1px dashed #9db9be; color: var(--lake); background: transparent; }
-        #qp-top .qp-daytitle { margin-bottom: 10px; gap: 8px 12px; }
-        #qp-top .qp-daytitle h3 { font-family: Georgia, "Iowan Old Style", serif; font-size: 1.3rem; line-height: 1.2; font-weight: 700; color: var(--ink); }
-        #qp-top .qp-dayacts { gap: 2px; background: var(--lake-soft); border-radius: 10px; padding: 2px; }
-        #qp-top .qp-dayacts button { border: 0; background: transparent; width: 30px; height: 28px; border-radius: 8px; color: var(--ink); }
-        #qp-top .qp-dayacts button:hover:not(:disabled) { background: #fff; }
-        #qp-top .qp-daytitle .qp-preset { border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--mute); max-width: 260px; min-height: 34px; font-size: .8rem; }
-
-        /* Route as a journey: a thin rail with a stop per row */
-        #qp-top #day-route-select { margin: 4px 0 12px; }
-        #qp-top .qp-row { position: relative; border-top: 0; padding: 5px 0 5px 24px; gap: 12px; align-items: flex-start; }
-        #qp-top .qp-row::before { content: ""; position: absolute; left: 0; top: 13px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--lake); background: #fff; box-sizing: border-box; }
-        #qp-top .qp-row:has(+ .qp-row)::after { content: ""; position: absolute; left: 4px; top: 23px; bottom: -13px; width: 2px; background: #cfe0e3; }
-        #qp-top .qp-rl { flex: 0 0 52px; padding-top: 5px; font-size: .84rem; font-weight: 700; color: var(--ink); text-transform: none; letter-spacing: 0; white-space: nowrap; }
-        #qp-top .qp-rl small { font-size: .68rem; font-weight: 500; color: var(--mute); }
-        #qp-top .qp-city-btns { gap: 5px; }
-        #qp-top .qp-city-btns button:hover:not(:disabled) { filter: brightness(.96); }
-
-        /* Stay + AI toolbar */
-        #qp-top .qp-ai > div { gap: 8px; align-items: stretch; }
-        #qp-top .qp-hotline { width: auto; flex: 0 1 auto; background: var(--lake-soft); border: 0; border-radius: 12px; padding: 6px 8px; gap: 8px; }
-        #qp-top .qp-hotline select.qp-h-wide { width: 230px; border-color: transparent; background: #fff; }
-        #qp-top .qp-hotline select.bad { border: 1px solid #e0a45a; background: #fff6e8; color: #8a4b00; }
-        #qp-top .qp-stp { background: #fff; border-radius: 9px; padding: 2px 3px 2px 9px; gap: 4px; color: var(--mute); }
-        #qp-top .qp-stp button { border: 0; background: var(--lake-soft); width: 26px; height: 26px; border-radius: 7px; }
-        #qp-top .qp-stp b { min-width: 20px; }
-        #qp-top .qp-nohotel { font-size: .82rem; color: var(--mute); padding: 0 6px; align-self: center; }
-        #qp-top .qp-hotline:has(.qp-nohotel) { background: transparent; padding: 0; }
-        #qp-top .qp-ai input.qp-route-select { border: 1px solid var(--line); background: #fff; border-radius: 10px; }
-        #qp-top .qp-ai > div > button { background: var(--saffron); color: #1b1200; border-radius: 10px; min-height: 40px; }
-
-        /* Activities */
-        #qp-top .qp-act { background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--saffron); border-radius: 12px; padding: 10px 12px; }
-        #qp-top .qp-act input, #qp-top .qp-act textarea { background: #f6f9f9; border-color: transparent; border-radius: 9px; }
-        #qp-top .qp-act input:hover, #qp-top .qp-act textarea:hover { border-color: #c9dde0; }
-        #qp-top .qp-act .qp-time-input { color: var(--lake); font-weight: 600; }
-        #qp-top .qp-act .qp-title-input { font-weight: 700; color: var(--ink); }
-
-        #qp-top select:focus-visible, #qp-top input:focus-visible, #qp-top textarea:focus-visible, #qp-top button:focus-visible { outline: 2px solid var(--lake); outline-offset: 1px; }
-        @media (max-width: 720px) {
-          #qp-top .qp-active-day { padding: 10px 12px 14px; border-radius: 14px; }
-          #qp-top .qp-daytitle h3 { font-size: 1.1rem; }
-          #qp-top .qp-rl { flex-basis: auto; }
-          #qp-top .qp-row { flex-direction: column; gap: 0; padding-left: 20px; }
-          #qp-top .qp-row::before { top: 9px; }
-          #qp-top .qp-row:has(+ .qp-row)::after { top: 19px; }
-          #qp-top .qp-hotline { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
-          #qp-top .qp-hotline select.qp-h-wide { width: 100%; }
-        }
-        @media (prefers-reduced-motion: reduce) { #qp-top * { transition: none !important; } }
-`}</style>
-
-      <div className="qp-wrap" id="qp-top">
-        {/* 1. Header */}
-        <div className="qp-head">
-          <h2>Build the itinerary</h2>
-          <span>① route &amp; hotel for each day &nbsp;→&nbsp; ② rooms &nbsp;→&nbsp; ③ Generate PDF</span>
-        </div>
-
-        {/* 2. Sticky summary bar */}
-        <div className="qp-sticky">
-          <div><div className="k">Client</div><div className="v">{quote?.meta_summary?.client_name || "N/A"}</div></div>
-          <div><div className="k">Trip</div><div className="v">{timeline.length} days · {quote?.meta_summary?.budget_tier || "N/A"} · {vehicleType || "N/A"} · {mealPlan}</div></div>
-          <div><div className="k">Estimated total</div><div className="v">{fmtINR(Number(editableCost) || 0)}</div></div>
-          <div className="grow" aria-live="polite">{saveState === "saving" ? "Saving…" : "All changes saved"}</div>
-          <button type="button" className="qp-ghost" onClick={undo} disabled={!canUndo} aria-label="Undo last change">Undo</button>
-          <button type="button" className="qp-ghost" onClick={redo} disabled={!canRedo} aria-label="Redo">Redo</button>
-          <button type="button" className="qp-gen" onClick={generateChecked} disabled={pdfBusy}>
-            {pdfBusy ? "Generating…" : "Generate PDF"}
-            {!pdfBusy && <span className={"qp-badge" + (issues.length ? "" : " ok")}>{issues.length ? `${issues.length} ${issues.length === 1 ? "issue" : "issues"}` : "Ready"}</span>}
-          </button>
-        </div>
-
-        {draftOffer && (
-          <div className="qp-draft">
-            <span>An unsaved draft from {new Date(draftOffer.at || Date.now()).toLocaleString()} was found on this device.</span>
-            <span style={{ display: "flex", gap: "8px" }}>
-              <button type="button" className="qp-fix" style={{ borderColor: "#1d4ed8", color: "#1e3a8a" }} onClick={restoreDraft}>Restore draft</button>
-              <button type="button" className="qp-fix" style={{ borderColor: "#64748b", color: "#334155" }} onClick={discardDraft}>Discard</button>
-            </span>
+      {draftOffer && (
+        <div className="sv-banner">
+          <span>An unsaved draft from {new Date(draftOffer.at || Date.now()).toLocaleString()} was found on this device.</span>
+          <div className="sv-banner-b">
+            <button type="button" className="sv-btn sv-sm sv-primary" onClick={restoreDraft}>Restore</button>
+            <button type="button" className="sv-btn sv-sm sv-soft" onClick={discardDraft}>Discard</button>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Trip settings: vehicle, meal plan, start and end point in one compact row */}
-        <div className="qp-set">
-          {[["start", "Start", startPoint, changeStart], ["end", "End", endPoint, changeEnd]].map(([key, label, val, setter]) => {
-            const showFind = !isSrinagarPoint(val) && val.trim().length >= 3;
-            if (!showFind) return null;
-            const info = key === "start" ? startInfo : endInfo;
-            const small = { width: "78px", padding: "4px 6px", border: "1px solid #cbd5e1", borderRadius: "6px", fontSize: "0.8rem", boxSizing: "border-box" };
-            return (
-              <div key={key} style={{ marginTop: "8px" }}>
-                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-                  <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#334155" }}>{label} point: {val}</span>
-                  {showFind && (
-                    <button type="button" onClick={() => locatePoint(key)} disabled={!!locBusy}
-                      style={{ padding: "6px 12px", borderRadius: "6px", border: "1px solid #c4b5fd", background: "#f5f3ff", color: "#1b5666", fontWeight: "bold", cursor: locBusy ? "wait" : "pointer", fontSize: "0.8rem" }}>
-                      {locBusy === key ? "Looking up…" : "📍 Find location & distance (AI)"}
-                    </button>
+      {step !== "review" ? (
+        /* ───────────── DAYS STEP ───────────── */
+        <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+          <div className="sv-chips" role="tablist" aria-label="Days">
+            {timeline.map((d, i) => (
+              <button key={i} type="button" role="tab" aria-selected={i === activeDay}
+                className={"sv-chip" + (i === activeDay ? " on" : "")} onClick={() => setActiveDay(i)}>
+                <b>Day {i + 1}</b>
+                <span>{d.transit_route ? shortRoute(d).replace(/^Airport to /, "").replace(/^.* to /, "") : "New"}</span>
+                {warnDays.has(i) && <i title="Needs attention" />}
+              </button>
+            ))}
+            <button type="button" className="sv-chip add" onClick={addDay} aria-label="Add a day"><Icon name="plus" /></button>
+          </div>
+
+          <div className="sv-stack">
+            <section className="sv-card sv-stack">
+              <div className="sv-dayhead">
+                <div>
+                  <div className="sv-eyebrow">Day {activeDay + 1} of {timeline.length}</div>
+                  <h2 className="sv-h2">{heading}</h2>
+                  <div className="sv-sub">{dep ? "Departure day" : (stayValue ? `Night in ${stayValue}` : "No overnight stay chosen")}</div>
+                </div>
+                <button type="button" className="sv-ib sv-ib-soft" onClick={() => setSheet({ type: "dayMenu" })} aria-label="Day options"><Icon name="more" /></button>
+              </div>
+              {dayIssues.length
+                ? <span className="sv-pill warn">{dayIssues.length} to finish on this day</span>
+                : <span className="sv-pill ok"><Icon name="check" size={14} />Day is ready</span>}
+
+              <div className="sv-rail">
+                <PickRow label="From" value={rFrom || "Choose"} hint={activeDay > 0 && prevNight && rFrom !== prevNight ? `Day ${activeDay} ended in ${prevNight}` : ""} warn={!rFrom}
+                  onClick={() => setSheet({ type: "opts", step: "from" })} />
+                <PickRow label="To" value={rTo || "Choose"} warn={!rTo} onClick={() => setSheet({ type: "opts", step: "to" })} />
+                {dep
+                  ? <PickRow label="Drop" value={endPoint || DEFAULT_POINT} onClick={() => setSheet({ type: "end" })} />
+                  : <PickRow label="Stay" value={stayValue || "Choose"} warn={!stayValue} onClick={() => setSheet({ type: "opts", step: "stay" })} />}
+              </div>
+              {customRoute && <div className="sv-sub">Using “{day.transit_route}”. Pick From or To to replace it.</div>}
+              {addNote && <div className="sv-note">{addNote}</div>}
+              <button type="button" className="sv-btn sv-sm sv-soft sv-self" onClick={() => setSheet({ type: "presets" })}><Icon name="spark" size={18} />Quick start: ready-made days</button>
+            </section>
+
+            <section className="sv-card sv-stack">
+              {dep ? (
+                <div className="sv-row static"><span className="k">Hotel</span><span className="v"><small>Departure day, no hotel needed</small></span></div>
+              ) : (
+                <>
+                  <PickRow label="Hotel" warn={!hotelSelections[activeDay]}
+                    value={hotelName || `Choose a hotel${day.overnight_stay ? " in " + day.overnight_stay : ""}`}
+                    hint={hotelName ? day.overnight_stay : ""} onClick={() => setSheet({ type: "hotel" })} />
+                  <PickRow label="Room" value={day.room_type || DEFAULT_ROOM_TYPE} onClick={() => setSheet({ type: "room" })} />
+                  <div className="sv-pair">
+                    <Stepper label="Rooms" value={rooms} min={1} max={20} onChange={(v) => setRoomField(activeDay, "rooms", v)} />
+                    <Stepper label="Extra bed" value={ebs} min={0} max={20} onChange={(v) => setRoomField(activeDay, "eb", v)} />
+                  </div>
+                  <div className="sv-sub">Rooms, extra beds and room type also apply to the days after this one.</div>
+                </>
+              )}
+            </section>
+
+            <div className="sv-sechead">
+              <h3 className="sv-h3">Activities <span className="sv-sub">{day.schedule.length}</span></h3>
+              <button type="button" className="sv-btn sv-sm sv-accent" disabled={!!aiBusy} onClick={() => setSheet({ type: "ai" })}>
+                {aiBusy === "day" ? <><span className="sv-spin" />Writing</> : <><Icon name="spark" size={18} />Rewrite day</>}
+              </button>
+            </div>
+            {aiError && <div className="sv-note bad">{aiError}</div>}
+
+            {day.schedule.length === 0 && <div className="sv-card sv-empty">No activities yet. Add one or let AI write the day.</div>}
+            {day.schedule.map((slot, k) => {
+              const open = openAct === k;
+              const noDesc = !String(slot.description || "").trim();
+              return (
+                <div key={k} className="sv-act">
+                  <button type="button" className="sv-act-h" aria-expanded={open} onClick={() => setOpenAct(open ? -1 : k)}>
+                    <span className="t">{slot.time_slot || "***"}</span>
+                    <span className="m">
+                      <b>{slot.activity_title || "Untitled"}</b>
+                      {!open && <span className={noDesc ? "empty" : ""}>{noDesc ? "Needs a description" : slot.description}</span>}
+                    </span>
+                    <Icon name={open ? "up" : "down"} size={18} />
+                  </button>
+                  {open && (
+                    <div className="sv-act-b">
+                      <div className="sv-grid-time">
+                        <label className="sv-field"><span className="sv-lbl">Time</span>
+                          <input className="sv-inp" value={slot.time_slot || ""} onChange={(e) => setAct(k, { time_slot: e.target.value })} /></label>
+                        <label className="sv-field"><span className="sv-lbl">Title</span>
+                          <input className="sv-inp" value={slot.activity_title || ""} onChange={(e) => setAct(k, { activity_title: e.target.value })} /></label>
+                      </div>
+                      <label className="sv-field"><span className="sv-lbl">Description</span>
+                        <textarea className="sv-inp" rows={4} value={slot.description || ""} onChange={(e) => setAct(k, { description: e.target.value })} /></label>
+                      <div className="sv-act-tools">
+                        <button type="button" className="sv-btn sv-sm sv-soft" disabled={!!aiBusy} onClick={() => aiWriteActivity(k)}>
+                          {aiBusy === "act-" + k ? <><span className="sv-spin" />Writing</> : <><Icon name="spark" size={18} />Write with AI</>}
+                        </button>
+                        <button type="button" className="sv-btn sv-sm sv-soft sv-sq" disabled={k === 0} onClick={() => moveAct(k, -1)} aria-label="Move up"><Icon name="up" /></button>
+                        <button type="button" className="sv-btn sv-sm sv-soft sv-sq" disabled={k === day.schedule.length - 1} onClick={() => moveAct(k, 1)} aria-label="Move down"><Icon name="down" /></button>
+                        <button type="button" className="sv-btn sv-sm sv-danger sv-sq" onClick={() => delAct(k)} aria-label="Delete activity"><Icon name="trash" /></button>
+                      </div>
+                    </div>
                   )}
                 </div>
-                {info && (
-                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "6px", alignItems: "center", fontSize: "0.72rem", color: "#64748b" }}>
-                    <span>Lat</span><input style={small} type="number" step="0.0001" value={info.lat ?? ""} onChange={(e) => editInfo(key, "lat", e.target.value)} />
-                    <span>Lon</span><input style={small} type="number" step="0.0001" value={info.lon ?? ""} onChange={(e) => editInfo(key, "lon", e.target.value)} />
-                    <span>km by road</span><input style={small} type="number" value={info.km ?? ""} onChange={(e) => editInfo(key, "km", e.target.value)} />
-                    <span>hrs</span><input style={{ ...small, width: "60px" }} type="number" step="0.5" value={info.hours ?? ""} onChange={(e) => editInfo(key, "hours", e.target.value)} />
-                  </div>
-                )}
-                {locMsg[key] && <div style={{ fontSize: "0.72rem", color: info ? "#7e6a9b" : "#b91c1c", marginTop: "4px" }}>{locMsg[key]}</div>}
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+            <button type="button" className="sv-btn sv-line sv-full" onClick={addAct}><Icon name="plus" />Add activity</button>
 
-        <div className="qp-layout">
-        <div className="qp-side">
-        {/* 3. Days strip with the checks summary on the same line */}
-        <div className="qp-daysbar">
-          <h3>Your days <span>tap a day to edit</span></h3>
-          <div className="qp-chk">
-            {issues.length === 0
-              ? <span className="qp-chk-ok">✓ All set, ready for the PDF</span>
-              : <>
-                  <span className="qp-chk-warn">⚠ {issues.length} to finish</span>
-                  {missingHotelDays.length > 0 && (
-                    <button type="button" className="qp-fix" onClick={fixAllHotels}>Pick hotels ({missingHotelDays.length})</button>
-                  )}
-                  <button type="button" className="qp-fix" onClick={() => setShowChecks((v) => !v)}>{showChecks ? "Hide" : "Details"}</button>
-                </>}
+            <div className="sv-pair">
+              <button type="button" className="sv-btn sv-soft" disabled={activeDay === 0} onClick={() => { setActiveDay(activeDay - 1); window.scrollTo({ top: 0 }); }}><Icon name="back" />Day {activeDay}</button>
+              {activeDay === timeline.length - 1
+                ? <button type="button" className="sv-btn sv-primary" onClick={() => goStep("review")}>Review<Icon name="chev" /></button>
+                : <button type="button" className="sv-btn sv-primary" onClick={() => { setActiveDay(activeDay + 1); window.scrollTo({ top: 0 }); }}>Day {activeDay + 2}<Icon name="chev" /></button>}
+            </div>
+            <div className="sv-sub sv-center">Tip: swipe left or right to change day.</div>
           </div>
         </div>
-        {issues.length > 0 && showChecks && (
-          <div className="qp-checks">
-            {issues.map((w, k) => (
-              <div key={k} className="qp-warn"><span>{w.text}</span><button type="button" className="qp-fix" onClick={w.fix}>{w.btn}</button></div>
+      ) : (
+        /* ───────────── REVIEW STEP ───────────── */
+        <div className="sv-stack">
+          <section className="sv-card">
+            <h2 className="sv-h2">{quote?.meta_summary?.client_name || "Client"}</h2>
+            <div className="sv-sum"><span>Days</span><b>{timeline.length}</b></div>
+            <div className="sv-sum"><span>Guests</span><b>{quote?.meta_summary?.adults ?? quote?.adults ?? 2} adults{(quote?.meta_summary?.kids ?? quote?.kids ?? 0) ? `, ${quote?.meta_summary?.kids ?? quote?.kids} kids` : ""}</b></div>
+            <div className="sv-sum"><span>Plan</span><b>{quote?.meta_summary?.budget_tier || "N/A"} · {mealPlan} · {vehicleType || "N/A"}</b></div>
+            <PickRow label="Pick-up" value={startPoint || DEFAULT_POINT} onClick={() => setSheet({ type: "start" })} />
+            <PickRow label="Drop" value={endPoint || DEFAULT_POINT} onClick={() => setSheet({ type: "end" })} />
+            {[["start", "Start", startPoint], ["end", "End", endPoint]].map(([key, label, val]) => {
+              if (isSrinagarPoint(val) || (val || "").trim().length < 3) return null;
+              const info = key === "start" ? startInfo : endInfo;
+              return (
+                <div key={key} className="sv-loc">
+                  <div className="sv-sub"><b>{label} point:</b> {val}</div>
+                  <button type="button" className="sv-btn sv-sm sv-soft sv-self" disabled={!!locBusy} onClick={() => locatePoint(key)}>
+                    {locBusy === key ? <><span className="sv-spin" />Looking up</> : <><Icon name="pin" size={18} />Find location and distance (AI)</>}
+                  </button>
+                  {info && (
+                    <div className="sv-loc-g">
+                      {[["lat", "Lat", "0.0001"], ["lon", "Lon", "0.0001"], ["km", "Road km", "1"], ["hours", "Hours", "0.5"]].map(([f, l, st]) => (
+                        <label key={f} className="sv-field"><span className="sv-lbl">{l}</span>
+                          <input className="sv-inp" type="number" inputMode="decimal" step={st} value={info[f] ?? ""} onChange={(e) => editInfo(key, f, e.target.value)} /></label>
+                      ))}
+                    </div>
+                  )}
+                  {locMsg[key] && <div className={"sv-sub" + (info ? "" : " bad")}>{locMsg[key]}</div>}
+                </div>
+              );
+            })}
+          </section>
+
+          <section className="sv-card sv-stack">
+            <div className="sv-sechead">
+              <h3 className="sv-h3">Checks</h3>
+              {issues.length ? <span className="sv-pill warn">{issues.length} to finish</span> : <span className="sv-pill ok">All set</span>}
+            </div>
+            {issues.length === 0 && <div className="sv-sub">Every day has a route, a hotel and descriptions. Ready for the PDF.</div>}
+            {issues.map((q, k) => (
+              <div key={k} className="sv-issue"><span>{q.text}</span><button type="button" className="sv-btn sv-sm" onClick={() => runFix(q)}>{q.btn === "Open day" ? "Open" : q.btn === "Pick suggested hotel" ? "Pick one" : q.btn}</button></div>
+            ))}
+            {missingHotelDays.length > 1 && <button type="button" className="sv-btn sv-sm sv-soft sv-self" onClick={fixAllHotels}>Pick suggested hotels for all ({missingHotelDays.length})</button>}
+          </section>
+
+          <section className="sv-card">
+            <h3 className="sv-h3">Stays</h3>
+            {timeline.map((d, i) => isDepDay(d) ? null : (
+              <button key={i} type="button" className="sv-sum link" onClick={() => { setActiveDay(i); onStep("days"); }}>
+                <span>Day {i + 1} · {d.overnight_stay || "?"}</span>
+                <b className={hotelSelections[i] ? "" : "bad"}>
+                  {hotelSelections[i] ? ALL_HOTELS_FLAT[hotelSelections[i]]?.name : "Not chosen"}
+                  <small>{d.room_type || DEFAULT_ROOM_TYPE} · {d.rooms ?? 1} room{(d.rooms ?? 1) > 1 ? "s" : ""}{d.eb ? `, ${d.eb} extra bed` : ""}</small>
+                </b>
+              </button>
+            ))}
+          </section>
+
+          <section className="sv-card sv-stack">
+            <label className="sv-field"><span className="sv-lbl">Total price on the PDF (₹)</span>
+              <input className="sv-inp sv-big" type="number" inputMode="numeric" value={editableCost} onChange={(e) => setEditableCost(e.target.value)} /></label>
+            <button type="button" className={"sv-sw" + (showPerPerson ? " on" : "")} role="switch" aria-checked={showPerPerson} onClick={() => setShowPerPerson((v) => !v)}>
+              <span>Show price per person</span><i className="box" /></button>
+            <span className="sv-lbl">Included in the package</span>
+            {[["union_cab", "Union cab (Pahalgam ABC / snow chain)"], ["gondola_p1", "Gondola Phase 1"], ["gondola_p2", "Gondola Phase 2"]].map(([k, lab]) => (
+              <button key={k} type="button" className={"sv-sw" + (includedExtras.includes(k) ? " on" : "")} role="switch" aria-checked={includedExtras.includes(k)} onClick={() => toggleExtra(k)}>
+                <span>{lab}</span><i className="box" /></button>
+            ))}
+            <div className="sv-sub">Anything switched off is listed under exclusions on the PDF.</div>
+          </section>
+
+          <details className="sv-more">
+            <summary><b>Hotels &amp; photos</b><span className="sv-sub">add a hotel or its photos</span></summary>
+            <HotelImageManager />
+          </details>
+        </div>
+      )}
+
+      {/* Always-visible total + main action */}
+      <div className="sv-dock">
+        <div className="sv-dock-tot"><small>Estimated total</small><b>{dockTotal}</b></div>
+        {step === "review"
+          ? <button type="button" className="sv-btn sv-accent" onClick={generateChecked} disabled={pdfBusy}>{pdfBusy ? <><span className="sv-spin" />Generating</> : <><Icon name="pdf" />Generate PDF</>}</button>
+          : <button type="button" className="sv-btn sv-primary" onClick={() => goStep("review")}>Review &amp; PDF{issues.length > 0 && <span className="sv-badge">{issues.length}</span>}</button>}
+      </div>
+
+      {/* ───────────── SHEETS ───────────── */}
+      {sheet?.type === "opts" && (() => {
+        const st = sheet.step, list = optionList(st), cur = optionValue(st), isAddHere = addOpen === st;
+        return (
+          <Sheet title={sheetTitle[st]} onClose={closeSheet}>
+            {st === "from" && activeDay > 0 && prevNight && <div className="sv-sub">Day {activeDay} ended in {prevNight}.</div>}
+            <div className="sv-opts">
+              {list.map((o) => {
+                const isCustom = customNames().includes(o);
+                return (
+                  <div key={o} className={"sv-opt-wrap" + (isCustom ? " has-x" : "")}>
+                    <button type="button" className={"sv-opt" + (cur === o ? " on" : "")} onClick={() => choose(st, o)}>{o}</button>
+                    {isCustom && <button type="button" className="sv-opt-x" aria-label={`Remove ${o}`} onClick={() => removeCustomPlace(o)}><Icon name="x" size={16} /></button>}
+                  </div>
+                );
+              })}
+            </div>
+            {addNote && <div className="sv-note">{addNote}</div>}
+            {!isAddHere
+              ? <button type="button" className="sv-opt add" onClick={() => { setAddOpen(st); setAddText(""); setAddErr(""); }}>+ Add a new place</button>
+              : (
+                <div className="sv-addplace">
+                  <input autoFocus className="sv-inp" placeholder="Place name, e.g. Sopore" maxLength={40} value={addText} disabled={addBusy}
+                    onChange={(e) => setAddText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomPlace(addText, (n) => choose(st, n)); } }} />
+                  <button type="button" className="sv-btn sv-primary" disabled={addBusy || !addText.trim()} onClick={() => addCustomPlace(addText, (n) => choose(st, n))}>{addBusy ? "Locating…" : "Add and use it"}</button>
+                  {addErr && <div className="sv-note bad">{addErr}</div>}
+                </div>
+              )}
+          </Sheet>
+        );
+      })()}
+
+      {sheet?.type === "hotel" && (
+        <Sheet title={`Hotel in ${day.overnight_stay || "this place"}`} onClose={closeSheet}>
+          {hotelList.length === 0 && <div className="sv-empty">No hotels saved for {day.overnight_stay || "this place"} yet. Add one under Hotels &amp; photos in Review.</div>}
+          <div className="sv-list">
+            {hotelList.map((h) => (
+              <button key={h.id} type="button" className={"sv-opt" + (hotelSelections[activeDay] === h.id ? " on" : "")}
+                onClick={() => { setHotelSelections((prev) => ({ ...prev, [activeDay]: h.id })); closeSheet(); }}>
+                {h.name}<small>{h.place}</small>
+              </button>
             ))}
           </div>
-        )}
+        </Sheet>
+      )}
 
-        </div>
-        <div className="qp-main">
-        {/* 4. Active day editor */}
-        {timeline[activeDay] && (
-          <div className="qp-active-day" id="qp-editor">
-            <div className="qp-daypills" role="tablist" aria-label="Days">
-              {timeline.map((d, i) => (
-                <button key={i} type="button" role="tab" aria-selected={i === activeDay} className={"qp-daypill" + (i === activeDay ? " on" : "")} onClick={() => setActiveDay(i)}>
-                  Day {i + 1}{warnDays.has(i) && <span className="pd" title="Needs attention" />}
-                </button>
-              ))}
-              <button type="button" className="qp-daypill plus" onClick={addDay} aria-label="Add a day">+ Day</button>
-            </div>
-            <div className="qp-daytitle">
-              <h3>Day {timeline[activeDay].day}: {timeline[activeDay].title || timeline[activeDay].date}</h3>
-              <div className="qp-dayacts">
-                <button type="button" onClick={() => moveDay(activeDay, -1)} disabled={activeDay === 0} aria-label="Move day earlier" title="Move earlier">&#8249;</button>
-                <button type="button" onClick={() => moveDay(activeDay, 1)} disabled={activeDay === timeline.length - 1} aria-label="Move day later" title="Move later">&#8250;</button>
-                <button type="button" onClick={() => copyDay(activeDay)} aria-label="Duplicate day" title="Duplicate this day">⧉</button>
-                <button type="button" onClick={() => deleteDay(activeDay)} disabled={timeline.length <= 1} aria-label="Delete day" title="Remove this day">✕</button>
-              </div>
-              <select
-                className="qp-route-select qp-preset"
-                value={TRANSIT_OPTIONS.includes(timeline[activeDay].transit_route) ? timeline[activeDay].transit_route : ""}
-                onChange={(e) => { const route = e.target.value; if (route) applyRoute(route); }}
-              >
-                <option value="">{timeline[activeDay].transit_route && !TRANSIT_OPTIONS.includes(timeline[activeDay].transit_route) ? `Custom route (built from the steps)` : "⚡ Quick start: pick a ready-made day"}</option>
-                {TRANSIT_OPTIONS.map((route, i) => <option key={i} value={route}>{routeLabel(route, startPoint, endPoint)}</option>)}
-              </select>
-            </div>
+      {sheet?.type === "room" && (
+        <Sheet title="Room type" onClose={closeSheet}>
+          <div className="sv-opts">
+            {[...new Set([day.room_type || DEFAULT_ROOM_TYPE, ...ROOM_TYPES])].map((t) => (
+              <button key={t} type="button" className={"sv-opt" + ((day.room_type || DEFAULT_ROOM_TYPE) === t ? " on" : "")}
+                onClick={() => { setRoomField(activeDay, "room_type", t); closeSheet(); }}>{t}</button>
+            ))}
+          </div>
+          <div className="sv-sub">Applies to this day and the days after it.</div>
+        </Sheet>
+      )}
 
-            {/* Route picker: Starting from -> Going to -> Overnight */}
-            {(() => {
-              const day = timeline[activeDay];
-              const parsed = parseRoute(day.transit_route);
-              const draft = pickDraft[activeDay] || {};
-              const prevNight = activeDay > 0 ? (timeline[activeDay - 1]?.overnight_stay || "") : "";
-              const autoFrom = activeDay === 0 ? "Airport" : (isFromPlace(prevNight) ? prevNight : "Srinagar");
-              const from  = draft.from  ?? parsed?.from  ?? autoFrom;
-              const to    = draft.to    ?? parsed?.to    ?? "";
-              const isDep = to === "Departure";
-              const night = isDep ? "" : (draft.night ?? parsed?.night ?? "");
-              const customRoute = !parsed && !!day.transit_route;
+      {sheet?.type === "presets" && (
+        <Sheet title="Ready-made days" onClose={closeSheet}>
+          <div className="sv-list">
+            {TRANSIT_OPTIONS.map((route) => (
+              <button key={route} type="button" className={"sv-opt" + (day.transit_route === route ? " on" : "")}
+                onClick={() => { applyRoute(route); closeSheet(); }}>{routeLabel(route, startPoint, endPoint)}</button>
+            ))}
+          </div>
+          <div className="sv-sub">This replaces the route and activities of the current day.</div>
+        </Sheet>
+      )}
 
-              const pick = (patch) => {
-                const next = { from, to, night, ...patch };
-                // Day 1 starts where the guests are collected: a real place (e.g. Pathankot) becomes the tour
-                // start point, so the PDF cover, journey line and map show it. "Airport" keeps the start point as set.
-                if (activeDay === 0 && patch.from !== undefined) {
-                  const wantStart = patch.from === "Airport" ? DEFAULT_POINT : patch.from;
-                  if (wantStart !== startPoint) changeStart(wantStart);
-                }
-                if (patch.to !== undefined && patch.night === undefined) next.night = patch.to === "Departure" ? "" : defaultNightFor(patch.to, next.from);
-                if (next.to === "Departure" || (next.to && next.night)) {
-                  applyRoute(routeTitle(next.from, next.to, next.night));
-                } else {
-                  setPickDraft(prev => ({ ...prev, [activeDay]: next }));
-                }
-              };
-              const pickNight = (city) => {
-                if (customRoute || (!to && day.transit_route)) {
-                  // Hand-picked preset (e.g. "Pahalgam: Local Sightseeing"): only change where they sleep.
-                  setTimeline(prev => prev.map((d, i) => i === activeDay ? { ...d, overnight_stay: city } : d));
-                  setHotelSelections(prev => ({ ...prev, [activeDay]: null }));
-                } else pick({ night: city });
-              };
-
-              const chipStyle = (on, disabled) => ({
-                padding: "3px 12px", borderRadius: "999px", minHeight: "28px", fontSize: "0.8rem", fontWeight: 600,
-                border: on ? "1px solid #1b5666" : "1px solid transparent", backgroundColor: on ? "#1b5666" : "#edf2f2",
-                color: on ? "#fff" : "#1f3f47", cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.4 : 1, transition: "background-color .12s, color .12s",
-              });
-              const row = (step, label, hint, options, value, onPick, disabled) => (
-                <div className="qp-row">
-                  <label className="qp-rl">{label}{hint && <small>{hint}</small>}</label>
-                  <div className="qp-rc">
-                    <div className="qp-city-btns">
-                      {options.map((o) => {
-                        const custom = customNames().includes(o);
-                        return (
-                          <span key={o} style={{ display: "inline-flex", alignItems: "center", gap: "2px" }}>
-                            <button type="button" disabled={disabled} onClick={() => onPick(o)} style={{ ...chipStyle(value === o, disabled), ...(custom && !disabled ? { borderTopRightRadius: 0, borderBottomRightRadius: 0 } : {}) }}>{o}</button>
-                            {custom && !disabled && (
-                              <button type="button" title={`Remove ${o} from the lists`} aria-label={`Remove ${o}`} onClick={() => removeCustomPlace(o)}
-                                style={{ ...chipStyle(false, false), padding: "4px 8px", marginLeft: "-3px", borderTopLeftRadius: 0, borderBottomLeftRadius: 0, color: "#b91c1c", borderColor: "#fecaca" }}>✕</button>
-                            )}
-                          </span>
-                        );
-                      })}
-                      {!disabled && addOpen !== step && (
-                        <button type="button" onClick={() => { setAddOpen(step); setAddText(""); setAddErr(""); }} style={{ ...chipStyle(false, false), borderStyle: "dashed", color: "#1b5666", borderColor: "#8fb3ba", backgroundColor: "transparent" }}>+ Place</button>
-                      )}
-                    </div>
-                    {!disabled && addOpen === step && (
-                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center", marginTop: "6px" }}>
-                        <input
-                          autoFocus
-                          className="qp-route-select"
-                          style={{ maxWidth: "240px", minHeight: "32px" }}
-                          placeholder="Place name, e.g. Sopore"
-                          maxLength={40}
-                          value={addText}
-                          disabled={addBusy}
-                          onChange={(e) => setAddText(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") { e.preventDefault(); addCustomPlace(addText, onPick); }
-                            if (e.key === "Escape") setAddOpen(null);
-                          }}
-                        />
-                        <button type="button" disabled={addBusy || !addText.trim()} onClick={() => addCustomPlace(addText, onPick)} style={{ ...chipStyle(true, false) }}>{addBusy ? "Locating…" : "Add"}</button>
-                        <button type="button" disabled={addBusy} onClick={() => setAddOpen(null)} style={chipStyle(false, false)}>Cancel</button>
-                        {addErr && <div style={{ width: "100%", color: "#b91c1c", fontSize: "0.78rem" }}>{addErr}</div>}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-
+      {(sheet?.type === "start" || sheet?.type === "end") && (
+        <Sheet title={sheet.type === "start" ? "Pick-up point" : "Drop point"} onClose={closeSheet}>
+          <div className="sv-list">
+            {(sheet.type === "start" ? POINT_PRESETS : endOptions).map((p) => {
+              const cur = sheet.type === "start" ? (startPoint || DEFAULT_POINT) : (endPoint || DEFAULT_POINT);
               return (
-                <div id="day-route-select">
-                  {row(1, "From", activeDay > 0 && !draft.from && !parsed && prevNight ? `Day ${activeDay} night` : (parsed && activeDay > 0 && from !== autoFrom ? `Day ${activeDay} ended in ${prevNight || "?"}` : ""), fromOptions(), from, (o) => pick({ from: o }))}
-                  {row(2, "To", "", toOptions(), to, (o) => pick({ to: o }))}
-                  {row(3, "Stay", isDep ? "not needed" : "", nightOptions(), night || (customRoute ? (day.overnight_stay || "") : ""), pickNight, isDep)}
-                  {(isDep || day.transit_route === DROP_ROUTE) && row(4, "Drop at", "", [...POINT_PRESETS, ...fromOptions().filter((o) => o !== "Airport" && o !== "Srinagar")], endPoint || DEFAULT_POINT, (o) => changeEnd(o))}
-                  {addNote && <div style={{ fontSize: "0.8rem", color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "8px 10px", marginBottom: "10px" }}>{addNote}</div>}
-                  {customRoute && <div style={{ fontSize: "0.78rem", color: "#64748b", marginBottom: "10px" }}>Using “{day.transit_route}”. Pick From / To to replace it.</div>}
-                </div>
+                <button key={p} type="button" className={"sv-opt" + (cur === p ? " on" : "")}
+                  onClick={() => { (sheet.type === "start" ? changeStart : changeEnd)(p); closeSheet(); }}>{p}</button>
               );
-            })()}
-
-            <div className="qp-pair qp-pair1">
-            {/* AI writer */}
-            <div className="qp-ai">
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-                {(() => {
-                  const d = timeline[activeDay];
-                  const i = activeDay;
-                  const dep = isDepDay(d);
-                  const list = dep ? [] : (HOTEL_KB[getHotelGroup(d.overnight_stay)] || []);
-                  return (
-                    <div className="qp-hotline">
-                      {dep ? <span className="qp-nohotel">Departure day, no hotel needed</span> : (
-                        <>
-                          <select className={"qp-h-wide" + (hotelSelections[i] ? "" : " bad")} aria-label={`Hotel for day ${i + 1}`} value={hotelSelections[i] || ""}
-                            onChange={(e) => setHotelSelections((prev) => ({ ...prev, [i]: e.target.value }))}>
-                            <option value="">{list.length ? "Choose hotel…" : `No hotels in ${d.overnight_stay || "this place"}`}</option>
-                            {list.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
-                          </select>
-                          <select className="qp-h-room" aria-label={`Room type for day ${i + 1}`} value={d.room_type || DEFAULT_ROOM_TYPE}
-                            onChange={(e) => setRoomField(i, "room_type", e.target.value)}>
-                            {[...new Set([d.room_type || DEFAULT_ROOM_TYPE, ...ROOM_TYPES])].map((t) => <option key={t} value={t}>{t}</option>)}
-                          </select>
-                          {[["rooms", "Rooms", 1, 1, 20], ["eb", "EB", 0, 0, 20]].map(([f, lbl, def, min, max]) => {
-                            const v = Math.max(min, Math.min(max, Number(d[f] ?? def) || def));
-                            return (
-                              <div key={f} className="qp-stp">
-                                <span>{lbl}</span>
-                                <button type="button" aria-label={`Fewer ${lbl}`} disabled={v <= min} onClick={() => setRoomField(i, f, v - 1)}>−</button>
-                                <b>{v}</b>
-                                <button type="button" aria-label={`More ${lbl}`} disabled={v >= max} onClick={() => setRoomField(i, f, v + 1)}>+</button>
-                              </div>
-                            );
-                          })}
-                        </>
-                      )}
-                    </div>
-                  );
-                })()}
-                <input
-                  className="qp-route-select"
-                  style={{ flex: 1, minWidth: "160px", maxWidth: "none" }}
-                  placeholder="AI hints: honeymoon, relaxed pace…"
-                  maxLength={300}
-                  value={aiHints}
-                  onChange={(e) => setAiHints(e.target.value)}
-                />
-                <button
-                  type="button"
-                  onClick={aiRewriteDay}
-                  disabled={!!aiBusy}
-                  style={{ padding: "8px 14px", borderRadius: "6px", border: "none", background: "#b4690a", color: "#fff", fontWeight: "bold", cursor: aiBusy ? "wait" : "pointer", minHeight: "38px", opacity: aiBusy ? 0.7 : 1 }}
-                >
-                  {aiBusy === "day" ? "Writing…" : "✨ Rewrite day"}
-                </button>
-              </div>
-              {aiError && <div style={{ color: "#b91c1c", fontSize: "0.8rem", marginTop: "6px" }}>{aiError}</div>}
-            </div>
-
-            </div>
-
-            {/* Activity list */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "10px" }}>
-              {timeline[activeDay].schedule.map((slot, actIdx) => (
-                <div key={actIdx} className="qp-act">
-                  <div className="qp-activity-row">
-                    <input
-                      type="text"
-                      value={slot.time_slot}
-                      onChange={(e) => { const t = [...timeline]; t[activeDay].schedule[actIdx].time_slot = e.target.value; setTimeline(t); }}
-                      className="qp-time-input"
-                    />
-                    <input
-                      type="text"
-                      value={slot.activity_title}
-                      onChange={(e) => { const t = [...timeline]; t[activeDay].schedule[actIdx].activity_title = e.target.value; setTimeline(t); }}
-                      className="qp-title-input"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => aiWriteActivity(actIdx)}
-                      disabled={!!aiBusy}
-                      title="Write this description with AI"
-                      style={{ padding: "4px 10px", borderRadius: "6px", border: "1px solid #b9d0d4", background: "#e4eef0", color: "#1b5666", fontWeight: "bold", fontSize: "0.8rem", cursor: aiBusy ? "wait" : "pointer", minHeight: "32px", flexShrink: 0, opacity: aiBusy ? 0.7 : 1 }}
-                    >
-                      {aiBusy === "act-" + actIdx ? "Writing…" : "✨ Write"}
-                    </button>
-                  </div>
-                  <textarea
-                    value={slot.description}
-                    onChange={(e) => handleDescriptionChange(activeDay, actIdx, e.target.value)}
-                    style={{ width: "100%", padding: "6px 8px", border: "1px solid #e2e8f0", borderRadius: "6px", boxSizing: "border-box", resize: "vertical", fontSize: "0.85rem", fontFamily: "inherit" }}
-                    rows={2}
-                  />
-                </div>
-              ))}
-            </div>
+            })}
           </div>
-        )}
+        </Sheet>
+      )}
 
-        </div>
-        </div>
+      {sheet?.type === "dayMenu" && (
+        <Sheet title={`Day ${activeDay + 1} options`} onClose={closeSheet}>
+          <button type="button" className="sv-menu" disabled={activeDay === 0} onClick={() => { moveDay(activeDay, -1); closeSheet(); }}><Icon name="up" />Move earlier</button>
+          <button type="button" className="sv-menu" disabled={activeDay === timeline.length - 1} onClick={() => { moveDay(activeDay, 1); closeSheet(); }}><Icon name="down" />Move later</button>
+          <button type="button" className="sv-menu" onClick={() => { copyDay(activeDay); closeSheet(); }}><Icon name="copy" />Duplicate this day</button>
+          <button type="button" className="sv-menu danger" disabled={timeline.length <= 1} onClick={() => { closeSheet(); deleteDay(activeDay); }}><Icon name="trash" />Delete this day</button>
+          <div className="sv-sub">Delete can be undone from the top bar.</div>
+        </Sheet>
+      )}
 
-        {/* 6. Hotel photo manager (rarely needed) */}
-        <details className="qp-more">
-          <summary><b>🏨 Hotels &amp; photos</b> <span className="qp-sub">add a hotel or its photos</span></summary>
-          <div style={{ padding: "4px 10px 12px" }}>
-            <HotelImageManager />
-          </div>
-        </details>
-
-        {/* 7. Footer / PDF export */}
-        <div className="qp-footer-bar">
-          <div className="qp-footer-cost">
-            <h3 style={{ margin: 0, fontSize: "1rem" }}>Total Est. Cost (₹):</h3>
-            <input
-              type="number"
-              value={editableCost}
-              onChange={(e) => setEditableCost(e.target.value)}
-              className="qp-cost-input"
-            />
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.85rem", marginTop: 6, cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={showPerPerson}
-                onChange={(e) => setShowPerPerson(e.target.checked)}
-              />
-              Show price per person on PDF
-            </label>
-            <div style={{ marginTop: 8, fontSize: "0.85rem" }}>
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>Included in package (otherwise listed as exclusions):</div>
-              {[["union_cab", "Union cab (Pahalgam ABC / snow chain)"], ["gondola_p1", "Gondola Phase 1"], ["gondola_p2", "Gondola Phase 2"]].map(([k, lab]) => (
-                <label key={k} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", marginTop: 3 }}>
-                  <input type="checkbox" checked={includedExtras.includes(k)} onChange={() => toggleExtra(k)} />
-                  {lab}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <button
-            className="qp-save-btn"
-            onClick={generateChecked}
-            disabled={pdfBusy}
-          >
-            {pdfBusy ? "Generating…" : "💾 Lock Changes & Generate PDF"}
-          </button>
-        </div>
-      </div>
-    </>
+      {sheet?.type === "ai" && (
+        <Sheet title={`Rewrite Day ${activeDay + 1} with AI`} onClose={closeSheet}>
+          <label className="sv-field"><span className="sv-lbl">Hints (optional)</span>
+            <input className="sv-inp" maxLength={300} placeholder="honeymoon, relaxed pace…" value={aiHints} onChange={(e) => setAiHints(e.target.value)} /></label>
+          <button type="button" className="sv-btn sv-accent sv-full" onClick={() => { closeSheet(); aiRewriteDay(); }}><Icon name="spark" size={18} />Write this day</button>
+          <div className="sv-sub">This replaces all activities for the day. Undo brings them back.</div>
+        </Sheet>
+      )}
+    </div>
   );
 }
