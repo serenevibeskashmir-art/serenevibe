@@ -10,13 +10,14 @@ Env vars (both optional - when the URL is empty nothing is sent and PDF generati
 import datetime
 import json
 import os
+import threading
 
 import requests
 
 IST = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
 
 
-def send_row(name, quote_no, cost, travel_date, timeout=8):
+def send_row(name, quote_no, cost, travel_date, extra=None, timeout=8):
     """POST one row. Returns (ok, detail) where detail says exactly what went wrong. Never raises."""
     url = os.getenv("GOOGLE_SHEET_WEBHOOK_URL", "").strip().strip('"').strip("'")
     if not url:
@@ -31,6 +32,8 @@ def send_row(name, quote_no, cost, travel_date, timeout=8):
         "travel_date": str(travel_date or ""),
         "generated_at": datetime.datetime.now(IST).strftime("%d %b %Y %H:%M"),
     }
+    for k, v in (extra or {}).items():             # extra columns: email, days, adults, kids, ...
+        row[k] = ", ".join(map(str, v)) if isinstance(v, (list, tuple)) else ("" if v is None else str(v))
     try:
         # Apps Script answers a POST with a 302 to its result page; requests follows it.
         r = requests.post(url, data=json.dumps(row), headers={"Content-Type": "text/plain;charset=utf-8"},
@@ -55,11 +58,23 @@ def send_row(name, quote_no, cost, travel_date, timeout=8):
     return False, f"Unexpected reply HTTP {r.status_code}: {body[:200]}"
 
 
-def log_quote(name, quote_no, cost, travel_date):
-    """Send one quote to the sheet. Never raises: a Sheets problem must not block the PDF."""
+def log_quote(name, quote_no, cost, travel_date, extra=None):
+    """Send one quote to the sheet. Never raises and never waits more than ~4.5s, so a slow Google
+    can't push the PDF request past the host's 10s limit."""
     if not os.getenv("GOOGLE_SHEET_WEBHOOK_URL", "").strip():
         return False
-    ok, detail = send_row(name, quote_no, cost, travel_date)
+    result = {}
+
+    def work():
+        result["r"] = send_row(name, quote_no, cost, travel_date, extra, timeout=4)
+
+    t = threading.Thread(target=work, daemon=True)
+    t.start()
+    t.join(4.5)
+    if "r" not in result:
+        print("Google Sheet log failed: no answer from Apps Script within 4.5s")
+        return False
+    ok, detail = result["r"]
     if not ok:
         print(f"Google Sheet log failed: {detail}")
     return ok
