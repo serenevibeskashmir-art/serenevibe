@@ -2,13 +2,17 @@
 // Setup: see the steps in the chat / README. Columns: Name | Quote No | Cost | Travel Date | Generated At
 const SECRET = "June@2024";          // must equal GOOGLE_SHEET_SECRET in your server settings
 const SHEET_NAME = "Quotes";
+const SHEET_ID = "";                 // only needed if this script was NOT created from the sheet (Extensions > Apps Script)
+
+// Open the Web app URL in a browser: you should see {"ok":true,"alive":true}. If you see a Google login page, redeploy as "Anyone".
+function doGet() { return out({ ok: true, alive: true }); }
 
 function doPost(e) {
   try {
     const d = JSON.parse(e.postData.contents);
-    if (d.secret !== SECRET) return out({ ok: false, error: "bad secret" });
+    if (String(d.secret || "").trim() !== SECRET) return out({ ok: false, error: "bad secret" });
 
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = SHEET_ID ? SpreadsheetApp.openById(SHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
     const sh = ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME);
     if (sh.getLastRow() === 0) {
       sh.appendRow(["Name", "Quote No", "Cost", "Travel Date", "Generated At"]);
@@ -21,7 +25,7 @@ function doPost(e) {
     if (last > 1) {
       const vals = sh.getRange(2, 1, last - 1, 2).getValues();
       for (let i = 0; i < vals.length; i++) {
-        if (vals[i][0] === d.name && vals[i][1] === d.quote_no) {
+        if (String(vals[i][0]) === String(d.name) && String(vals[i][1]) === String(d.quote_no)) {
           sh.getRange(i + 2, 1, 1, 5).setValues([row]);
           return out({ ok: true, updated: true });
         }
