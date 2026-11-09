@@ -1218,9 +1218,34 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
   const [sheet, setSheet]     = useState(null);   // { type, step? }  one bottom sheet at a time
   const [openAct, setOpenAct] = useState(0);      // expanded activity (-1 = none)
   const touch = useRef(null);
+  const chipsRef = useRef(null);
+  const [hotelQ, setHotelQ] = useState("");
   useEffect(() => { setOpenAct(0); }, [activeDay, quote]);
 
-  const closeSheet = () => { setSheet(null); setAddText(""); setAddErr(""); setAddOpen(null); };
+  // Changing day always restarts the screen at the top of that day: page scrolled to the top,
+  // the day strip centred on the new day, and any open sheet closed.
+  const goDay = (n) => {
+    if (n < 0 || n >= timeline.length) return;
+    setSheet(null);
+    setActiveDay(n);
+  };
+  useEffect(() => {
+    if (step === "review") return;
+    const up = () => {
+      window.scrollTo({ top: 0, left: 0 });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+      const on = chipsRef.current?.querySelector(".sv-chip.on");
+      if (on && on.scrollIntoView) on.scrollIntoView({ inline: "center", block: "nearest" });
+    };
+    up();
+    const r = requestAnimationFrame(up);          // again after the new day has drawn
+    const t = setTimeout(up, 120);                // and once more in case the keyboard or layout moved things
+    return () => { cancelAnimationFrame(r); clearTimeout(t); };
+  }, [activeDay, step]);
+
+
+  const closeSheet = () => { setSheet(null); setHotelQ(""); setAddText(""); setAddErr(""); setAddOpen(null); };
   const goStep = (s) => { onStep(s); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
   const day = timeline[activeDay];
@@ -1295,7 +1320,7 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
     const t = e.changedTouches[0], dx = t.clientX - s.x, dy = t.clientY - s.y;
     if (Math.abs(dx) > 70 && Math.abs(dy) < 50) {
       const n = activeDay + (dx < 0 ? 1 : -1);
-      if (n >= 0 && n < timeline.length) { setActiveDay(n); window.scrollTo({ top: 0 }); }
+      goDay(n);
     }
   };
 
@@ -1333,10 +1358,10 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
       {step !== "review" ? (
         /* ───────────── DAYS STEP ───────────── */
         <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-          <div className="sv-chips" role="tablist" aria-label="Days">
+          <div className="sv-chips" role="tablist" aria-label="Days" ref={chipsRef}>
             {timeline.map((d, i) => (
               <button key={i} type="button" role="tab" aria-selected={i === activeDay}
-                className={"sv-chip" + (i === activeDay ? " on" : "")} onClick={() => setActiveDay(i)}>
+                className={"sv-chip" + (i === activeDay ? " on" : "")} onClick={() => goDay(i)}>
                 <b>Day {i + 1}</b>
                 <span>{d.transit_route ? shortRoute(d).replace(/^Airport to /, "").replace(/^.* to /, "") : "New"}</span>
                 {warnDays.has(i) && <i title="Needs attention" />}
@@ -1369,7 +1394,12 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
               </div>
               {customRoute && <div className="sv-sub">Using “{day.transit_route}”. Pick From or To to replace it.</div>}
               {addNote && <div className="sv-note">{addNote}</div>}
-              <button type="button" className="sv-btn sv-sm sv-soft sv-self" onClick={() => setSheet({ type: "presets" })}><Icon name="spark" size={18} />Quick start: ready-made days</button>
+              <div className="sv-act-tools">
+                <button type="button" className="sv-btn sv-sm sv-accent" disabled={!!aiBusy} onClick={() => setSheet({ type: "ai" })}>
+                  {aiBusy === "day" ? <><span className="sv-spin" />Writing</> : <><Icon name="spark" size={18} />Rewrite day with AI</>}
+                </button>
+                <button type="button" className="sv-btn sv-sm sv-soft" onClick={() => setSheet({ type: "presets" })}>Ready-made days</button>
+              </div>
             </section>
 
             <section className="sv-card sv-stack">
@@ -1438,10 +1468,10 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
             <button type="button" className="sv-btn sv-line sv-full" onClick={addAct}><Icon name="plus" />Add activity</button>
 
             <div className="sv-pair">
-              <button type="button" className="sv-btn sv-soft" disabled={activeDay === 0} onClick={() => { setActiveDay(activeDay - 1); window.scrollTo({ top: 0 }); }}><Icon name="back" />Day {activeDay}</button>
+              <button type="button" className="sv-btn sv-soft" disabled={activeDay === 0} onClick={() => goDay(activeDay - 1)}><Icon name="back" />Day {activeDay}</button>
               {activeDay === timeline.length - 1
                 ? <button type="button" className="sv-btn sv-primary" onClick={() => goStep("review")}>Review<Icon name="chev" /></button>
-                : <button type="button" className="sv-btn sv-primary" onClick={() => { setActiveDay(activeDay + 1); window.scrollTo({ top: 0 }); }}>Day {activeDay + 2}<Icon name="chev" /></button>}
+                : <button type="button" className="sv-btn sv-primary" onClick={() => goDay(activeDay + 1)}>Day {activeDay + 2}<Icon name="chev" /></button>}
             </div>
             <div className="sv-sub sv-center">Tip: swipe left or right to change day.</div>
           </div>
@@ -1569,8 +1599,13 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
       {sheet?.type === "hotel" && (
         <Sheet title={`Hotel in ${day.overnight_stay || "this place"}`} onClose={closeSheet}>
           {hotelList.length === 0 && <div className="sv-empty">No hotels saved for {day.overnight_stay || "this place"} yet. Add one under Hotels &amp; photos in Review.</div>}
+          {hotelList.length > 6 && (
+            <div className="sv-find">
+              <input className="sv-inp" type="search" placeholder={`Search ${hotelList.length} hotels`} value={hotelQ} onChange={(e) => setHotelQ(e.target.value)} />
+            </div>
+          )}
           <div className="sv-list">
-            {hotelList.map((h) => (
+            {hotelList.filter((h) => !hotelQ.trim() || (h.name + " " + (h.place || "")).toLowerCase().includes(hotelQ.trim().toLowerCase())).map((h) => (
               <button key={h.id} type="button" className={"sv-opt" + (hotelSelections[activeDay] === h.id ? " on" : "")}
                 onClick={() => { setHotelSelections((prev) => ({ ...prev, [activeDay]: h.id })); closeSheet(); }}>
                 {h.name}<small>{h.place}</small>
