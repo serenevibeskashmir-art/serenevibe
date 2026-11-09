@@ -233,6 +233,62 @@ textarea.sv-inp { min-height: 96px; resize: vertical; line-height: 1.45; font-si
   .sv-main input[type="password"], .sv-main input[type="date"], .sv-main select { font-size: 16px; }   /* stops iOS zoom on focus */
 }
 
+
+/* ── Mobile builder polish ─────────────────────────────── */
+@media (max-width: 899px) {
+  .sv-panel { padding: 10px 12px 0; }
+  .sv-top-row { height: 54px; }
+  .sv-steps button { min-height: 42px; }
+  .sv-shell.has-steps { --sv-head: 108px; }
+
+  /* Day strip: snaps, fades at the edge, clearly shows the current day */
+  .sv-chips { scroll-snap-type: x proximity; scroll-padding: 0 14px; -webkit-overflow-scrolling: touch; }
+  .sv-chip { scroll-snap-align: center; min-width: 82px; }
+  .sv-chip.on { box-shadow: 0 2px 8px -2px rgba(27,86,102,.55); }
+
+  /* Everything inside the builder reads at a thumb-friendly size, and never zooms iOS on focus */
+  .sv-inp, .sv-qp input, .sv-qp textarea, .sv-qp select { font-size: 16px; }
+  .sv-card { padding: 12px; border-radius: 14px; }
+  .sv-h2 { font-size: 1.22rem; }
+  .sv-act-h { min-height: 64px; }
+  .sv-act-b textarea.sv-inp { min-height: 120px; }
+  .sv-grid-time { grid-template-columns: 88px minmax(0, 1fr); }
+  .sv-act-tools { flex-wrap: wrap; }
+  .sv-act-tools > .sv-btn:first-child { flex: 1 1 100%; }
+  .sv-act-tools > .sv-sq { flex: 1; width: auto; }
+
+  /* Bottom sheets: room for the keyboard, a bigger close area, sticky title */
+  .sv-sheet { max-height: 92dvh; }
+  .sv-sheet-h { position: sticky; top: 0; background: #fff; border-radius: 22px 22px 0 0; z-index: 1; }
+  .sv-sheet-b { padding-bottom: calc(24px + var(--sv-safe-b)); }
+  .sv-opts { grid-template-columns: 1fr 1fr; }
+
+  /* The keyboard is open: hide the bars so the field being typed in stays visible */
+  .sv-shell:has(.sv-qp input:focus, .sv-qp textarea:focus) .sv-dock,
+  .sv-shell:has(.sv-qp input:focus, .sv-qp textarea:focus) .sv-nav { display: none; }
+  .sv-shell:has(.sv-qp input:focus, .sv-qp textarea:focus) .sv-main { padding-bottom: 24px; }
+
+  /* Day 2 and later: next / previous buttons stay easy to reach */
+  .sv-qp .sv-pair > .sv-btn { min-height: 52px; }
+}
+
+
+/* ── Compact pickers: more options per screen, and the list always scrolls ── */
+.sv-sheet { overflow: hidden; }
+.sv-sheet-b { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior: contain; gap: 6px; }
+.sv-sheet .sv-opts { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
+.sv-sheet .sv-opt { min-height: 42px; padding: 6px 10px; border-radius: 10px; font-size: .84rem; line-height: 1.2; border-width: 1px; }
+.sv-sheet .sv-opt.on { box-shadow: none; border-width: 1.5px; }
+.sv-sheet .sv-opt-wrap.has-x .sv-opt { padding-right: 36px; }
+.sv-sheet .sv-opt-x { width: 36px; height: 36px; top: 3px; right: 2px; }
+.sv-sheet .sv-list { gap: 5px; }
+.sv-sheet .sv-list .sv-opt { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+.sv-sheet .sv-list .sv-opt small { flex: none; font-size: .68rem; text-align: right; max-width: 40%; }
+.sv-sheet .sv-opt.add { min-height: 42px; }
+.sv-find { position: sticky; top: 0; z-index: 1; background: #fff; padding-bottom: 4px; }
+.sv-find .sv-inp { min-height: 42px; border-radius: 10px; padding: 6px 12px; }
+.sv-count { font-size: .7rem; color: var(--sv-mute); }
+
 /* ── Desktop ───────────────────────────────────────────── */
 @media (min-width: 900px) {
   .sv-shell { --sv-nav-h: 52px; }
