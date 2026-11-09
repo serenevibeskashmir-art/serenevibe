@@ -3,7 +3,8 @@ import os
 from flask import Blueprint, jsonify, request, send_file
 
 from backend.auth import admin_required
-from backend.services.pdf_service import generate_pdf, _quote_ref, normalize_extras
+from backend.services.pdf_service import (generate_pdf, _quote_ref, normalize_extras, _extras_list, _amount_int,
+                                          UNION_CAB_PLACES, COUPLE_EXTRAS, _GONDOLA_LABELS)
 from backend.services.sheet_log import log_quote, send_row
 
 itinerary_bp = Blueprint("itinerary", __name__)
@@ -186,6 +187,14 @@ def _build_default_timeline(days):
     return timeline
 
 
+def _inclusion_labels(payload):
+    """Readable names of the optional extras ticked for this quote (cabs, gondola, couple items)."""
+    names = {k: f"Union cab - {n}" for k, n in UNION_CAB_PLACES}
+    names.update(_GONDOLA_LABELS)
+    names.update(dict(COUPLE_EXTRAS))
+    return [names.get(k, k) for k in _extras_list(payload)]
+
+
 @itinerary_bp.route("/sheet-test", methods=["GET", "POST"])
 @admin_required
 def sheet_test():
@@ -270,7 +279,17 @@ def generate_custom_itinerary():
         return jsonify({"error": f"Failed to build file structure: {pdf_error}"}), 500
 
     # Record the quote in the Google Sheet (no-op unless GOOGLE_SHEET_WEBHOOK_URL is set; never blocks the PDF).
-    log_quote(client_name, _quote_ref(client_name), calculated_cost, data.get("start_date", "Flexible"))
+    _hotel_names = []
+    for _h in (response_payload.get("hotel_details") or {}).values():
+        _n = (_h or {}).get("name") if isinstance(_h, dict) else None
+        if _n and _n not in _hotel_names:
+            _hotel_names.append(_n)
+    log_quote(client_name, _quote_ref(client_name), calculated_cost, data.get("start_date", "Flexible"), {
+        "email": client_email, "days": days, "adults": adults, "kids": data.get("kids", 0),
+        "budget_tier": budget_tier, "vehicle": vehicle, "meal_plan": meal_plan,
+        "pickup": start_point, "drop": end_point, "hotels": _hotel_names,
+        "inclusions": _inclusion_labels(response_payload),
+    })
 
     # On serverless hosting a second request may land on a different instance that
     # doesn't have the file, so the admin asks for the PDF in this same response.
