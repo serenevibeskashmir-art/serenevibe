@@ -4,7 +4,7 @@ from flask import Blueprint, jsonify, request, send_file
 
 from backend.auth import admin_required
 from backend.services.pdf_service import generate_pdf, _quote_ref, normalize_extras
-from backend.services.sheet_log import log_quote
+from backend.services.sheet_log import log_quote, send_row
 
 itinerary_bp = Blueprint("itinerary", __name__)
 
@@ -184,6 +184,14 @@ def _build_default_timeline(days):
     timeline.append(departure_day)
 
     return timeline
+
+
+@itinerary_bp.route("/sheet-test", methods=["GET", "POST"])
+@admin_required
+def sheet_test():
+    """Sends a TEST row to the Google Sheet and reports exactly what happened (open while logged in as admin)."""
+    ok, detail = send_row("TEST - delete me", "SVK-TEST", 1, "Test")
+    return jsonify({"ok": ok, "detail": detail}), (200 if ok else 502)
 
 
 @itinerary_bp.route("/generate", methods=["POST"])
