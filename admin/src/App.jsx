@@ -6,6 +6,7 @@ import AssistantSettings from './pages/AssistantSettings.jsx';
 import SitePackages from './pages/SitePackages.jsx';
 import WebsitePhotos from './pages/WebsitePhotos.jsx';
 import WhatsAppLeads from './pages/WhatsAppLeads.jsx';
+import Payments from './pages/Payments.jsx';
 import ScrollDownButton from './components/ScrollDownButton.jsx';
 import { Icon } from './components/ui.jsx';
 import { clearAdminToken, verifyAdminSession } from './api';
@@ -14,6 +15,7 @@ import { clearAdminToken, verifyAdminSession } from './api';
 const TABS = [
   { id: 'itinerary', label: 'Itinerary', title: 'Itinerary Builder', icon: 'route' },
   { id: 'whatsapp',  label: 'Leads',     title: 'WhatsApp Leads',    icon: 'chat'  },
+  { id: 'payments',  label: 'Payments',  title: 'Payments',          icon: 'wallet' },
   { id: 'packages',  label: 'Packages',  title: 'Packages',          icon: 'box'   },
   { id: 'photos',    label: 'Photos',    title: 'Website Photos',    icon: 'image' },
   { id: 'assistant', label: 'Assistant', title: 'AI Assistant',      icon: 'bot'   },
@@ -123,6 +125,8 @@ export default function App() {
         )}
 
         {activeTab === 'whatsapp' && <WhatsAppLeads onUnauthorized={handleLogout} />}
+
+        {activeTab === 'payments' && <Payments onUnauthorized={handleLogout} />}
 
         {activeTab === 'packages' && (
           <SitePackages authenticated={authenticated} onUnauthorized={handleLogout} />
