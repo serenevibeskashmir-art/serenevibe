@@ -78,3 +78,28 @@ def log_quote(name, quote_no, cost, travel_date, extra=None):
     if not ok:
         print(f"Google Sheet log failed: {detail}")
     return ok
+
+
+def call_script(action, payload=None, timeout=8):
+    """Ask the Apps Script to do something other than log a quote ("list" or "pay").
+    Returns (data, error): data is the script's JSON reply when it says ok, otherwise None and error says why. Never raises."""
+    url = os.getenv("GOOGLE_SHEET_WEBHOOK_URL", "").strip().strip('"').strip("'")
+    if not url or not url.endswith("/exec"):
+        return None, "GOOGLE_SHEET_WEBHOOK_URL is not set to the Apps Script Web app URL (ending in /exec)."
+    body = {"secret": os.getenv("GOOGLE_SHEET_SECRET", "").strip(), "action": action, **(payload or {})}
+    try:
+        r = requests.post(url, data=json.dumps(body), headers={"Content-Type": "text/plain;charset=utf-8"},
+                          timeout=(4, timeout), allow_redirects=True)
+    except requests.exceptions.Timeout:
+        return None, f"Google Sheet did not answer within {timeout}s. Try again."
+    except Exception as exc:
+        return None, f"Network error: {exc}"
+    try:
+        reply = r.json()
+    except ValueError:
+        return None, ("Google returned a web page instead of data. In Apps Script, deploy a NEW version of the "
+                      "Web app (Who has access: Anyone) with the latest script.")
+    if not isinstance(reply, dict) or reply.get("ok") is not True:
+        err = reply.get("error") if isinstance(reply, dict) else None
+        return None, f"Google Sheet refused it: {err or reply}"
+    return reply, None
