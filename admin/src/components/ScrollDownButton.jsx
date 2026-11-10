@@ -30,7 +30,7 @@ export default function ScrollDownButton() {
       style={{
         position: "fixed",
         right: "max(16px, env(safe-area-inset-right))",
-        bottom: "max(20px, env(safe-area-inset-bottom))",
+        bottom: "calc(var(--sv-nav-h, 60px) + env(safe-area-inset-bottom, 0px) + 14px)",   // sits above the bottom tab bar, not on top of it
         zIndex: 9999,
         width: 56,
         height: 56,
