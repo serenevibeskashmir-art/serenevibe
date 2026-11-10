@@ -13,6 +13,7 @@ from backend.routes.email import email_bp
 from backend.routes.hotels import hotels_bp
 from backend.routes.itinerary import itinerary_bp
 from backend.routes.leads import leads_bp
+from backend.routes.ledger import ledger_bp
 from backend.routes.packages import packages_bp
 from backend.routes.payments import payments_bp
 from backend.routes.site_packages import public_packages_manifest, site_packages_bp
@@ -43,6 +44,7 @@ def create_app():
     app.register_blueprint(assistant_bp, url_prefix="/api")
     app.register_blueprint(whatsapp_bp, url_prefix="/api")
     app.register_blueprint(payments_bp, url_prefix="/api")
+    app.register_blueprint(ledger_bp, url_prefix="/api")
 
     with app.app_context():
         try:
