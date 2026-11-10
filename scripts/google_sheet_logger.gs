@@ -3,7 +3,8 @@
 //
 // The admin panel (Accounts tab) also talks to this script: action "list" reads the rows, action "pay" saves a booking amount.
 // It also keeps a second tab, "Expenses", for money you spend and profit you earn (actions "ledger_list", "ledger_add", "ledger_delete").
-// Expenses columns: Date | Type | Category | Description | Amount | Quote No | Added At | ID   (totals appear in J1:K4)
+// Expenses columns: Date | Type | Category | Description | Amount | Quote No | Added At | ID | Client   (totals appear in J1:K4)
+// Quote No + Client are picked from the Quotes tab in the admin panel.
 // Payment tracking (no typing needed):
 //   Payment Status is a dropdown on every row. Pick "Token paid"   -> Booking Amount fills with 25% of Cost.
 //                                              Pick "Paid in full" -> Booking Amount fills with the full Cost.
@@ -24,8 +25,8 @@ const STATUSES = ["Pending", STATUS_TOKEN, STATUS_FULL];
 
 // ---- Expenses & profit tab ----
 const LEDGER_SHEET = "Expenses";
-const LEDGER_HEADERS = ["Date", "Type", "Category", "Description", "Amount", "Quote No", "Added At", "ID"];
-const L_DATE = 1, L_TYPE = 2, L_CAT = 3, L_DESC = 4, L_AMT = 5, L_QUOTE = 6, L_ADDED = 7, L_ID = 8;
+const LEDGER_HEADERS = ["Date", "Type", "Category", "Description", "Amount", "Quote No", "Added At", "ID", "Client"];
+const L_DATE = 1, L_TYPE = 2, L_CAT = 3, L_DESC = 4, L_AMT = 5, L_QUOTE = 6, L_ADDED = 7, L_ID = 8, L_CLIENT = 9;
 const L_PROFIT = "Profit", L_EXPENSE = "Expense";
 const L_TYPES = [L_PROFIT, L_EXPENSE];
 const IMPORT_TAG = "(payment received)";   // marks rows made by importPastPayments()
@@ -182,6 +183,7 @@ function getLedger(ss) {
       SpreadsheetApp.newDataValidation().requireValueInList(L_TYPES, true).setAllowInvalid(true).build());
     sh.setColumnWidth(L_DESC, 260);
     sh.setColumnWidth(L_ID, 90);
+    sh.setColumnWidth(L_CLIENT, 150);
     // Running totals, always up to date because they are formulas.
     sh.getRange("J1:K4").setValues([["Summary", ""], ["Total Profit", ""], ["Total Expenses", ""], ["Net (Profit - Expenses)", ""]]);
     sh.getRange("K2").setFormula('=SUMIF(B:B,"' + L_PROFIT + '",E:E)');
@@ -224,7 +226,7 @@ function ledgerList(ss) {
     const type = String(v[L_TYPE - 1]).trim() === L_PROFIT ? L_PROFIT : L_EXPENSE;
     rows.push({ id: String(v[L_ID - 1]), date: dateText(v[L_DATE - 1]), type: type, category: cellText(v[L_CAT - 1]),
                 description: cellText(v[L_DESC - 1]), amount: Number(v[L_AMT - 1]) || 0, quote_no: cellText(v[L_QUOTE - 1]),
-                added_at: cellText(v[L_ADDED - 1]) });
+                client: cellText(v[L_CLIENT - 1]), added_at: cellText(v[L_ADDED - 1]) });
   });
   if (filled) sh.getRange(2, L_ID, vals.length, 1).setValues(vals.map(function (v) { return [v[L_ID - 1]]; }));
   rows.reverse();                                       // later rows first ...
@@ -248,7 +250,7 @@ function ledgerAdd(ss, d) {
     const id = newId();
     const added = Utilities.formatDate(new Date(), "Asia/Kolkata", "dd MMM yyyy HH:mm");
     const row = [date, type, String(d.category || "").slice(0, 60), String(d.description || "").slice(0, 300),
-                 amount, String(d.quote_no || "").slice(0, 40), added, id];
+                 amount, String(d.quote_no || "").slice(0, 40), added, id, String(d.client || "").slice(0, 80)];
     const r = sh.getLastRow() + 1;
     sh.getRange(r, 1, 1, row.length).setValues([row]);
     sh.getRange(r, L_DATE).setNumberFormat("dd mmm yyyy");
@@ -256,7 +258,7 @@ function ledgerAdd(ss, d) {
     sh.getRange(r, L_TYPE).setDataValidation(
       SpreadsheetApp.newDataValidation().requireValueInList(L_TYPES, true).setAllowInvalid(true).build());
     return { ok: true, row: { id: id, date: dateText(date), type: type, category: row[2], description: row[3],
-                              amount: amount, quote_no: row[5], added_at: added } };
+                              amount: amount, quote_no: row[5], client: row[8], added_at: added } };
   } finally {
     lock.releaseLock();
   }
@@ -307,7 +309,7 @@ function importPastPayments() {
     let when = v[4] instanceof Date ? v[4] : new Date(String(v[4]));
     if (isNaN(when.getTime())) when = new Date();
     rows.push([new Date(when.getFullYear(), when.getMonth(), when.getDate()), L_PROFIT, "Package booking",
-               desc, paid, quoteNo, added, newId()]);
+               desc, paid, quoteNo, added, newId(), String(v[0])]);
   });
   if (rows.length) {
     const r = led.getLastRow() + 1;
