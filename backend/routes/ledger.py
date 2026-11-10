@@ -1,7 +1,7 @@
 """Expenses & profit: entries live in the "Expenses" tab of the same Google Sheet as the quotes.
 
     GET    /api/admin/ledger        -> {"rows": [...]}  (newest date first)
-    POST   /api/admin/ledger        -> body {type, amount, date, category, description, quote_no}; adds one row
+    POST   /api/admin/ledger        -> body {type, amount, date, category, description, quote_no, client}; adds one row
     DELETE /api/admin/ledger/<id>   -> removes that row
 
 Like payments, the sheet is the single source of truth: nothing is stored in the database.
@@ -57,6 +57,7 @@ def add_ledger():
         "category": str(body.get("category") or "").strip()[:60],
         "description": str(body.get("description") or "").strip()[:300],
         "quote_no": str(body.get("quote_no") or "").strip()[:40],
+        "client": str(body.get("client") or "").strip()[:80],
     }
     data, error = call_script("ledger_add", payload)
     if error:
