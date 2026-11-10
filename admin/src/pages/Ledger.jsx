@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch } from '../api';
 
 /* Expenses & profit: every entry is written to the "Expenses" tab of your Google Sheet.
@@ -42,6 +42,8 @@ export default function Ledger({ onUnauthorized }) {
   const [quotes, setQuotes]   = useState(null);    // quotes from the Quotes sheet, for "Link to quote"
   const [quotesErr, setQuotesErr] = useState('');
   const [qSearch, setQSearch]   = useState('');
+  const [qOpen, setQOpen]       = useState(false);   // quote list is only shown while the search box is in use
+  const qBox = useRef(null);
 
   const load = useCallback(async () => {
     setError('');
@@ -67,11 +69,18 @@ export default function Ledger({ onUnauthorized }) {
     } catch (e) { setQuotesErr(e.message); setQuotes((q) => q || []); }
   }, [onUnauthorized]);
 
+  useEffect(() => {                                  // tap anywhere outside the picker to close the list
+    if (!qOpen) return undefined;
+    const close = (e) => { if (qBox.current && !qBox.current.contains(e.target)) setQOpen(false); };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [qOpen]);
+
   const quoteMatches = useMemo(() => {
     const s = qSearch.trim().toLowerCase();
     return (quotes || [])
       .filter((r) => !s || [r.name, r.quote_no].some((v) => (v || '').toLowerCase().includes(s)))
-      .slice(0, 6);
+      .slice(0, 30);
   }, [quotes, qSearch]);
 
   const months = useMemo(
@@ -95,7 +104,7 @@ export default function Ledger({ onUnauthorized }) {
   const bad = !(amountNum > 0) || !form.date;
 
   const openForm = (type) => {
-    setForm({ ...blank(), type }); setAdding(true); setNote(''); setError(''); setQSearch('');
+    setForm({ ...blank(), type }); setAdding(true); setNote(''); setError(''); setQSearch(''); setQOpen(false);
     loadQuotes();                                              // always fresh: picks up quotes made a minute ago
   };
 
@@ -194,19 +203,26 @@ export default function Ledger({ onUnauthorized }) {
                 <button type="button" style={S.del} onClick={() => setForm((f) => ({ ...f, quote_no: '', client: '' }))}>Remove</button>
               </div>
             ) : (
-              <>
-                <input id="lg-q" style={S.input} type="search" value={qSearch} onChange={(e) => setQSearch(e.target.value)}
-                  placeholder={quotes === null ? 'Loading quotes…' : 'Search client name or quote no'} autoComplete="off" />
-                {quotesErr && <small style={{ ...S.small, color: '#b42318' }}>{quotesErr} <button type="button" style={S.del} onClick={loadQuotes}>Try again</button></small>}
-                {quotes && !quotes.length && !quotesErr && <small style={S.small}>No quotes in the sheet yet.</small>}
-                {quotes && quotes.length > 0 && !quoteMatches.length && <small style={S.small}>No quote matches.</small>}
-                {quoteMatches.map((r) => (
-                  <button key={`${r.name}||${r.quote_no}`} type="button" style={S.pick}
-                    onClick={() => { setForm((f) => ({ ...f, quote_no: r.quote_no, client: r.name })); setQSearch(''); }}>
-                    <b>{r.name}</b><small style={S.small}>{r.quote_no}{r.travel_date ? ` · travel ${r.travel_date}` : ''}</small>
-                  </button>
-                ))}
-              </>
+              <div ref={qBox}>
+                <input id="lg-q" style={S.input} type="search" value={qSearch}
+                  onChange={(e) => { setQSearch(e.target.value); setQOpen(true); }}
+                  onFocus={() => setQOpen(true)} onClick={() => setQOpen(true)}
+                  placeholder={quotes === null ? 'Loading quotes…' : 'Tap to choose a quote'} autoComplete="off" />
+                {qOpen && (
+                  <div style={S.list} role="listbox" aria-label="Quotes">
+                    {quotesErr && <small style={{ ...S.small, color: '#b42318', padding: '10px 12px' }}>{quotesErr} <button type="button" style={S.del} onClick={loadQuotes}>Try again</button></small>}
+                    {quotes === null && !quotesErr && <small style={{ ...S.small, padding: '10px 12px' }}>Loading quotes…</small>}
+                    {quotes && !quotes.length && !quotesErr && <small style={{ ...S.small, padding: '10px 12px' }}>No quotes in the sheet yet.</small>}
+                    {quotes && quotes.length > 0 && !quoteMatches.length && <small style={{ ...S.small, padding: '10px 12px' }}>No quote matches.</small>}
+                    {quoteMatches.map((r) => (
+                      <button key={`${r.name}||${r.quote_no}`} type="button" role="option" style={S.pick}
+                        onClick={() => { setForm((f) => ({ ...f, quote_no: r.quote_no, client: r.name })); setQSearch(''); setQOpen(false); }}>
+                        <b>{r.name}</b><small style={S.small}>{r.quote_no}{r.travel_date ? ` · travel ${r.travel_date}` : ''}</small>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
 
             <div style={S.nav}>
@@ -291,6 +307,7 @@ const S = {
   err: { background: '#fee4e2', color: '#b42318', borderRadius: 8, padding: '10px 12px', marginTop: 12 },
   ok: { color: '#14703b', fontSize: 13, fontWeight: 600, margin: '10px 0 0' },
   picked: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: '#f4f8fb', border: `1px solid ${LINE}`, borderRadius: 8, padding: '8px 12px', minHeight: 48 },
-  pick: { display: 'block', width: '100%', textAlign: 'left', font: 'inherit', color: INK, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 8, padding: '10px 12px', minHeight: 48, marginTop: 6, cursor: 'pointer' },
+  list: { marginTop: 6, maxHeight: 220, overflowY: 'auto', overscrollBehavior: 'contain', border: `1px solid ${LINE}`, borderRadius: 8, background: '#fff' },
+  pick: { display: 'block', width: '100%', textAlign: 'left', font: 'inherit', color: INK, background: '#fff', border: 0, borderBottom: `1px solid ${LINE}`, padding: '10px 12px', minHeight: 48, cursor: 'pointer' },
   empty: { textAlign: 'center', color: MUTED, padding: '28px 0' },
 };
