@@ -27,7 +27,7 @@ const prettyMonth = (ym) => {
   return new Date(+y, +m - 1, 1).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
 };
 
-const blank = () => ({ type: 'Expense', amount: '', date: todayISO(), category: '', description: '', quote_no: '' });
+const blank = () => ({ type: 'Expense', amount: '', date: todayISO(), category: '', description: '', quote_no: '', client: '' });
 
 export default function Ledger({ onUnauthorized }) {
   const [rows, setRows]       = useState(null);
@@ -39,6 +39,9 @@ export default function Ledger({ onUnauthorized }) {
   const [busy, setBusy]       = useState(false);
   const [removing, setRemoving] = useState('');    // id being deleted
   const [note, setNote]       = useState('');
+  const [quotes, setQuotes]   = useState(null);    // quotes from the Quotes sheet, for "Link to quote"
+  const [quotesErr, setQuotesErr] = useState('');
+  const [qSearch, setQSearch]   = useState('');
 
   const load = useCallback(async () => {
     setError('');
@@ -52,6 +55,24 @@ export default function Ledger({ onUnauthorized }) {
   }, [onUnauthorized]);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadQuotes = useCallback(async () => {
+    setQuotesErr('');
+    try {
+      const res = await apiFetch('/api/admin/payments');       // same quote list the Client payments view reads
+      if (res.status === 401) { onUnauthorized && onUnauthorized(); return; }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not read the quotes.');
+      setQuotes(data.rows || []);
+    } catch (e) { setQuotesErr(e.message); setQuotes((q) => q || []); }
+  }, [onUnauthorized]);
+
+  const quoteMatches = useMemo(() => {
+    const s = qSearch.trim().toLowerCase();
+    return (quotes || [])
+      .filter((r) => !s || [r.name, r.quote_no].some((v) => (v || '').toLowerCase().includes(s)))
+      .slice(0, 6);
+  }, [quotes, qSearch]);
 
   const months = useMemo(
     () => [...new Set((rows || []).map((r) => (r.date || '').slice(0, 7)).filter(Boolean))].sort().reverse(),
@@ -73,7 +94,10 @@ export default function Ledger({ onUnauthorized }) {
   const amountNum = Number(form.amount);
   const bad = !(amountNum > 0) || !form.date;
 
-  const openForm = (type) => { setForm({ ...blank(), type }); setAdding(true); setNote(''); setError(''); };
+  const openForm = (type) => {
+    setForm({ ...blank(), type }); setAdding(true); setNote(''); setError(''); setQSearch('');
+    loadQuotes();                                              // always fresh: picks up quotes made a minute ago
+  };
 
   const add = async () => {
     setBusy(true); setError(''); setNote('');
@@ -160,8 +184,30 @@ export default function Ledger({ onUnauthorized }) {
             <label style={S.label} htmlFor="lg-desc">Note (optional)</label>
             <input id="lg-desc" style={S.input} value={form.description} onChange={set('description')} maxLength={300} placeholder="e.g. Houseboat advance, Sharma family" />
 
-            <label style={S.label} htmlFor="lg-q">Quote no (optional)</label>
-            <input id="lg-q" style={S.input} value={form.quote_no} onChange={set('quote_no')} maxLength={40} placeholder="Link to a quote" />
+            <label style={S.label} htmlFor="lg-q">Link to quote (optional)</label>
+            {form.quote_no ? (
+              <div style={S.picked}>
+                <div style={{ minWidth: 0 }}>
+                  <b style={S.cat}>{form.client || 'Quote'}</b>
+                  <small style={S.small}>{form.quote_no}</small>
+                </div>
+                <button type="button" style={S.del} onClick={() => setForm((f) => ({ ...f, quote_no: '', client: '' }))}>Remove</button>
+              </div>
+            ) : (
+              <>
+                <input id="lg-q" style={S.input} type="search" value={qSearch} onChange={(e) => setQSearch(e.target.value)}
+                  placeholder={quotes === null ? 'Loading quotes…' : 'Search client name or quote no'} autoComplete="off" />
+                {quotesErr && <small style={{ ...S.small, color: '#b42318' }}>{quotesErr} <button type="button" style={S.del} onClick={loadQuotes}>Try again</button></small>}
+                {quotes && !quotes.length && !quotesErr && <small style={S.small}>No quotes in the sheet yet.</small>}
+                {quotes && quotes.length > 0 && !quoteMatches.length && <small style={S.small}>No quote matches.</small>}
+                {quoteMatches.map((r) => (
+                  <button key={`${r.name}||${r.quote_no}`} type="button" style={S.pick}
+                    onClick={() => { setForm((f) => ({ ...f, quote_no: r.quote_no, client: r.name })); setQSearch(''); }}>
+                    <b>{r.name}</b><small style={S.small}>{r.quote_no}{r.travel_date ? ` · travel ${r.travel_date}` : ''}</small>
+                  </button>
+                ))}
+              </>
+            )}
 
             <div style={S.nav}>
               <button type="button" style={S.ghost} onClick={() => setAdding(false)} disabled={busy}>Cancel</button>
@@ -194,7 +240,7 @@ export default function Ledger({ onUnauthorized }) {
                   <span style={{ ...S.badge, background: bg, color: fg }}>{r.type}</span>
                   <b style={S.cat}>{r.category || 'Uncategorised'}</b>
                 </div>
-                <small style={S.small}>{prettyDate(r.date)}{r.quote_no ? ` · ${r.quote_no}` : ''}</small>
+                <small style={S.small}>{prettyDate(r.date)}{r.client ? ` · ${r.client}` : ''}{r.quote_no ? ` · ${r.quote_no}` : ''}</small>
                 {r.description && <small style={{ ...S.small, color: INK }}>{r.description}</small>}
               </div>
               <div style={S.right}>
@@ -244,5 +290,7 @@ const S = {
   del: { font: 'inherit', fontSize: 12, fontWeight: 600, color: '#b42318', background: 'transparent', border: 0, padding: '8px 4px', minHeight: 36, cursor: 'pointer', textDecoration: 'underline' },
   err: { background: '#fee4e2', color: '#b42318', borderRadius: 8, padding: '10px 12px', marginTop: 12 },
   ok: { color: '#14703b', fontSize: 13, fontWeight: 600, margin: '10px 0 0' },
+  picked: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: '#f4f8fb', border: `1px solid ${LINE}`, borderRadius: 8, padding: '8px 12px', minHeight: 48 },
+  pick: { display: 'block', width: '100%', textAlign: 'left', font: 'inherit', color: INK, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 8, padding: '10px 12px', minHeight: 48, marginTop: 6, cursor: 'pointer' },
   empty: { textAlign: 'center', color: MUTED, padding: '28px 0' },
 };
