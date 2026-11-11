@@ -118,7 +118,7 @@ export default function Payments({ onUnauthorized }) {
               </div>
 
               {!editing && (
-                <button type="button" style={S.primary} onClick={() => start(r)}>
+                <button type="button" style={{ ...S.primary, minHeight: 38, padding: '4px 14px', fontSize: 14 }} onClick={() => start(r)}>
                   {r.booking_amount > 0 ? 'Change amount' : 'Add booking amount'}
                 </button>
               )}
@@ -160,30 +160,30 @@ const Num = ({ label, value, tone }) => (
 
 const INK = '#1e3a4f', MUTED = '#5a6578', LINE = '#dde3ea', GOLD = '#b8956b';
 const S = {
-  page: { padding: 'clamp(16px,4vw,32px)', boxSizing: 'border-box' },
+  page: { padding: 'clamp(8px,3vw,32px) clamp(10px,3vw,32px) clamp(12px,3vw,32px)', boxSizing: 'border-box' },
   wrap: { maxWidth: 640, margin: '0 auto' },
-  text: { margin: '0 0 14px', color: MUTED },
-  stats: { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 14 },
-  stat: { background: '#152a3a', color: '#fff', borderRadius: 12, padding: '10px 12px', minWidth: 0 },
-  statNum: { display: 'block', fontFamily: 'Georgia, serif', fontSize: '1.05rem', color: '#e3c49b', fontVariantNumeric: 'tabular-nums' },
-  chips: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 },
-  chip: { font: 'inherit', fontSize: 13, fontWeight: 600, border: `1px solid ${LINE}`, background: '#fff', color: INK, borderRadius: 99, padding: '7px 14px', minHeight: 40, cursor: 'pointer' },
+  text: { margin: '0 0 8px', color: MUTED, fontSize: 12.5, lineHeight: 1.4 },
+  stats: { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6, marginBottom: 8 },
+  stat: { background: '#152a3a', color: '#fff', borderRadius: 10, padding: '7px 9px', minWidth: 0 },
+  statNum: { display: 'block', fontFamily: 'Georgia, serif', fontSize: '.98rem', color: '#e3c49b', fontVariantNumeric: 'tabular-nums' },
+  chips: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 },
+  chip: { font: 'inherit', fontSize: 13, fontWeight: 600, border: `1px solid ${LINE}`, background: '#fff', color: INK, borderRadius: 99, padding: '4px 12px', minHeight: 34, cursor: 'pointer' },
   chipOn: { background: GOLD, borderColor: GOLD, color: '#fff' },
-  tools: { display: 'flex', gap: 8, marginBottom: 12 },
-  input: { flex: 1, width: '100%', boxSizing: 'border-box', font: 'inherit', fontSize: 16, color: INK, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 8, padding: '10px 12px', minHeight: 48 },
-  card: { background: '#fff', border: `1px solid ${LINE}`, borderRadius: 12, padding: 16, marginBottom: 12, color: INK },
+  tools: { display: 'flex', gap: 6, marginBottom: 8 },
+  input: { flex: 1, width: '100%', boxSizing: 'border-box', font: 'inherit', fontSize: 16, color: INK, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 8, padding: '6px 10px', minHeight: 42 },
+  card: { background: '#fff', border: `1px solid ${LINE}`, borderRadius: 12, padding: 12, marginBottom: 8, color: INK },
   top: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 },
-  name: { display: 'block', fontFamily: 'Georgia, serif', fontSize: '1.05rem', overflowWrap: 'anywhere' },
-  small: { display: 'block', color: MUTED, fontSize: 12, marginTop: 2 },
+  name: { display: 'block', fontFamily: 'Georgia, serif', fontSize: '1rem', overflowWrap: 'anywhere' },
+  small: { display: 'block', color: MUTED, fontSize: 11.5, marginTop: 1 },
   badge: { fontSize: 11, fontWeight: 700, borderRadius: 99, padding: '3px 10px', whiteSpace: 'nowrap' },
-  nums: { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, margin: '12px 0' },
-  primary: { flex: 1, width: '100%', font: 'inherit', fontWeight: 600, borderRadius: 10, padding: '12px 18px', minHeight: 48, cursor: 'pointer', background: GOLD, border: `1px solid ${GOLD}`, color: '#fff' },
-  ghost: { flex: '0 0 auto', font: 'inherit', fontWeight: 600, borderRadius: 10, padding: '12px 18px', minHeight: 48, cursor: 'pointer', background: '#fff', border: `1px solid ${LINE}`, color: INK },
-  edit: { borderTop: `1px solid ${LINE}`, paddingTop: 12 },
+  nums: { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, margin: '8px 0' },
+  primary: { flex: 1, width: '100%', font: 'inherit', fontWeight: 600, borderRadius: 9, padding: '6px 14px', minHeight: 42, cursor: 'pointer', background: GOLD, border: `1px solid ${GOLD}`, color: '#fff' },
+  ghost: { flex: '0 0 auto', font: 'inherit', fontWeight: 600, borderRadius: 9, padding: '6px 14px', minHeight: 42, cursor: 'pointer', background: '#fff', border: `1px solid ${LINE}`, color: INK },
+  edit: { borderTop: `1px solid ${LINE}`, paddingTop: 8 },
   label: { display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 },
-  quick: { display: 'flex', gap: 8, flexWrap: 'wrap', margin: '10px 0 6px' },
-  nav: { display: 'flex', gap: 10, marginTop: 12 },
+  quick: { display: 'flex', gap: 6, flexWrap: 'wrap', margin: '8px 0 4px' },
+  nav: { display: 'flex', gap: 8, marginTop: 8 },
   err: { background: '#fee4e2', color: '#b42318', borderRadius: 8, padding: '10px 12px', marginBottom: 12 },
   ok: { color: '#14703b', fontSize: 13, fontWeight: 600, marginTop: 8 },
-  empty: { textAlign: 'center', color: MUTED, padding: '28px 0' },
+  empty: { textAlign: 'center', color: MUTED, padding: '18px 0' },
 };
