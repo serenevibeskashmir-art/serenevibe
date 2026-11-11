@@ -179,12 +179,17 @@ export default function Ledger({ onUnauthorized }) {
               ))}
             </div>
 
-            <label style={S.label} htmlFor="lg-amt">Amount (₹)</label>
-            <input id="lg-amt" style={S.input} type="number" inputMode="decimal" min="0" autoFocus
-              value={form.amount} onChange={set('amount')} placeholder="e.g. 4500" />
-
-            <label style={S.label} htmlFor="lg-date">Date</label>
-            <input id="lg-date" style={S.input} type="date" value={form.date} onChange={set('date')} max="2100-12-31" />
+            <div style={S.two}>
+              <div style={{ minWidth: 0 }}>
+                <label style={S.label} htmlFor="lg-amt">Amount (₹)</label>
+                <input id="lg-amt" style={S.input} type="number" inputMode="decimal" min="0" autoFocus
+                  value={form.amount} onChange={set('amount')} placeholder="4500" />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <label style={S.label} htmlFor="lg-date">Date</label>
+                <input id="lg-date" style={S.input} type="date" value={form.date} onChange={set('date')} max="2100-12-31" />
+              </div>
+            </div>
 
             <label style={S.label} htmlFor="lg-cat">Category</label>
             <input id="lg-cat" style={S.input} list="lg-cats" value={form.category} onChange={set('category')} maxLength={60} placeholder="Pick or type" />
@@ -279,35 +284,36 @@ const Stat = ({ label, value, tone }) => (
 
 const INK = '#1e3a4f', MUTED = '#5a6578', LINE = '#dde3ea', GOLD = '#b8956b';
 const S = {
-  page: { padding: 'clamp(16px,4vw,32px)', boxSizing: 'border-box' },
+  page: { padding: 'clamp(8px,3vw,32px) clamp(10px,3vw,32px) clamp(12px,3vw,32px)', boxSizing: 'border-box' },
   wrap: { maxWidth: 640, margin: '0 auto' },
-  text: { margin: '0 0 14px', color: MUTED },
-  stats: { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 12 },
-  stat: { background: '#152a3a', color: '#fff', borderRadius: 12, padding: '10px 12px', minWidth: 0 },
-  statNum: { display: 'block', fontFamily: 'Georgia, serif', fontSize: '1.05rem', color: '#e3c49b', fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' },
-  chips: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 },
-  chip: { font: 'inherit', fontSize: 13, fontWeight: 600, border: `1px solid ${LINE}`, background: '#fff', color: INK, borderRadius: 99, padding: '7px 14px', minHeight: 40, cursor: 'pointer' },
+  text: { margin: '0 0 8px', color: MUTED, fontSize: 12.5, lineHeight: 1.4 },
+  stats: { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 6, marginBottom: 8 },
+  stat: { background: '#152a3a', color: '#fff', borderRadius: 10, padding: '7px 9px', minWidth: 0 },
+  statNum: { display: 'block', fontFamily: 'Georgia, serif', fontSize: '.98rem', color: '#e3c49b', fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere' },
+  chips: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 },
+  chip: { font: 'inherit', fontSize: 13, fontWeight: 600, border: `1px solid ${LINE}`, background: '#fff', color: INK, borderRadius: 99, padding: '4px 12px', minHeight: 34, cursor: 'pointer' },
   chipOn: { background: GOLD, borderColor: GOLD, color: '#fff' },
-  tools: { display: 'flex', gap: 8, marginBottom: 12 },
-  input: { flex: 1, width: '100%', boxSizing: 'border-box', font: 'inherit', fontSize: 16, color: INK, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 8, padding: '10px 12px', minHeight: 48 },
-  card: { background: '#fff', border: `2px solid ${LINE}`, borderRadius: 12, padding: 16, marginBottom: 12, color: INK },
-  seg: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 12, background: '#eef2f6', padding: 4, borderRadius: 10 },
-  segBtn: { font: 'inherit', fontWeight: 700, border: 0, borderRadius: 8, padding: '10px 0', minHeight: 44, cursor: 'pointer', background: 'transparent', color: INK },
-  label: { display: 'block', fontSize: 13, fontWeight: 600, margin: '12px 0 6px' },
-  primary: { flex: 1, width: '100%', font: 'inherit', fontWeight: 600, borderRadius: 10, padding: '12px 18px', minHeight: 48, cursor: 'pointer', background: GOLD, border: `1px solid ${GOLD}`, color: '#fff' },
-  ghost: { flex: '0 0 auto', font: 'inherit', fontWeight: 600, borderRadius: 10, padding: '12px 18px', minHeight: 48, cursor: 'pointer', background: '#fff', border: `1px solid ${LINE}`, color: INK },
-  nav: { display: 'flex', gap: 10, marginTop: 12, marginBottom: 4 },
-  row: { display: 'flex', gap: 12, alignItems: 'flex-start', justifyContent: 'space-between', background: '#fff', border: `1px solid ${LINE}`, borderRadius: 12, padding: '12px 14px', marginBottom: 10, color: INK },
+  tools: { display: 'flex', gap: 6, marginBottom: 8 },
+  input: { flex: 1, width: '100%', boxSizing: 'border-box', font: 'inherit', fontSize: 16, color: INK, background: '#fff', border: `1px solid ${LINE}`, borderRadius: 8, padding: '6px 10px', minHeight: 42 },
+  card: { background: '#fff', border: `2px solid ${LINE}`, borderRadius: 12, padding: 12, marginBottom: 8, color: INK },
+  two: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 },
+  seg: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginBottom: 6, background: '#eef2f6', padding: 3, borderRadius: 10 },
+  segBtn: { font: 'inherit', fontWeight: 700, border: 0, borderRadius: 8, padding: '6px 0', minHeight: 40, cursor: 'pointer', background: 'transparent', color: INK },
+  label: { display: 'block', fontSize: 12.5, fontWeight: 600, margin: '8px 0 4px' },
+  primary: { flex: 1, width: '100%', font: 'inherit', fontWeight: 600, borderRadius: 9, padding: '6px 14px', minHeight: 42, cursor: 'pointer', background: GOLD, border: `1px solid ${GOLD}`, color: '#fff' },
+  ghost: { flex: '0 0 auto', font: 'inherit', fontWeight: 600, borderRadius: 9, padding: '6px 14px', minHeight: 42, cursor: 'pointer', background: '#fff', border: `1px solid ${LINE}`, color: INK },
+  nav: { display: 'flex', gap: 8, marginTop: 8, marginBottom: 4 },
+  row: { display: 'flex', gap: 12, alignItems: 'flex-start', justifyContent: 'space-between', background: '#fff', border: `1px solid ${LINE}`, borderRadius: 12, padding: '9px 12px', marginBottom: 6, color: INK },
   rowTop: { display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   cat: { fontFamily: 'Georgia, serif', fontSize: '1rem', overflowWrap: 'anywhere' },
-  small: { display: 'block', color: MUTED, fontSize: 12, marginTop: 3, overflowWrap: 'anywhere' },
+  small: { display: 'block', color: MUTED, fontSize: 11.5, marginTop: 2, overflowWrap: 'anywhere' },
   badge: { fontSize: 11, fontWeight: 700, borderRadius: 99, padding: '3px 10px', whiteSpace: 'nowrap' },
   right: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flex: '0 0 auto' },
-  del: { font: 'inherit', fontSize: 12, fontWeight: 600, color: '#b42318', background: 'transparent', border: 0, padding: '8px 4px', minHeight: 36, cursor: 'pointer', textDecoration: 'underline' },
-  err: { background: '#fee4e2', color: '#b42318', borderRadius: 8, padding: '10px 12px', marginTop: 12 },
+  del: { font: 'inherit', fontSize: 12, fontWeight: 600, color: '#b42318', background: 'transparent', border: 0, padding: '4px 4px', minHeight: 32, cursor: 'pointer', textDecoration: 'underline' },
+  err: { background: '#fee4e2', color: '#b42318', borderRadius: 8, padding: '8px 10px', marginTop: 8 },
   ok: { color: '#14703b', fontSize: 13, fontWeight: 600, margin: '10px 0 0' },
-  picked: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: '#f4f8fb', border: `1px solid ${LINE}`, borderRadius: 8, padding: '8px 12px', minHeight: 48 },
+  picked: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: '#f4f8fb', border: `1px solid ${LINE}`, borderRadius: 8, padding: '6px 10px', minHeight: 42 },
   list: { marginTop: 6, maxHeight: 220, overflowY: 'auto', overscrollBehavior: 'contain', border: `1px solid ${LINE}`, borderRadius: 8, background: '#fff' },
-  pick: { display: 'block', width: '100%', textAlign: 'left', font: 'inherit', color: INK, background: '#fff', border: 0, borderBottom: `1px solid ${LINE}`, padding: '10px 12px', minHeight: 48, cursor: 'pointer' },
-  empty: { textAlign: 'center', color: MUTED, padding: '28px 0' },
+  pick: { display: 'block', width: '100%', textAlign: 'left', font: 'inherit', color: INK, background: '#fff', border: 0, borderBottom: `1px solid ${LINE}`, padding: '7px 12px', minHeight: 42, cursor: 'pointer' },
+  empty: { textAlign: 'center', color: MUTED, padding: '18px 0' },
 };
