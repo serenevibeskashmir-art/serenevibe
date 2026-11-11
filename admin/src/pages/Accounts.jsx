@@ -33,8 +33,8 @@ export default function Accounts({ onUnauthorized }) {
 }
 
 const S = {
-  bar: { padding: 'clamp(16px,4vw,32px) clamp(16px,4vw,32px) 0', boxSizing: 'border-box' },
-  seg: { maxWidth: 640, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, background: '#eef2f6', padding: 4, borderRadius: 12 },
-  btn: { font: 'inherit', fontWeight: 700, fontSize: 14, border: 0, borderRadius: 9, padding: '10px 6px', minHeight: 46, cursor: 'pointer', background: 'transparent', color: '#1e3a4f' },
+  bar: { padding: 'clamp(8px,3vw,32px) clamp(10px,3vw,32px) 0', boxSizing: 'border-box' },
+  seg: { maxWidth: 640, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, background: '#eef2f6', padding: 3, borderRadius: 10 },
+  btn: { font: 'inherit', fontWeight: 700, fontSize: 13.5, border: 0, borderRadius: 8, padding: '6px 4px', minHeight: 40, cursor: 'pointer', background: 'transparent', color: '#1e3a4f' },
   on: { background: '#152a3a', color: '#fff' },
 };
