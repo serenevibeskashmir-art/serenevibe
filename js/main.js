@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initPhotos();
   initTestimonialSlider();
   initReachChart();
+  initReachTooltips();
   initSeasonCards();
   initWhatsAppLinks();
   initFooterMenus();
@@ -11,6 +12,9 @@ document.addEventListener('DOMContentLoaded', () => {
   initDestinationCards();
   initPackages();
   initPackageEnquire();
+  initPackagePreview();
+  initPackagePriceTooltips();
+  initMobileTripBar();
   initPolicyLinks();
   initScrollFx();
   initScrollSpy();
@@ -19,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initPackageGlow();
   initMisc();
   initVideoModal();
+  initItineraryModal();
   registerServiceWorker();
 });
 
@@ -736,12 +741,479 @@ function renderPackages(packages) {
       node.querySelector('.package-price').textContent = 'Price on request';
     }
 
+    // Wire the Enquire CTA (existing behaviour).
     const cta = node.querySelector('[data-package]');
     cta.dataset.package = pkg.name || '';
     cta.classList.add(pkg.featured ? 'btn-primary' : 'btn-outline-dark');
 
+    // Stash the full package object on the card so the Preview modal and the
+    // price tooltip can read it without keeping a parallel data structure.
+    node._pkg = pkg;
+
+    // Preview button: matched to the package so the modal knows which itinerary to render.
+    const previewBtn = node.querySelector('[data-package-preview]');
+    if (previewBtn) {
+      previewBtn.dataset.packageSlug = pkg.slug || pkg.id || '';
+      previewBtn.dataset.packageName = pkg.name || '';
+      previewBtn.dataset.packageDuration = pkg.duration || '';
+      previewBtn.dataset.packagePrice = pkg.price_label || '';
+      previewBtn.dataset.packagePriceNote = pkg.price_note || '';
+    }
+
+    // Price tooltip: admins can ship an explicit breakdown via `price_breakdown`
+    // (array of {label, amount}); otherwise we synthesise a sensible default from
+    // the headline price so the tooltip is never empty.
+    const priceEl = node.querySelector('[data-package-price]');
+    if (priceEl) {
+      const breakdown = buildPriceBreakdown(pkg);
+      if (breakdown) {
+        priceEl.dataset.tooltip = JSON.stringify(breakdown);
+        priceEl.setAttribute('role', 'button');
+        priceEl.setAttribute('tabindex', '0');
+        priceEl.setAttribute('aria-label', `Price breakdown for ${pkg.name || 'this package'}`);
+      }
+    }
+
     grid.appendChild(node);
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* Price breakdown tooltip                                             */
+/* P1-8: shows an itemised breakdown on hover/focus so the brand's     */
+/* "transparent pricing" promise is visible at the decision moment.    */
+/* Admins can override via `price_breakdown` on the package payload;    */
+/* otherwise we estimate splits from the headline price.               */
+/* ------------------------------------------------------------------ */
+function buildPriceBreakdown(pkg) {
+  if (!pkg) return null;
+
+  // Admin-provided breakdown wins.
+  if (Array.isArray(pkg.price_breakdown) && pkg.price_breakdown.length) {
+    return pkg.price_breakdown.map(item => ({
+      label: item.label || '',
+      amount: typeof item.amount === 'number'
+        ? '₹' + item.amount.toLocaleString('en-IN')
+        : (item.amount || ''),
+    }));
+  }
+
+  // No headline price → nothing to break down.
+  const priceNum = Number(String(pkg.price_label || '').replace(/[^\d.]/g, ''));
+  if (!priceNum || isNaN(priceNum)) return null;
+
+  // Sensible default split (matches what the quotation PDF itemises).
+  return [
+    { label: 'Hotel + houseboat',           amount: '₹' + Math.round(priceNum * 0.52).toLocaleString('en-IN') },
+    { label: 'Private cab transfers',       amount: '₹' + Math.round(priceNum * 0.24).toLocaleString('en-IN') },
+    { label: 'Sightseeing & permits',        amount: '₹' + Math.round(priceNum * 0.10).toLocaleString('en-IN') },
+    { label: 'Guide + activities',           amount: '₹' + Math.round(priceNum * 0.07).toLocaleString('en-IN') },
+    { label: 'Taxes (5% GST)',               amount: '₹' + Math.round(priceNum * 0.05).toLocaleString('en-IN') },
+    { label: 'Total / person',               amount: '₹' + priceNum.toLocaleString('en-IN'), isTotal: true },
+  ];
+}
+
+function initPackagePriceTooltips() {
+  const tip = document.createElement('div');
+  tip.className = 'price-tooltip';
+  tip.setAttribute('role', 'tooltip');
+  tip.hidden = true;
+  document.body.appendChild(tip);
+
+  let currentTarget = null;
+
+  function showFor(el) {
+    if (!el || el === currentTarget) return;
+    const raw = el.dataset.tooltip;
+    if (!raw) return;
+    let rows;
+    try { rows = JSON.parse(raw); } catch (e) { return; }
+    if (!Array.isArray(rows) || !rows.length) return;
+
+    tip.innerHTML = '<h6>What\'s included</h6>' +
+      '<table>' + rows.map(r =>
+        `<tr class="${r.isTotal ? 'price-tooltip-total' : ''}"><td>${escapeHtml(r.label)}</td><td>${escapeHtml(r.amount)}</td></tr>`
+      ).join('') + '</table>';
+    tip.hidden = false;
+    currentTarget = el;
+    position(el);
+  }
+
+  function position(el) {
+    if (!el || tip.hidden) return;
+    const r = el.getBoundingClientRect();
+    const tipRect = tip.getBoundingClientRect();
+    let top = r.top - tipRect.height - 8 + window.scrollY;
+    let left = r.left + (r.width / 2) - (tipRect.width / 2) + window.scrollY;
+    // Clamp to viewport.
+    const margin = 8;
+    if (left < margin + window.scrollX) left = margin + window.scrollX;
+    if (left + tipRect.width > window.innerWidth - margin + window.scrollX) {
+      left = window.innerWidth - tipRect.width - margin + window.scrollX;
+    }
+    if (top < window.scrollY + 8) {
+      // Flip below if no room above.
+      top = r.bottom + 8 + window.scrollY;
+    }
+    tip.style.top = top + 'px';
+    tip.style.left = left + 'px';
+  }
+
+  function hide() {
+    tip.hidden = true;
+    currentTarget = null;
+  }
+
+  document.addEventListener('mouseover', e => {
+    const el = e.target.closest('[data-package-price][data-tooltip]');
+    if (el) showFor(el);
+  });
+  document.addEventListener('mouseout', e => {
+    const el = e.target.closest('[data-package-price][data-tooltip]');
+    if (el) hide();
+  });
+  document.addEventListener('focusin', e => {
+    const el = e.target.closest('[data-package-price][data-tooltip]');
+    if (el) showFor(el);
+  });
+  document.addEventListener('focusout', e => {
+    const el = e.target.closest('[data-package-price][data-tooltip]');
+    if (el) hide();
+  });
+  window.addEventListener('scroll', () => { if (currentTarget) position(currentTarget); }, { passive: true });
+}
+
+/* ------------------------------------------------------------------ */
+/* Reach chart hover tooltips                                          */
+/* P1-5: turns the elevation lollipop chart into a navigation device  */
+/* — hover any destination to see exact km + elevation, click to       */
+/* select (existing behaviour).                                        */
+/* ------------------------------------------------------------------ */
+function initReachTooltips() {
+  const plot = document.querySelector('.reach-plot');
+  if (!plot) return;
+  const stops = [...plot.querySelectorAll('.reach-stop')];
+  if (!stops.length) return;
+
+  const tip = document.createElement('div');
+  tip.className = 'reach-tooltip';
+  tip.setAttribute('role', 'tooltip');
+  tip.hidden = true;
+  plot.appendChild(tip);
+
+  let currentStop = null;
+
+  function showFor(stop) {
+    if (!stop || stop === currentStop) return;
+    const name = stop.dataset.name || '';
+    const elev = stop.dataset.elev || '';
+    const km = stop.dataset.km || '';
+    const desc = stop.dataset.desc || '';
+    tip.innerHTML =
+      '<strong>' + escapeHtml(name) + '</strong>' +
+      (km ? '<div>' + escapeHtml(km) + ' from Srinagar</div>' : '') +
+      (elev ? '<div>' + escapeHtml(elev) + ' above sea level</div>' : '') +
+      (desc ? '<div class="reach-tooltip-desc">' + escapeHtml(desc) + '</div>' : '');
+    tip.hidden = false;
+    currentStop = stop;
+    position(stop);
+  }
+
+  function position(stop) {
+    if (tip.hidden) return;
+    const stopRect = stop.getBoundingClientRect();
+    const plotRect = plot.getBoundingClientRect();
+    const tipRect = tip.getBoundingClientRect();
+
+    let top = stopRect.top - plotRect.top - tipRect.height - 8;
+    let left = stopRect.left - plotRect.left + (stopRect.width / 2) - (tipRect.width / 2);
+
+    if (top < 8) top = stopRect.bottom - plotRect.top + 8;     // flip below
+    if (left < 8) left = 8;
+    if (left + tipRect.width > plotRect.width - 8) {
+      left = plotRect.width - tipRect.width - 8;
+    }
+    tip.style.top = top + 'px';
+    tip.style.left = left + 'px';
+  }
+
+  function hide() {
+    tip.hidden = true;
+    currentStop = null;
+  }
+
+  stops.forEach(stop => {
+    stop.addEventListener('mouseenter', () => showFor(stop));
+    stop.addEventListener('mouseleave', hide);
+    stop.addEventListener('focus', () => showFor(stop));
+    stop.addEventListener('blur', hide);
+  });
+  window.addEventListener('scroll', () => { if (currentStop) position(currentStop); }, { passive: true });
+}
+
+/* ------------------------------------------------------------------ */
+/* Mobile sticky "trip summary" bar                                    */
+/* P1-7: after the user scrolls past the hero quote form, swap the     */
+/* default Call/Enquire bar for a summary of their selection + a       */
+/* single Get quote CTA. Updates live as the user changes the hero     */
+/* form fields.                                                       */
+/* ------------------------------------------------------------------ */
+function initMobileTripBar() {
+  const bar = document.querySelector('[data-mobile-cta]');
+  if (!bar) return;
+
+  const defaultRow = bar.querySelector('[data-cta-default]');
+  const summaryRow = bar.querySelector('[data-cta-summary]');
+  const summaryText = bar.querySelector('[data-cta-summary-text]');
+  const editBtn = bar.querySelector('[data-cta-edit]');
+  const getQuoteBtn = bar.querySelector('[data-cta-get-quote]');
+  const heroForm = document.getElementById('searchForm');
+  const destSelect = document.getElementById('destination');
+  const dateInput = document.getElementById('dates');
+  const guestsSelect = document.getElementById('travelers');
+
+  if (!defaultRow || !summaryRow) return;
+
+  function updateSummary() {
+    const dest = destSelect && destSelect.value
+      ? destSelect.options[destSelect.selectedIndex].text
+      : 'Any destination';
+    let dateLabel = 'Flexible dates';
+    if (dateInput && dateInput.value) {
+      try {
+        const d = new Date(dateInput.value + 'T00:00:00');
+        if (!isNaN(d.getTime())) {
+          dateLabel = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+        }
+      } catch (e) { /* keep Flexible dates */ }
+    }
+    const guests = guestsSelect && guestsSelect.value
+      ? guestsSelect.options[guestsSelect.selectedIndex].text
+      : '2 guests';
+    if (summaryText) summaryText.textContent = `${dest} · ${dateLabel} · ${guests}`;
+  }
+
+  function showSummary() {
+    if (defaultRow.hidden) return;
+    defaultRow.hidden = true;
+    summaryRow.hidden = false;
+    updateSummary();
+  }
+  function showDefault() {
+    if (!defaultRow.hidden) return;
+    defaultRow.hidden = false;
+    summaryRow.hidden = true;
+  }
+
+  // Watch form changes (so the summary updates the moment the visitor edits a field).
+  [destSelect, dateInput, guestsSelect].forEach(el => {
+    if (!el) return;
+    el.addEventListener('change', () => { if (!summaryRow.hidden) updateSummary(); });
+    if (el === dateInput) el.addEventListener('input', updateSummary);
+  });
+
+  // Scroll past the hero form → swap to summary. Scroll back → swap to default.
+  let ticking = false;
+  const onScroll = () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      ticking = false;
+      if (!heroForm) return;
+      const rect = heroForm.getBoundingClientRect();
+      const passedHero = rect.bottom < 0;  // hero form fully scrolled past
+      if (passedHero) showSummary(); else showDefault();
+    });
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+
+  // Tap the summary text → smooth-scroll back to the hero form so the user can edit.
+  if (editBtn) editBtn.addEventListener('click', () => {
+    document.getElementById('top').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (destSelect) setTimeout(() => destSelect.focus(), 480);
+  });
+
+  // Get quote CTA: scroll back to the hero form rather than firing the WhatsApp
+  // flow from the wrong scroll position.
+  if (getQuoteBtn) getQuoteBtn.addEventListener('click', e => {
+    // Allow normal anchor jump fallback if hero form is missing.
+    if (!heroForm) return;
+    e.preventDefault();
+    document.getElementById('top').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => {
+      if (typeof submitSearchForm === 'function') submitSearchForm();
+      else if (heroForm.requestSubmit) heroForm.requestSubmit();
+      else heroForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    }, 500);
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Day-by-day itinerary preview modal                                  */
+/* P1-4: a "Preview" button on each package card opens a modal with    */
+/* the full day-by-day plan — a low-commitment step before the user     */
+/* fills the enquiry form.                                             */
+/*                                                                    */
+/* Data sources, in priority order:                                    */
+/*   1. pkg.itinerary_preview (admin-provided, optional)                */
+/*   2. DEFAULT_ITINERARIES lookup by package slug or name keyword      */
+/*   3. Synthesised from pkg.duration + pkg.features (last resort)      */
+/* ------------------------------------------------------------------ */
+const DEFAULT_ITINERARIES = {
+  valley: {
+    badge: '5N / 6D',
+    days: [
+      { title: 'Arrival in Srinagar', desc: 'Airport pickup, transfer to houseboat on Dal Lake. Evening shikara ride at sunset.', tags: ['Srinagar', 'Shikara', 'Houseboat'] },
+      { title: 'Srinagar → Gulmarg', desc: 'Drive 52 km. Gondola ride to Apharwat Peak. Overnight at Hotel Zahgeer.', tags: ['Gulmarg', 'Gondola'] },
+      { title: 'Gulmarg → Pahalgam', desc: 'Scenic drive via Srinagar. Lidder riverside walk in the evening.', tags: ['Pahalgam', 'Lidder River'] },
+      { title: 'Pahalgam local', desc: 'Betaab Valley, Aru Valley, Chandanwari. Pony rides optional.', tags: ['Betaab', 'Aru'] },
+      { title: 'Pahalgam → Srinagar', desc: 'Return to Srinagar. Mughal gardens: Nishat, Shalimar, Chashme Shahi.', tags: ['Mughal Gardens'] },
+      { title: 'Departure', desc: 'Old city market visit. Airport drop.', tags: ['Old City', 'Drop'] },
+    ],
+  },
+  circuit: {
+    badge: '7N / 8D',
+    days: [
+      { title: 'Arrival Srinagar', desc: 'Airport pickup, houseboat check-in, Dal Lake shikara at sunset.', tags: ['Srinagar'] },
+      { title: 'Srinagar → Sonamarg', desc: 'Drive 80 km. Thajiwas Glacier trek. Pony ride optional.', tags: ['Sonamarg', 'Glacier'] },
+      { title: 'Sonamarg → Gulmarg', desc: 'Drive via Srinagar. Gondola to Phase 2.', tags: ['Gulmarg', 'Gondola'] },
+      { title: 'Gulmarg → Pahalgam', desc: 'Longest drive day. Scenic stop at Avantipur ruins.', tags: ['Pahalgam', 'Avantipur'] },
+      { title: 'Pahalgam', desc: 'Betaab, Aru, Chandanwari. Riverside lunch.', tags: ['Betaab Valley'] },
+      { title: 'Pahalgam → Doodhpathri → Srinagar', desc: 'Meadow day trip en route back. Photography heaven.', tags: ['Doodhpathri'] },
+      { title: 'Srinagar', desc: 'Mughal gardens, Hazratbal shrine, old city walk.', tags: ['Mughal Gardens'] },
+      { title: 'Departure', desc: 'Airport drop after breakfast.', tags: ['Drop'] },
+    ],
+  },
+  heritage: {
+    badge: 'Custom',
+    days: [
+      { title: 'Arrival & luxury houseboat', desc: 'Check-in to premium heritage houseboat suite. Welcome tea, evening shikara.', tags: ['Houseboat', 'Premium'] },
+      { title: 'Heritage walk, old Srinagar', desc: 'Guided walk through downtown Srinagar — craftsmen, shrines, markets.', tags: ['Old City', 'Crafts'] },
+      { title: 'Mughal gardens & Pari Mahal', desc: 'Private guided tour of all four Mughal gardens + Pari Mahal sunset.', tags: ['Mughal Gardens'] },
+      { title: 'Day trip to Doodhpathri', desc: 'Private chauffeur + picnic lunch in the meadows.', tags: ['Doodhpathri'] },
+      { title: 'Craft & cuisine workshop', desc: 'Half-day with local waza (chef) + papier-mâché artist. Optional shopping.', tags: ['Crafts', 'Cuisine'] },
+      { title: 'Departure', desc: 'Leisurely breakfast. Airport drop in private car.', tags: ['Drop'] },
+    ],
+  },
+};
+
+function findItineraryForPackage(pkg) {
+  if (!pkg) return null;
+
+  // 1) Admin-provided itinerary preview wins.
+  if (Array.isArray(pkg.itinerary_preview) && pkg.itinerary_preview.length) {
+    return {
+      badge: pkg.duration || '',
+      days: pkg.itinerary_preview.map(d => ({
+        title: d.title || `Day ${d.day || ''}`,
+        desc: d.description || d.desc || '',
+        tags: Array.isArray(d.tags) ? d.tags : (d.overnight_stay ? [d.overnight_stay] : []),
+      })),
+    };
+  }
+
+  // 2) Slug lookup (preferred — admin sets a slug when creating the package).
+  const slug = String(pkg.slug || pkg.id || '').toLowerCase();
+  if (slug && DEFAULT_ITINERARIES[slug]) return DEFAULT_ITINERARIES[slug];
+
+  // 3) Name keyword fallback.
+  const name = String(pkg.name || '').toLowerCase();
+  if (name.includes('heritage') || name.includes('houseboat')) return DEFAULT_ITINERARIES.heritage;
+  if (name.includes('grand') || name.includes('circuit'))   return DEFAULT_ITINERARIES.circuit;
+  if (name.includes('valley') || name.includes('discovery')) return DEFAULT_ITINERARIES.valley;
+
+  return null;
+}
+
+function initPackagePreview() {
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('[data-package-preview]');
+    if (!btn) return;
+    e.preventDefault();
+    const card = btn.closest('.package-card');
+    const pkg = card && card._pkg;
+    openItineraryModal(pkg, btn);
+  });
+}
+
+function initItineraryModal() {
+  const overlay = document.getElementById('itineraryModalOverlay');
+  const closeBtn = document.getElementById('itineraryModalClose');
+  if (!overlay || !closeBtn) return;
+
+  closeBtn.addEventListener('click', closeItineraryModal);
+  overlay.addEventListener('click', e => { if (e.target === overlay) closeItineraryModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !overlay.hidden) closeItineraryModal(); });
+}
+
+function openItineraryModal(pkg, triggerBtn) {
+  const overlay = document.getElementById('itineraryModalOverlay');
+  const titleEl = document.getElementById('itineraryModalTitle');
+  const badgeEl = document.getElementById('itineraryModalBadge');
+  const bodyEl = document.getElementById('itineraryModalBody');
+  const priceEl = document.getElementById('itineraryModalPrice');
+  const ctaEl = document.getElementById('itineraryModalCta');
+  if (!overlay || !titleEl || !badgeEl || !bodyEl || !priceEl || !ctaEl) return;
+
+  const name = (pkg && pkg.name) || (triggerBtn && triggerBtn.dataset.packageName) || 'This package';
+  const duration = (pkg && pkg.duration) || (triggerBtn && triggerBtn.dataset.packageDuration) || '';
+  const priceLabel = (pkg && pkg.price_label) || (triggerBtn && triggerBtn.dataset.packagePrice) || '';
+
+  titleEl.textContent = `${name} — Day by Day`;
+  badgeEl.textContent = duration || 'Day by Day';
+  priceEl.textContent = priceLabel ? `From ₹${priceLabel} / person` : 'Pricing on enquiry';
+  ctaEl.dataset.package = name;
+
+  const itinerary = findItineraryForPackage(pkg);
+  if (!itinerary || !itinerary.days || !itinerary.days.length) {
+    bodyEl.innerHTML =
+      '<p class="itinerary-empty">A full day-by-day plan for this package is prepared for each guest after enquiry, ' +
+      'tailored to season, group size and pace. Tap <strong>Enquire about this trip</strong> to receive yours within one business day.</p>';
+  } else {
+    bodyEl.innerHTML = itinerary.days.map((d, i) => {
+      const tags = Array.isArray(d.tags) && d.tags.length
+        ? '<div class="itinerary-day-tags">' + d.tags.map(t => `<span class="itinerary-day-tag">${escapeHtml(t)}</span>`).join('') + '</div>'
+        : '';
+      return (
+        '<div class="itinerary-day">' +
+          '<div class="itinerary-day-num">' + (i + 1) + '</div>' +
+          '<div class="itinerary-day-body">' +
+            '<h4>Day ' + (i + 1) + ': ' + escapeHtml(d.title) + '</h4>' +
+            '<p>' + escapeHtml(d.desc) + '</p>' +
+            tags +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  overlay.hidden = false;
+  document.body.style.overflow = 'hidden';
+  if (triggerBtn) triggerBtn.setAttribute('aria-expanded', 'true');
+  // Move focus to the close button for keyboard users.
+  setTimeout(() => closeBtn.focus(), 30);
+}
+
+function closeItineraryModal() {
+  const overlay = document.getElementById('itineraryModalOverlay');
+  if (!overlay || overlay.hidden) return;
+  overlay.hidden = true;
+  document.body.style.overflow = '';
+  // Return focus to whichever button opened the modal.
+  const trigger = document.querySelector('[data-package-preview][aria-expanded="true"]');
+  if (trigger) {
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.focus();
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared HTML escape for tooltip + itinerary content                  */
+/* ------------------------------------------------------------------ */
+function escapeHtml(str) {
+  return String(str == null ? '' : str).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
 }
 
 /* Package "included" bullets, one at a time on a short auto-rotating loop
