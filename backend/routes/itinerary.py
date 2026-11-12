@@ -1,3 +1,4 @@
+import io
 import os
 
 from flask import Blueprint, jsonify, request, send_file
@@ -5,6 +6,7 @@ from flask import Blueprint, jsonify, request, send_file
 from backend.auth import admin_required
 from backend.services.pdf_service import (generate_pdf, _quote_ref, normalize_extras, _extras_list, _amount_int,
                                           UNION_CAB_PLACES, COUPLE_EXTRAS, _GONDOLA_LABELS)
+from backend.services.pdf_archive import archive_pdf, get_archived_pdf, list_archive
 from backend.services.sheet_log import log_quote, send_row
 
 itinerary_bp = Blueprint("itinerary", __name__)
@@ -278,6 +280,10 @@ def generate_custom_itinerary():
         print(f"PDF Generation Failed: {pdf_error}")
         return jsonify({"error": f"Failed to build file structure: {pdf_error}"}), 500
 
+    # Keep a permanent copy of this PDF in the 2nd database (no-op unless DATABASE_URL_2 is set; never blocks the PDF).
+    archive_pdf(os.path.join(output_dir, f"Kashmir_Tour_{str(client_name).replace(' ', '_')}.pdf"),
+                client_name, _quote_ref(client_name), days, calculated_cost)
+
     # Record the quote in the Google Sheet (no-op unless GOOGLE_SHEET_WEBHOOK_URL is set; never blocks the PDF).
     _hotel_names = []
     for _h in (response_payload.get("hotel_details") or {}).values():
@@ -302,3 +308,32 @@ def generate_custom_itinerary():
         return jsonify({"error": "PDF was generated but could not be found on the server."}), 500
 
     return jsonify(response_payload), 200
+
+
+@itinerary_bp.get("/archive")
+@admin_required
+def archive_list():
+    """List PDFs saved in the 2nd database, newest first (?limit=&offset=)."""
+    limit = min(max(request.args.get("limit", 100, type=int), 1), 500)
+    offset = max(request.args.get("offset", 0, type=int), 0)
+    try:
+        rows = list_archive(limit, offset)
+    except Exception as exc:
+        return jsonify({"error": f"Could not read the PDF archive: {exc}"}), 500
+    if rows is None:
+        return jsonify({"error": "DATABASE_URL_2 is not set, so there is no PDF archive."}), 404
+    return jsonify(rows)
+
+
+@itinerary_bp.get("/archive/<int:pdf_id>")
+@admin_required
+def archive_download(pdf_id):
+    """Download one archived PDF."""
+    try:
+        item = get_archived_pdf(pdf_id)
+    except Exception as exc:
+        return jsonify({"error": f"Could not read the PDF archive: {exc}"}), 500
+    if item is None:
+        return jsonify({"error": "PDF not found in the archive."}), 404
+    filename, data = item
+    return send_file(io.BytesIO(data), mimetype="application/pdf", as_attachment=True, download_name=filename)
