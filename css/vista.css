@@ -591,3 +591,31 @@ body {
 .rd-footer { position: relative; }
 .rd-footer::after { top: 0; }
 .rd-footer::before { background: var(--lake-950) !important; opacity: 1 !important; }
+
+/* ---- Compact footer ---------------------------------------------------- */
+/* Bottom padding keeps the floating Assistant (left) and WhatsApp (right) buttons
+   off the copyright line and the Staff login link when the page is scrolled to the end. */
+.rd-footer-inner { padding: 1.3rem clamp(1.25rem, 4vw, 3rem) 5.6rem; }
+.rd-footer-grid { gap: .8rem 2rem; }
+.rd-footer .footer-brand p { margin: .45rem 0 .7rem; font-size: .8rem; line-height: 1.5; max-width: 22rem; }
+.rd-footer .rd-footer-wa { padding: .4rem .95rem; font-size: .78rem; border-radius: 12px; }
+.rd-footer .footer-links summary, .rd-footer .footer-contact summary { padding: 0 0 .35rem; margin-bottom: 0; font-size: .88rem; }
+.rd-footer details[open] summary { margin-bottom: .1rem; }
+.rd-footer .footer-links a, .rd-footer .footer-contact a { padding: .08rem 0; min-height: 0; font-size: .82rem; line-height: 1.35; }
+.rd-footer .footer-links li { margin-bottom: 0; line-height: 1.35; }
+.rd-footer .footer-contact p { margin-bottom: .2rem; font-size: .82rem; line-height: 1.35; }
+.rd-footer-bottom { margin-top: .9rem; padding-top: .8rem; align-items: center; }
+
+/* Staff login: clearly visible button */
+.rd-footer .rd-staff {
+  display: inline-flex; align-items: center; gap: .4rem; padding: .4rem .95rem;
+  border: 1px solid rgba(255, 255, 255, .5); border-radius: 999px;
+  color: #fff; font-size: .82rem; font-weight: 600; line-height: 1;
+}
+.rd-footer .rd-staff:hover, .rd-footer .rd-staff:focus-visible { background: #fff; color: var(--lake-950); border-color: #fff; }
+
+@media (max-width: 600px) {
+  .rd-footer-inner { padding-bottom: 4.6rem; }
+  .rd-footer-grid { gap: .5rem; }
+  .rd-footer details { padding-top: .6rem; }
+}
