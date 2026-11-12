@@ -432,3 +432,110 @@ h1, h2, h3, h4, .proof-heading { font-family: var(--serif); font-weight: 400; le
   .proof-card.proof-card--wide { flex-direction: column; }
   .proof-card--wide .proof-body { padding: 1.5rem; }
 }
+
+/* ============================================================
+   COMPACT PASS — tighter rhythm, shorter sections, smaller cards
+   (keeps the same look; trims roughly a third of the page height)
+   ============================================================ */
+:root { --rd-gap: clamp(2.75rem, 5vw, 4.5rem); }
+
+/* headings */
+.section h2, .proof-heading, .rd-how h2, .section-header h2 { font-size: clamp(1.75rem, 3.2vw, 2.6rem); line-height: 1.06; }
+.rd-head-row { margin-bottom: clamp(1.2rem, 2.4vw, 1.8rem); }
+.rd-head-row > p, .section-header p, .proof-subheading { font-size: .95rem; line-height: 1.55; }
+.section-header { margin-bottom: 1.4rem; }
+
+/* hero */
+.rd-hero { min-height: min(92svh, 760px); padding: 7rem clamp(1.25rem, 5vw, 4.5rem) 4.5rem; }
+.rd-hero h1 { font-size: clamp(2.5rem, 5.8vw, 5rem); }
+.rd-hero .hero-sub { margin-top: 1.1rem; font-size: 1rem; max-width: 30rem; }
+.rd-hero .hero-tag { margin-bottom: 1rem; }
+.rd-search { margin-top: 1.6rem; }
+.rd-hero .hero-assure { margin-top: 1rem; }
+.vista-script { font-size: clamp(4.5rem, 8.5vw, 8.5rem); }
+
+/* stats */
+.rd-stats { padding-bottom: 1.8rem; }
+.rd-stat { padding: .2rem 1.3rem; }
+.rd-stat .trust-pill-num { font-size: clamp(1.7rem, 2.8vw, 2.4rem); }
+.rd-stat-label { font-size: .84rem; }
+
+/* trust wall */
+.trust-band { padding-top: var(--rd-gap); }
+.proof-grid { gap: 12px; margin-top: 1.4rem; }
+.proof-card, .proof-card:nth-child(n) { border-radius: 22px; }
+.proof-body { padding: 1.15rem 1.3rem 1.3rem; gap: .4rem; }
+.proof-body--reviews { padding: 1.3rem 1.4rem 1.3rem; }
+.proof-title { font-size: clamp(1.2rem, 1.6vw, 1.45rem); }
+.proof-desc { font-size: .9rem; line-height: 1.5; }
+.proof-card:has(.cert-doc) .proof-title, .proof-card:has(.cat-office) .proof-title, .proof-card:has(.cat-video) .proof-title { font-size: clamp(1.4rem, 1.9vw, 1.7rem); }
+.proof-card:has(.cat-office), .proof-card:has(.cat-video) { min-height: 430px; }
+.proof-card:has(.cat-hotel) .proof-media { height: 200px; }
+.proof-card:has(.cert-doc:not(.has-photo)) .proof-body--top { padding-bottom: 9.5rem; }
+.proof-card:has(.cert-doc)::after { width: 7.5rem; bottom: 4rem; }
+.est-ribbon { padding: .8rem 1.3rem 1.1rem; }
+.review-score { font-size: clamp(3.4rem, 5vw, 4.6rem); }
+.rq { padding: .75rem .9rem; }
+.rq-text { font-size: .95rem; }
+.review-quotes { margin-top: .7rem; gap: .5rem; }
+.team-strip { padding: 0 1.3rem; }
+.team-photo { min-height: 190px; }
+.partner-logos { margin-top: .4rem; }
+.partner-badge { padding: .3rem .7rem; font-size: .78rem; }
+.proof-card.proof-card--wide .proof-media--wide { padding: .8rem; }
+.proof-card--wide .proof-body { padding: 1.5rem 2rem; }
+.proof-card--wide .proof-title { font-size: clamp(1.5rem, 2.4vw, 2rem); }
+.proof-card--wide .guest-group { gap: .5rem; }
+
+/* destinations */
+.section.destinations { margin-top: var(--rd-gap); }
+.rd-bento { gap: 10px; grid-auto-rows: clamp(150px, 16vw, 210px); }
+.rd-tile { border-radius: 18px; }
+.rd-tile-label { left: 1.1rem; bottom: .95rem; right: 1.1rem; }
+.rd-tile-label strong { font-size: clamp(1.3rem, 2vw, 1.8rem); }
+.rd-tile--a .rd-tile-label strong { font-size: clamp(1.8rem, 3vw, 2.6rem); }
+.rd-tile-label small { font-size: .78rem; }
+.destinations .reach { margin-top: 1.6rem; border-radius: 22px; padding: 1.4rem 1.6rem; }
+.reach figcaption h3 { font-size: 1.25rem; }
+@media (min-width: 761px) { .reach-plot { height: 250px !important; } }
+@media (min-width: 761px) { .reach-grid, .reach-field { top: 1.4rem !important; bottom: 3.2rem !important; } }
+
+/* how it works */
+.rd-how-grid { gap: clamp(1.5rem, 4vw, 3rem); }
+.rd-how-photo { max-height: 420px; }
+.rd-steps li { padding: .75rem 1rem; }
+.rd-steps li h3 { font-size: 1.05rem; }
+.rd-steps { gap: .55rem; }
+
+/* packages / about / seasons */
+.about-grid { gap: clamp(1.5rem, 4vw, 3.2rem); }
+.about-content h2 { margin-bottom: .7rem; }
+.about-list { gap: .7rem; }
+.about-list li { padding-top: .1rem; padding-bottom: .1rem; }
+.about-img-main { max-height: 420px; }
+.season-grid { gap: 12px; }
+.season-card { border-radius: 20px; }
+
+/* reviews */
+.section.testimonials::before { font-size: 18rem; top: -3rem; }
+.testimonial { padding: .6rem 1.4rem .8rem; }
+.testimonial > p, .testimonial blockquote p { font-size: clamp(1.15rem, 1.9vw, 1.55rem); }
+
+/* contact */
+.contact-grid { gap: clamp(1.5rem, 4vw, 3rem); }
+.contact-form { padding: 1.5rem 1.6rem; border-radius: 22px; }
+.contact-form .form-group { margin-bottom: .6rem; }
+.contact-form textarea { min-height: 84px; }
+.contact-item { margin-bottom: .6rem; }
+
+/* policies + footer */
+.policies-section .section-header { margin-bottom: 1rem; }
+.rd-footer-inner { padding-top: 2.2rem; padding-bottom: 1.1rem; }
+
+@media (max-width: 760px) {
+  :root { --rd-gap: 2.5rem; }
+  .rd-hero { padding: 6rem 1.1rem 3.2rem; }
+  .proof-card:has(.cat-office), .proof-card:has(.cat-video) { min-height: 360px; }
+  .rd-bento { grid-auto-rows: 150px; }
+  .rd-tile--a { grid-row: span 1; }
+}
