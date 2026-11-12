@@ -40,7 +40,7 @@
   --display: var(--serif);
   --rd-shadow: 0 1px 2px rgba(4, 26, 32, .05), 0 22px 44px -28px rgba(4, 26, 32, .38);
   --rd-gap: clamp(5rem, 9vw, 8.5rem);
-  --leaf: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 1.5l2.3 4.6 3.2-2.1-.4 5 4.6-1.4-2.3 4.2 3.6 1.2-4.4 2.6 1.3 3.2-4.8-.4L13 22.5h-2l-.5-4.2-4.8.4 1.3-3.2L2.6 13l3.6-1.2-2.3-4.2 4.6 1.4-.4-5 3.2 2.1z'/%3E%3C/svg%3E");
+  --leaf: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 1.5l2.1 4.9 3.2-1.6-.8 4.6 5.2-1-2.8 3.9 3.3 2.1-5.6.6.6 3.3-4.1-1.4-.5 4.6h-1.2l-.5-4.6-4.1 1.4.6-3.3-5.6-.6 3.3-2.1-2.8-3.9 5.2 1-.8-4.6 3.2 1.6z'/%3E%3C/svg%3E");
 }
 
 html { scroll-padding-top: 5.5rem; }
@@ -318,4 +318,117 @@ h1, h2, h3, h4, .proof-heading { font-family: var(--serif); font-weight: 400; le
   .rd-bento { grid-template-columns: 1fr; grid-auto-rows: 210px; }
   .rd-tile--a, .rd-tile--b, .rd-tile--c, .rd-tile--d, .rd-tile--e { grid-column: auto; }
   .rd-tile--a { grid-auto-rows: 260px; }
+}
+
+/* ============================================================
+   TRUST — "proof wall"
+   Two photo-led cards, one dark reviews card, arched team portraits
+   and a dark guest-photo band. Markup, data-photo slots and the
+   slideshow scripts are untouched.
+   ============================================================ */
+.proof-section .container {
+  max-width: 1240px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 26rem);
+  column-gap: 4rem; align-items: end;
+}
+.proof-heading { margin: 0; text-align: left; }
+.proof-subheading { margin: 0 0 .5rem; text-align: left; }
+.proof-grid {
+  grid-column: 1 / -1; margin-top: clamp(2rem, 4vw, 3rem);
+  grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px;
+}
+.proof-card, .proof-card:nth-child(n) {
+  grid-column: span 4; position: relative; display: flex; flex-direction: column;
+  border: 1px solid var(--line); border-top-width: 1px; border-radius: 26px; background: #fff; box-shadow: none; overflow: hidden;
+  transition: transform .5s cubic-bezier(.2, .7, .2, 1), box-shadow .5s ease, border-color .3s ease;
+}
+.proof-card:hover { transform: translateY(-4px); box-shadow: 0 30px 50px -34px rgba(4, 26, 32, .55); border-color: transparent; }
+.proof-card--wide, .proof-card--wide:nth-child(n) { grid-column: 1 / -1; }
+.proof-title { font-family: var(--serif); font-weight: 400; font-size: clamp(1.4rem, 1.9vw, 1.7rem); line-height: 1.15; color: var(--lake-900); letter-spacing: -.01em; }
+.proof-desc { font-size: .98rem; line-height: 1.6; color: var(--rd-muted); }
+.proof-body { padding: 1.5rem 1.6rem 1.7rem; gap: .55rem; }
+.proof-tag { background: rgba(4, 26, 32, .55); border: 1px solid rgba(255, 255, 255, .22); top: 1.1rem; left: 1.1rem; border-radius: 10px; padding: .35rem .75rem .35rem .6rem; }
+.proof-link { color: var(--lake-900); text-decoration-color: var(--saffron); }
+
+/* --- Registration: a plaque, with a chinar-leaf seal when there is no scan --- */
+.proof-card:has(.cert-doc) { background: linear-gradient(165deg, #fff 0%, #ecf3ef 100%); border-color: rgba(227, 167, 47, .55); }
+.proof-card:has(.cert-doc) .proof-cat { color: var(--saffron-ink); }
+.proof-card:has(.cert-doc) .proof-title { font-size: clamp(1.7rem, 2.4vw, 2.2rem); line-height: 1.08; }
+.proof-card:has(.cert-doc)::after {
+  content: ''; position: absolute; left: 50%; bottom: 5.2rem; width: 10.5rem; aspect-ratio: 1; transform: translateX(-50%);
+  background: linear-gradient(160deg, var(--saffron-bright), var(--chinar)); opacity: .3; pointer-events: none;
+  -webkit-mask: var(--leaf) center / contain no-repeat; mask: var(--leaf) center / contain no-repeat;
+}
+.proof-card:has(.cert-doc:not(.has-photo)) .proof-body--top { padding-bottom: 13rem; }
+.proof-card:has(.cert-doc.has-photo)::after { display: none; }
+.cert-doc.has-photo { margin: 0 1.6rem; border-radius: 14px; flex: 1; min-height: 240px; box-shadow: var(--rd-shadow); }
+.proof-card:has(.cert-doc) .proof-body--top { flex: 1; }
+.est-ribbon { padding: 1.1rem 1.6rem 1.5rem; }
+.est-ribbon-text { font-family: var(--serif); font-size: 1.05rem; color: var(--lake-900); font-weight: 400; }
+.est-ribbon-line { background: rgba(227, 167, 47, .6); }
+
+/* --- Photo-led cards: office + trip video --- */
+.proof-card:has(.cat-office), .proof-card:has(.cat-video) { min-height: 580px; background: var(--lake-900); border-color: transparent; color: #fff; }
+.proof-card:has(.cat-office) .proof-media, .proof-card:has(.cat-video) .proof-media { position: absolute; inset: 0; height: auto; width: 100%; }
+.proof-card:has(.cat-office)::after, .proof-card:has(.cat-video)::after {
+  content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(0deg, rgba(4, 26, 32, .94) 0%, rgba(4, 26, 32, .66) 34%, rgba(4, 26, 32, 0) 64%);
+}
+.proof-card:has(.cat-office) .proof-body, .proof-card:has(.cat-video) .proof-body { position: relative; z-index: 2; margin-top: auto; flex: 0 0 auto; }
+.proof-card:has(.cat-office) .proof-title, .proof-card:has(.cat-video) .proof-title { color: #fff; font-size: clamp(1.7rem, 2.4vw, 2.2rem); }
+.proof-card:has(.cat-office) .proof-desc, .proof-card:has(.cat-video) .proof-desc { color: rgba(255, 255, 255, .84); }
+.proof-card:has(.cat-office) .proof-link, .proof-card:has(.cat-video) .proof-link { color: #fff; }
+.proof-card:has(.cat-office) .proof-icon, .proof-card:has(.cat-video) .proof-icon { color: rgba(255, 255, 255, .5); }
+.proof-card:has(.cat-office) .proof-icon-label { color: rgba(255, 255, 255, .7); }
+.proof-card .cat-office, .proof-card .cat-video { background: linear-gradient(160deg, var(--lake-700), var(--lake-950)); }
+.cat-video .play-btn { inset: 0 0 36% 0; }
+.cat-video .play-circle { width: 78px; height: 78px; background: var(--saffron); color: var(--lake-950); box-shadow: 0 0 0 10px rgba(227, 167, 47, .25), 0 20px 40px -10px rgba(0, 0, 0, .6); }
+.proof-card:hover .cat-video .play-circle { background: var(--saffron-bright); transform: scale(1.06); }
+
+/* --- Reviews: dark, one huge number --- */
+.proof-card:has(.proof-body--reviews) { background: var(--lake-900); border-color: transparent; color: #fff; }
+.proof-body--reviews { padding: 1.8rem 1.8rem 1.7rem; }
+.proof-body--reviews .proof-cat { color: var(--saffron-bright); }
+.review-score { font-family: var(--serif); font-weight: 400; font-size: clamp(4.5rem, 7vw, 6.5rem); line-height: .9; color: var(--saffron-bright); letter-spacing: -.03em; margin-top: .4rem; }
+.star { color: var(--saffron-bright); font-size: 1.25rem; }
+.review-count { color: rgba(255, 255, 255, .78); }
+.google-logo-text { color: rgba(255, 255, 255, .8); }
+.rq { background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .1); border-radius: 16px; padding: 1rem 1.1rem; }
+.rq-text { font-family: var(--serif); font-size: 1.02rem; line-height: 1.5; color: #fff; }
+.rq-author { color: rgba(255, 255, 255, .62); }
+.proof-card:has(.proof-body--reviews) .proof-link { color: var(--saffron-bright); }
+
+/* --- Team: arched portraits --- */
+.team-strip { padding: 0 1.6rem; gap: .7rem; }
+.team-photo { border-radius: 999px 999px 14px 14px; aspect-ratio: 3 / 4.2; background: var(--pashmina); }
+.team-avatar { background: #fff; color: var(--lake-900); font-family: var(--serif); font-weight: 400; }
+.proof-body--bottom { padding-top: 1.1rem; }
+
+/* team portraits fill the card height */
+.team-strip { flex: 1; align-items: stretch; }
+.team-photo { aspect-ratio: auto; height: 100%; min-height: 260px; }
+
+/* --- Hotels --- */
+.proof-card:has(.cat-hotel) .proof-media { height: 270px; }
+.partner-badge { background: var(--pashmina); border-color: transparent; color: var(--lake-900); border-radius: 10px; }
+
+/* --- Guest photos: dark band --- */
+.proof-card.proof-card--wide { background: var(--lake-900); border-color: transparent; color: #fff; flex-direction: row; }
+.proof-card.proof-card--wide .proof-media--wide { background: transparent; padding: 1.1rem; flex: 1 1 62%; }
+.proof-card--wide .proof-body { padding: 2.4rem 2.6rem; justify-content: center; }
+.proof-card--wide .proof-title { color: #fff; font-size: clamp(1.8rem, 3vw, 2.6rem); }
+.proof-card--wide .proof-desc { color: rgba(255, 255, 255, .78); }
+.proof-card--wide .proof-link { color: var(--saffron-bright); }
+.proof-card--wide .guest-square { border-radius: 16px; }
+
+@media (max-width: 1024px) {
+  .proof-card, .proof-card:nth-child(n) { grid-column: span 6; }
+  .proof-card--wide, .proof-card--wide:nth-child(n) { grid-column: 1 / -1; }
+  .proof-card:has(.proof-body--reviews) { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) {
+  .proof-section .container { grid-template-columns: 1fr; row-gap: 1rem; }
+  .proof-card, .proof-card:nth-child(n) { grid-column: 1 / -1; }
+  .proof-card:has(.cat-office), .proof-card:has(.cat-video) { min-height: 480px; }
+  .proof-card.proof-card--wide { flex-direction: column; }
+  .proof-card--wide .proof-body { padding: 1.5rem; }
 }
