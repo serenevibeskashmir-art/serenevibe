@@ -76,8 +76,10 @@
         <li><a href="#packages">Packages</a></li>
         <li><a href="#about">About</a></li>
         <li><a href="#why-us">Reviews</a></li>
-        <li class="rd-nav-end"><a href="tel:+919419766510" class="rd-call">+91 94197 66510</a></li>
         <li><a href="#contact" class="btn btn-primary nav-cta">Enquire now</a></li>
+        <!-- Phone moved out of the nav bar to reduce duplication — it stays in the contact section,
+             the footer, and the mobile Call-us button below. The nav drawer (mobile menu) keeps it
+             for users who tap the menu on a small screen. -->
         <li class="nav-drawer-contact">
           <a href="tel:+919419766510">Call +91 94197 66510</a>
           <a href="https://wa.me/919419766510" target="_blank" rel="noopener">WhatsApp us</a>
@@ -565,8 +567,11 @@
                 <p class="package-desc"></p>
                 <div class="package-features-slideshow" data-package-features></div>
                 <div class="package-footer">
-                  <span class="package-price">From <strong></strong> <span class="package-per"></span></span>
-                  <a href="#contact" class="btn" data-package>Enquire</a>
+                  <span class="package-price" data-package-price title="">From <strong></strong> <span class="package-per"></span></span>
+                  <div class="package-footer-actions">
+                    <button type="button" class="btn btn-ghost-light package-preview-btn" data-package-preview aria-label="Preview day-by-day itinerary">Preview</button>
+                    <a href="#contact" class="btn" data-package>Enquire</a>
+                  </div>
                 </div>
               </div>
             </div>
@@ -909,10 +914,22 @@
     </div>
   </footer>
 
-  <!-- Mobile quick actions -->
-  <div class="mobile-cta" aria-label="Quick contact">
-    <a href="tel:+919419766510" class="btn btn-ghost-dark">Call us</a>
-    <a href="#contact" class="btn btn-primary">Enquire now</a>
+  <!-- Mobile quick actions: smarter sticky trip bar.
+       When the user scrolls past the hero form, this expands to show their selection
+       (destination · date · guests) + a single "Get quote" CTA. Before that, it stays
+       collapsed showing only "Call" + "Enquire". -->
+  <div class="mobile-cta" aria-label="Quick contact" data-mobile-cta>
+    <div class="mobile-cta-row mobile-cta-default" data-cta-default>
+      <a href="tel:+919419766510" class="btn btn-ghost-dark">Call us</a>
+      <a href="#contact" class="btn btn-primary">Enquire now</a>
+    </div>
+    <div class="mobile-cta-row mobile-cta-summary" data-cta-summary hidden>
+      <button type="button" class="mobile-cta-edit" data-cta-edit aria-label="Edit trip details and get a quote">
+        <span class="mobile-cta-summary-text" data-cta-summary-text>Srinagar · 2 guests</span>
+        <span class="mobile-cta-summary-hint">Tap to edit ↑</span>
+      </button>
+      <a href="#top" class="btn btn-primary" data-cta-get-quote>Get quote</a>
+    </div>
   </div>
 
   <!-- WhatsApp chat button (number is set once, in js/main.js -> WHATSAPP_NUMBER) -->
@@ -930,6 +947,32 @@
       <div class="video-modal-body" id="videoModalBody">
         <p class="video-loading">Loading video…</p>
       </div>
+    </div>
+  </div>
+
+  <!-- Day-by-day itinerary preview modal — opened by the "Preview" button on each
+       package card. Lets users see the trip plan before committing to an enquiry.
+       Data comes from DEFAULT_ITINERARIES in js/main.js (kept in sync with the backend's
+       DEFAULT_TIMELINE in backend/routes/itinerary.py); admins can override per-package
+       by adding an `itinerary_preview` field in the admin site-packages editor. -->
+  <div class="itinerary-modal-overlay" id="itineraryModalOverlay" role="dialog" aria-modal="true" aria-labelledby="itineraryModalTitle" hidden>
+    <div class="itinerary-modal" role="document">
+      <header class="itinerary-modal-head">
+        <div>
+          <span class="itinerary-modal-badge" id="itineraryModalBadge">5N / 6D</span>
+          <h3 id="itineraryModalTitle">Valley Discovery — Day by Day</h3>
+        </div>
+        <button type="button" class="itinerary-modal-close" id="itineraryModalClose" aria-label="Close preview">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4 4l12 12M16 4L4 16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </header>
+      <div class="itinerary-modal-body" id="itineraryModalBody" aria-live="polite">
+        <p class="itinerary-loading">Loading day-by-day plan…</p>
+      </div>
+      <footer class="itinerary-modal-foot">
+        <span class="itinerary-modal-price" id="itineraryModalPrice">From ₹13,999 / person</span>
+        <a href="#contact" class="btn btn-primary" id="itineraryModalCta">Enquire about this trip</a>
+      </footer>
     </div>
   </div>
 
