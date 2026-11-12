@@ -820,7 +820,7 @@ button.proof-media { display: block; width: 100%; margin: 0; padding: 0; border:
 /* ===== Footer ===== */
 .footer { position: relative; background: var(--pine-950); color: rgba(255, 255, 255, .74); padding-top: 4rem; }
 .footer::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--saffron) 50%, transparent); }
-.footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1.3fr; gap: 2.5rem; padding-bottom: 3rem; }
+.footer-grid { display: grid; grid-template-columns: 2fr 1fr 1.3fr; gap: 2.5rem; padding-bottom: 3rem; }
 .footer-brand .logo { margin-bottom: 1rem; }
 .footer-brand p { font-size: .92rem; line-height: 1.7; max-width: 22rem; }
 .footer-links summary, .footer-contact summary {
@@ -1161,11 +1161,8 @@ html { scrollbar-color: var(--pine-700) var(--glacier); }
 /* Destinations sit on white so the light trust band above reads as its own section */
 .destinations { background: var(--white); }
 
-/* Footer groups are always open on larger screens (see initFooterMenus in main.js) */
-@media (min-width: 901px) {
-  .footer-links summary, .footer-contact summary { cursor: default; pointer-events: none; }
-  .footer-links summary::after, .footer-contact summary::after { display: none; }
-}
+/* Footer groups can be collapsed on every screen size (initFooterMenus in main.js) */
+
 
 
 /* ============================================================
