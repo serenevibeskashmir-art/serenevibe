@@ -1,0 +1,58 @@
+/* Serene Vibes Kashmir: unified "Heritage Editorial" theme. Loads LAST, so it sets one consistent look:
+   warm pashmina paper, deep lake teal, saffron gold; one card, button, heading and spacing system. */
+:root {
+  --paper: #faf5ea; --paper-2: #f3ead7; --edge: rgba(7, 28, 38, .09);
+  --r-card: 22px; --r-btn: 999px;
+  --lift: 0 1px 0 rgba(255,255,255,.7) inset, 0 22px 44px -26px rgba(7, 28, 38, .42), 0 3px 8px -3px rgba(7, 28, 38, .1);
+  --lift-hover: 0 30px 56px -26px rgba(7, 28, 38, .5), 0 6px 14px -4px rgba(7, 28, 38, .14);
+  --gap-section: clamp(4rem, 8vw, 7rem);
+  --ornament: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12'%3E%3Cpath d='M0 6h46M74 6h46' stroke='%23d9a441' stroke-width='1.5'/%3E%3Cpath d='M60 0l6 6-6 6-6-6z' fill='%23d9a441'/%3E%3C/svg%3E");
+}
+html { scroll-behavior: smooth; }
+body { background: var(--paper); color: var(--ink); line-height: 1.65; -webkit-font-smoothing: antialiased; }
+p { text-wrap: pretty; }
+a { text-decoration: none; }
+
+/* Sections: one rhythm, warm light surfaces alternating */
+.section { padding-block: var(--gap-section); }
+.section.destinations, .section.packages, .section.about { background: var(--paper); }
+.section.rd-how, .section.season-strip { background: var(--paper-2); }
+
+/* Headings: one voice, with a gold diamond rule under every section title */
+h1, h2, h3 { letter-spacing: -.015em; line-height: 1.12; text-wrap: balance; }
+.section-header h2 { font-size: clamp(2rem, 4.2vw, 3.1rem); }
+.section-header h2::after { content: ''; display: block; width: 120px; height: 12px; margin: 1rem 0 0; background: var(--ornament) no-repeat center / contain; }
+.section-header--center h2::after, .section-header[style*="center"] h2::after { margin-inline: auto; }
+.section-header p { color: var(--ink-soft); font-size: 1.05rem; max-width: 40rem; }
+
+/* Cards: same radius, hairline edge, warm layered shadow, gentle lift */
+.proof-card, .season-card, .destination-card, .package-card, .rd-pkg, .contact-form, .reach, .policy {
+  border-radius: var(--r-card); border: 1px solid var(--edge); box-shadow: var(--lift); overflow: hidden;
+  transition: transform var(--spring), box-shadow var(--spring);
+}
+.proof-card:hover, .season-card:hover, .destination-card:hover, .package-card:hover, .rd-pkg:hover { transform: translateY(-5px); box-shadow: var(--lift-hover); }
+
+/* Buttons: one shape, two voices (gold = main action, ink outline = secondary) */
+.btn { border-radius: var(--r-btn); font-weight: 700; letter-spacing: .01em; padding: .85rem 1.6rem; transition: transform var(--spring), box-shadow var(--spring), background var(--ease), color var(--ease); }
+.btn.btn-primary { background: linear-gradient(180deg, var(--saffron-bright), var(--saffron)); color: var(--pine-950); border: 0; box-shadow: 0 10px 22px -10px rgba(217, 164, 65, .9); }
+.btn.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 16px 28px -10px rgba(217, 164, 65, 1); color: var(--pine-950); }
+.btn.btn-outline-dark, .btn.btn-ghost-dark { background: transparent; color: var(--pine-900); border: 1.5px solid var(--pine-900); }
+.btn.btn-outline-dark:hover, .btn.btn-ghost-dark:hover { background: var(--pine-900); color: #fff; transform: translateY(-2px); }
+.btn:active { transform: translateY(0) scale(.98); }
+
+/* Header: frosted glass with a fine gold underline */
+.top-bar { backdrop-filter: saturate(1.4) blur(14px); -webkit-backdrop-filter: saturate(1.4) blur(14px); border-bottom: 1px solid rgba(217, 164, 65, .35); }
+
+/* Forms: soft, clear focus */
+input, select, textarea { border-radius: 14px; }
+input:focus, select:focus, textarea:focus { outline: 0; border-color: var(--saffron); box-shadow: 0 0 0 4px rgba(217, 164, 65, .28); }
+:focus-visible { outline: 2px solid var(--saffron); outline-offset: 3px; }
+
+/* Cards glide in as they scroll into view (only where the browser supports it) */
+@keyframes svk-rise { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: none; } }
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .proof-card, .season-card, .destination-card, .package-card, .rd-pkg { animation: svk-rise linear both; animation-timeline: view(); animation-range: entry 0% cover 26%; }
+  }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition-duration: .01ms !important; } }
