@@ -561,14 +561,11 @@ function scrollToContact() {
 }
 
 function initFooterMenus() {
-  // Footer groups are accordions on phones and always open on larger screens
+  // Footer groups can be collapsed/expanded on every screen size.
+  // They start open on larger screens and closed on phones.
   const menus = [...document.querySelectorAll('.footer-links, .footer-contact')];
   if (!menus.length) return;
-  const wide = window.matchMedia('(min-width: 901px)');
-  const sync = () => { if (wide.matches) menus.forEach(d => { d.open = true; }); };
-  menus.forEach(d => d.querySelector('summary').addEventListener('click', e => { if (wide.matches) e.preventDefault(); }));
-  sync();
-  wide.addEventListener('change', sync);
+  if (window.matchMedia('(min-width: 901px)').matches) menus.forEach(d => { d.open = true; });
 }
 
 function initForms() {
