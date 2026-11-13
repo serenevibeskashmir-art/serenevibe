@@ -131,6 +131,13 @@ function initPhotos() {
 let SITE_PHOTOS = {};
 let SITE_LINKS = {};   // {slot: url}, e.g. the Highlights video link set in the admin panel
 
+/* Cloudinary delivery URLs can be resized by editing the transformation segment. */
+function srcsetFor(url, widths) {
+  const marker = '/f_auto,q_auto/';
+  if (!url || url.indexOf('/image/upload' + marker) === -1) return '';
+  return widths.map(w => url.replace(marker, '/f_auto,q_auto,c_limit,w_' + w + '/') + ' ' + w + 'w').join(', ');
+}
+
 function applyPhotos(photos, links) {
   SITE_PHOTOS = photos || {};
   SITE_LINKS = links || {};
@@ -145,6 +152,13 @@ function applyPhotos(photos, links) {
     if (photo.alt) img.alt = photo.alt;
     box.dataset.src = photo.url;
     if (slot !== 'hero') img.loading = 'lazy';
+    // Cloudinary photos: ask for sizes that fit the screen instead of the original upload
+    const widths = slot === 'hero' ? [800, 1280, 1920] : [640, 1100, 1600];
+    const set = srcsetFor(photo.url, widths);
+    if (set) {
+      img.srcset = set;
+      img.sizes = slot === 'hero' ? '100vw' : '(max-width: 760px) 92vw, (max-width: 1200px) 50vw, 1100px';
+    }
     img.decoding = 'async';
     img.addEventListener('load', () => box.classList.add('has-photo'), { once: true });
     img.src = photo.url;
