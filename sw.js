@@ -4,11 +4,11 @@ const CACHE_NAME = "serene-vibes-shell-v16";
 // API routes (which include the website photos), or generated PDFs,
 // all of which must always hit the network.
 const SHELL_ASSETS = [
-  "/css/site.min.css?v=20261113",
-  "/js/main.min.js?v=20261113",
-  "/js/redesign.min.js?v=20261113",
-  "/js/hotels.min.js?v=20261113",
-  "/js/assistant.min.js?v=20261113",
+  "/css/site.min.css?v=20261114",
+  "/js/main.min.js?v=20261114",
+  "/js/redesign.min.js?v=20261114",
+  "/js/hotels.min.js?v=20261114",
+  "/js/assistant.min.js?v=20261114",
   "/manifest.json",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
