@@ -150,3 +150,61 @@ body {
 @media (prefers-reduced-motion: no-preference) {
   .reach-bg-layer.on.has-photo img { animation: reachDrift 20s ease-in-out infinite alternate; }
 }
+
+/* ---------- 8. From the valley: one photo at a time ---------- */
+.gallery-tile[hidden] { display: none; }
+.gallery-grid.is-slides {
+  display: block; position: relative; overflow: hidden; isolation: isolate;
+  aspect-ratio: 16 / 9; max-height: min(76vh, 720px); width: 100%;
+  border-radius: 24px; background: var(--lake-950, #041a20);
+  box-shadow: 0 30px 60px -34px rgba(7, 28, 38, .6);
+  touch-action: pan-y;
+}
+.gallery-grid.is-slides .gallery-tile {
+  position: absolute; inset: 0; width: 100%; height: 100%; aspect-ratio: auto; min-height: 0;
+  grid-column: auto; grid-row: auto; border-radius: 0; cursor: zoom-in; overflow: hidden;
+  opacity: 0; visibility: hidden; z-index: 0;
+  transition: opacity .9s ease, visibility 0s linear .9s;
+}
+.gallery-grid.is-slides .gallery-tile.is-active { opacity: 1; visibility: visible; z-index: 1; transition: opacity .9s ease; }
+.gallery-grid.is-slides .gallery-tile img { width: 100%; height: 100%; object-fit: cover; transform: none; }
+.gallery-grid.is-slides .gallery-tile:hover img { transform: none; }
+@keyframes galleryDrift { from { transform: scale(1); } to { transform: scale(1.06); } }
+@media (prefers-reduced-motion: no-preference) {
+  .gallery-grid.is-slides .gallery-tile.is-active img { animation: galleryDrift 9s ease-out both; }
+}
+/* soft shade so the arrows and dots stay readable on any photo */
+.gallery-grid.is-slides::after {
+  content: ''; position: absolute; inset: auto 0 0 0; height: 28%; z-index: 2; pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(4, 26, 32, .55));
+}
+.gallery-nav {
+  position: absolute; top: 50%; z-index: 3; transform: translateY(-50%);
+  width: 52px; height: 52px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .45);
+  background: rgba(4, 26, 32, .38); color: #fff; display: grid; place-items: center; cursor: pointer;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  transition: background .2s ease, transform .2s ease;
+}
+.gallery-nav:hover { background: rgba(4, 26, 32, .7); }
+.gallery-nav:active { transform: translateY(-50%) scale(.94); }
+.gallery-nav--prev { left: clamp(.7rem, 2vw, 1.4rem); }
+.gallery-nav--next { right: clamp(.7rem, 2vw, 1.4rem); }
+.gallery-nav:focus-visible, .gallery-dot:focus-visible { outline: 2px solid var(--saffron-bright, #f0b94a); outline-offset: 3px; }
+.gallery-dots {
+  position: absolute; left: 0; right: 0; bottom: clamp(.8rem, 2vw, 1.3rem); z-index: 3;
+  display: flex; justify-content: center; align-items: center; gap: 2px;
+}
+.gallery-dot {
+  /* 24px tap area around a small dot */
+  width: 24px; height: 24px; border: 0; background: none; padding: 0; cursor: pointer; position: relative;
+}
+.gallery-dot::before {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; border-radius: 8px;
+  transform: translate(-50%, -50%); background: rgba(255, 255, 255, .6);
+  transition: width .3s ease, background .3s ease;
+}
+.gallery-dot.is-active::before { width: 26px; background: var(--saffron-bright, #f0b94a); }
+@media (max-width: 700px) {
+  .gallery-grid.is-slides { aspect-ratio: 4 / 3.4; border-radius: 18px; }
+  .gallery-nav { width: 42px; height: 42px; }
+}
