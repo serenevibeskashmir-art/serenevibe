@@ -1475,15 +1475,65 @@ function initFeatureSlideshow(box, features) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Policies: open the matching accordion when linked from the footer   */
+/* Policies: tabbed pop-up opened from the footer, or by a link such   */
+/* as /#cancellation-policy                                            */
 /* ------------------------------------------------------------------ */
 function initPolicyLinks() {
-  const openFromHash = () => {
-    const target = document.querySelector(`details.policy${location.hash || '#none'}`);
-    if (target) target.open = true;
+  const dialog = document.getElementById('policiesDialog');
+  if (!dialog || typeof dialog.showModal !== 'function') return;
+  const tabs = [...dialog.querySelectorAll('[role="tab"]')];
+  const panels = [...dialog.querySelectorAll('[role="tabpanel"]')];
+  const body = dialog.querySelector('.policy-panels');
+  let opener = null;
+
+  const select = (id, focus) => {
+    tabs.forEach(t => {
+      const on = t.dataset.policyTab === id;
+      t.setAttribute('aria-selected', String(on));
+      t.tabIndex = on ? 0 : -1;
+      if (on && focus) t.focus();
+    });
+    panels.forEach(p => { p.hidden = p.id !== id; });
+    if (body) body.scrollTop = 0;
   };
-  window.addEventListener('hashchange', openFromHash);
-  openFromHash();
+  const open = (id, from) => {
+    opener = from || document.activeElement;
+    select(id, false);
+    if (!dialog.open) dialog.showModal();
+    const active = tabs.find(t => t.getAttribute('aria-selected') === 'true');
+    if (active) active.focus();   // so the arrow keys move between tabs straight away
+  };
+
+  document.addEventListener('click', e => {
+    const link = e.target.closest('[data-policy]');
+    if (!link) return;
+    e.preventDefault();
+    open(link.dataset.policy, link);
+    history.replaceState(null, '', '#' + link.dataset.policy);
+  });
+  tabs.forEach((tab, i) => {
+    tab.addEventListener('click', () => select(tab.dataset.policyTab, false));
+    tab.addEventListener('keydown', e => {
+      const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); select(tabs[e.key === 'Home' ? 0 : tabs.length - 1].dataset.policyTab, true); }
+      if (!step) return;
+      e.preventDefault();
+      select(tabs[(i + step + tabs.length) % tabs.length].dataset.policyTab, true);
+    });
+  });
+  document.getElementById('policiesClose').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });   // click outside the card
+  dialog.addEventListener('close', () => {
+    if (panels.some(p => '#' + p.id === location.hash)) history.replaceState(null, '', location.pathname + location.search);
+    if (opener && opener.focus) opener.focus();
+  });
+
+  const fromHash = () => {
+    const id = location.hash.slice(1);
+    if (panels.some(p => p.id === id)) open(id, null);
+  };
+  window.addEventListener('hashchange', fromHash);
+  fromHash();
 }
 
 /* ------------------------------------------------------------------ */
