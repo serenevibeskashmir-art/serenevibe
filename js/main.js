@@ -300,6 +300,92 @@ function initGuestSlideshow(photos) {
 /* ------------------------------------------------------------------ */
 /* Gallery + lightbox (section stays hidden until photos exist)        */
 /* ------------------------------------------------------------------ */
+/* "From the valley": one photo at a time. The tiles are the slides, so photos and the
+   full-screen viewer keep working as before. Arrows, dots, swipe and arrow keys move
+   between photos; it advances by itself unless the visitor prefers reduced motion. */
+function initGallerySlideshow(grid, slides) {
+  const api = { justSwiped: () => false };
+  grid.dataset.layout = 'slides';
+  grid.classList.add('is-slides');
+  grid.querySelectorAll('.gallery-nav, .gallery-dots').forEach(n => n.remove());
+  grid.setAttribute('role', 'group');
+  grid.setAttribute('aria-roledescription', 'carousel');
+  grid.setAttribute('aria-label', 'Photos from the valley');
+
+  let cur = 0;
+  let timer = null;
+  let swiped = false;
+  const total = slides.length;
+  const dots = [];
+
+  const go = (i) => {
+    cur = (i + total) % total;
+    slides.forEach((tile, n) => {
+      const on = n === cur;
+      tile.classList.toggle('is-active', on);
+      tile.setAttribute('aria-hidden', String(!on));
+      tile.tabIndex = on ? 0 : -1;
+      tile.setAttribute('aria-label', `Open photo ${n + 1} of ${total}`);
+    });
+    dots.forEach((d, n) => {
+      d.classList.toggle('is-active', n === cur);
+      if (n === cur) d.setAttribute('aria-current', 'true'); else d.removeAttribute('aria-current');
+    });
+  };
+
+  if (total > 1) {
+    const mk = (cls, label, html) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = cls; b.setAttribute('aria-label', label); b.innerHTML = html;
+      return b;
+    };
+    const chev = d => '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' + d + '"/></svg>';
+    const prev = mk('gallery-nav gallery-nav--prev', 'Previous photo', chev('M15 5l-7 7 7 7'));
+    const next = mk('gallery-nav gallery-nav--next', 'Next photo', chev('M9 5l7 7-7 7'));
+    const bar = document.createElement('div');
+    bar.className = 'gallery-dots';
+    slides.forEach((_, n) => {
+      const d = mk('gallery-dot', `Show photo ${n + 1}`, '');
+      d.addEventListener('click', () => { go(n); restart(); });
+      bar.appendChild(d); dots.push(d);
+    });
+    prev.addEventListener('click', () => { go(cur - 1); restart(); });
+    next.addEventListener('click', () => { go(cur + 1); restart(); });
+    grid.append(prev, next, bar);
+
+    // Swipe
+    let x0 = null;
+    grid.addEventListener('pointerdown', e => { x0 = e.clientX; swiped = false; });
+    grid.addEventListener('pointerup', e => {
+      if (x0 === null) return;
+      const dx = e.clientX - x0; x0 = null;
+      if (Math.abs(dx) > 45) { swiped = true; go(cur + (dx < 0 ? 1 : -1)); restart(); setTimeout(() => { swiped = false; }, 350); }
+    });
+    grid.addEventListener('pointercancel', () => { x0 = null; });
+    grid.addEventListener('keydown', e => {
+      if (e.key === 'ArrowLeft') { go(cur - 1); restart(); }
+      if (e.key === 'ArrowRight') { go(cur + 1); restart(); }
+    });
+
+    // Autoplay: only while visible, and not while the visitor is hovering or focused inside
+    let visible = false, hold = false;
+    const tick = () => { if (!document.hidden && visible && !hold && !prefersReducedMotion) go(cur + 1); };
+    const restart = () => { clearInterval(timer); timer = setInterval(tick, 5500); };
+    grid.addEventListener('mouseenter', () => { hold = true; });
+    grid.addEventListener('mouseleave', () => { hold = false; });
+    grid.addEventListener('focusin', () => { hold = true; });
+    grid.addEventListener('focusout', () => { hold = false; });
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(entries => { visible = entries.some(e => e.isIntersecting); }, { threshold: 0.35 }).observe(grid);
+    } else { visible = true; }
+    restart();
+  }
+
+  go(0);
+  api.justSwiped = () => swiped;
+  return api;
+}
+
 function initGallery(photos) {
   const section = document.querySelector('[data-gallery]');
   const grid = section && section.querySelector('.gallery-grid');
@@ -315,7 +401,7 @@ function initGallery(photos) {
   if (!shown.length) return;
 
   section.hidden = false;
-  grid.dataset.layout = (shown.length === 3 || shown.length === 6) ? 'feature' : 'flat';
+  const slideshow = initGallerySlideshow(grid, shown);
 
   const box = document.getElementById('lightbox');
   const img = document.getElementById('lbImg');
@@ -332,7 +418,10 @@ function initGallery(photos) {
     cap.textContent = alt === 'Kashmir travel photo' ? '' : alt;
   };
 
-  shown.forEach((tile, i) => tile.addEventListener('click', () => { show(i); box.showModal(); }));
+  shown.forEach((tile, i) => tile.addEventListener('click', () => {
+    if (slideshow.justSwiped()) return;   // a swipe is not a tap
+    show(i); box.showModal();
+  }));
   document.getElementById('lbPrev').addEventListener('click', () => show(index - 1));
   document.getElementById('lbNext').addEventListener('click', () => show(index + 1));
   document.getElementById('lbClose').addEventListener('click', () => box.close());
