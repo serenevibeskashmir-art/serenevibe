@@ -1,0 +1,109 @@
+/* Polish layer: loads last in the bundle (see scripts/build_assets.sh).
+   1. Hero Urdu word: fixed opacity bug on phones, gentle drift on scroll
+   2. Kashmiri motifs: used where they mean something (dark chapters, footer, terms), chinar leaf under headings
+   3. Seasons: the section takes on the colour of the season; swipeable row on phones
+   4. Mobile bar: Call, WhatsApp, Enquire in one place
+   5. Rendering cost: skip painting far-below-the-fold sections until they are near */
+
+/* ---------- 1. Hero Urdu word ---------- */
+/* The entrance animation used to end at a hard-coded opacity, which beat the
+   lower opacity set for phones and left the word fully opaque on top of the headline. */
+.vista-script { --script-o: .94; }
+@keyframes vistaInk2 {
+  from { opacity: 0; transform: translateY(-14px) scale(.97); }
+  to   { opacity: var(--script-o); transform: none; }
+}
+.vista-script { animation: vistaInk2 1.6s cubic-bezier(.2, .7, .2, 1) .3s both; }
+
+@keyframes vistaDrift { to { translate: 0 4.5rem; } }
+@supports (animation-timeline: scroll()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .vista-script {
+      animation: vistaInk2 1.6s cubic-bezier(.2, .7, .2, 1) .3s both, vistaDrift linear both;
+      animation-timeline: auto, scroll(root block);
+      animation-range: normal, 0 90vh;
+    }
+  }
+}
+@media (max-width: 760px) {
+  .vista-script { --script-o: .2; top: 6.2rem; right: -.2rem; font-size: 7.5rem; }
+}
+
+/* ---------- 2. Motifs ---------- */
+:root {
+  /* chinar leaf between two fine rules */
+  --ornament: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 16'%3E%3Cpath d='M0 8h44M76 8h44' stroke='%23d9a441' stroke-width='1.4'/%3E%3Cpath d='M60 1l2.3 4.6 5.1.7-3.7 3.5.9 5-4.6-2.4-4.6 2.4.9-5-3.7-3.5 5.1-.7z' fill='%23d9a441'/%3E%3C/svg%3E");
+}
+/* chinar leaf rule under section titles */
+.section-header h2::after {
+  content: ''; display: block; width: 120px; height: 16px; margin: .9rem 0 0;
+  background: var(--ornament) no-repeat center / contain;
+}
+.section-header--center h2::after, .section-header[style*="center"] h2::after { margin-inline: auto; }
+
+/* Paisley weave only on the dark chapters (stats, destinations, reviews) and the footer.
+   Light sections go quiet so photos and text carry them; the carved-wood lattice stays on the terms. */
+body {
+  background-image:
+    radial-gradient(60rem 40rem at 105% 8%, rgba(227, 167, 47, .10), transparent 60%),
+    radial-gradient(55rem 38rem at -10% 55%, rgba(20, 80, 99, .08), transparent 62%);
+  background-size: auto, auto;
+}
+.section.packages {
+  background-image: linear-gradient(180deg, rgba(245, 247, 244, .55), rgba(245, 247, 244, 0) 30%);
+  background-size: auto;
+}
+
+/* ---------- 3. Seasons ---------- */
+@property --tone-a { syntax: '<color>'; inherits: true; initial-value: #dfeadf; }
+@property --tone-b { syntax: '<color>'; inherits: true; initial-value: #e5ece8; }
+.section.season-strip {
+  --tone-a: #dfeadf; --tone-b: #e5ece8;
+  background-color: var(--tone-b);
+  background-image: radial-gradient(70rem 34rem at 50% 0%, var(--tone-a), transparent 72%);
+  background-size: auto;
+  transition: --tone-a .9s ease, --tone-b .9s ease;
+}
+.season-strip[data-tone="spring"] { --tone-a: #cfe8d3; --tone-b: #e4efe5; }
+.season-strip[data-tone="summer"] { --tone-a: #cfe3f1; --tone-b: #e3edf3; }
+.season-strip[data-tone="autumn"] { --tone-a: #f7d8b0; --tone-b: #f3e8da; }
+.season-strip[data-tone="winter"] { --tone-a: #dce9f3; --tone-b: #e8eef2; }
+
+@media (hover: hover) {
+  .season-grid:has(.season-card:hover) .season-card:not(:hover) { filter: saturate(.75) brightness(.96); }
+  .season-card { transition: transform var(--ease), box-shadow var(--ease), filter .4s ease; }
+}
+
+@media (max-width: 760px) {
+  .season-strip .container { overflow: visible; }
+  .season-grid {
+    display: flex; gap: 12px; align-items: flex-start;
+    overflow-x: auto; overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory; scroll-padding-inline: 1.15rem;
+    margin-inline: calc(-1 * clamp(1.15rem, 5vw, 1.5rem));
+    padding: .4rem clamp(1.15rem, 5vw, 1.5rem) 1.4rem;
+    scrollbar-width: none;
+  }
+  .season-grid::-webkit-scrollbar { display: none; }
+  .season-item { flex: 0 0 min(78vw, 22rem); scroll-snap-align: start; }
+  .season-card { aspect-ratio: 4 / 5.2; }
+}
+
+/* ---------- 4. Mobile bar ---------- */
+.mobile-cta-row.mobile-cta-default { display: flex; gap: .5rem; }
+.mobile-cta-default .btn-wa {
+  background: #12a150; color: #fff; border: 0; display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+}
+.mobile-cta-default .btn-wa svg { flex-shrink: 0; }
+@media (max-width: 700px) {
+  /* WhatsApp now lives in the bar, so the floating button no longer covers the page */
+  .wa-float { display: none; }
+  .mobile-cta-default .btn { font-size: .88rem; padding-inline: .6rem; }
+}
+
+/* ---------- 5. Rendering cost ---------- */
+/* Sections far below the first screen are not laid out or painted until they scroll near.
+   The intrinsic size keeps the scrollbar steady. */
+.section.about, .section.season-strip, .policies-section, .rd-footer {
+  content-visibility: auto; contain-intrinsic-size: auto 760px;
+}
