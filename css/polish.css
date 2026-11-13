@@ -104,7 +104,7 @@ body {
 /* ---------- 5. Rendering cost ---------- */
 /* Sections far below the first screen are not laid out or painted until they scroll near.
    The intrinsic size keeps the scrollbar steady. */
-.section.about, .section.season-strip, .policies-section, .rd-footer {
+.section.about, .section.season-strip, .rd-footer {
   content-visibility: auto; contain-intrinsic-size: auto 760px;
 }
 
@@ -207,4 +207,55 @@ body {
 @media (max-width: 700px) {
   .gallery-grid.is-slides { aspect-ratio: 4 / 3.4; border-radius: 18px; }
   .gallery-nav { width: 42px; height: 42px; }
+}
+
+/* ---------- 9. Policies: footer column + tabbed pop-up ---------- */
+@media (min-width: 901px) {
+  .rd-footer-grid { grid-template-columns: 1.5fr 1fr 1fr 1.3fr; }
+}
+.policies-dialog {
+  border: 0; padding: 0; margin: auto; width: min(880px, 94vw); max-height: min(86vh, 760px);
+  border-radius: 22px; overflow: hidden; color: var(--ink); background: #fff;
+  box-shadow: 0 40px 90px -30px rgba(0, 0, 0, .6);
+}
+.policies-dialog[open] { display: flex; flex-direction: column; }
+.policies-dialog::backdrop { background: rgba(4, 26, 32, .66); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+@media (prefers-reduced-motion: no-preference) {
+  .policies-dialog[open] { animation: policiesIn .28s cubic-bezier(.2, .8, .2, 1); }
+  @keyframes policiesIn { from { opacity: 0; transform: translateY(14px) scale(.98); } to { opacity: 1; transform: none; } }
+}
+.policies-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+  padding: 1.5rem 1.6rem 1rem; background: var(--lake-950, #041a20); color: #fff;
+}
+.policies-head h2 { font-size: clamp(1.3rem, 2.6vw, 1.8rem); color: #fff; line-height: 1.15; margin: 0; }
+.policies-head h2::after { display: none; }
+.policies-head p { margin: .4rem 0 0; font-size: .9rem; color: rgba(255, 255, 255, .78); max-width: 34rem; }
+.policies-close {
+  flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, .35); background: rgba(255, 255, 255, .08); color: #fff;
+}
+.policies-close:hover { background: rgba(255, 255, 255, .18); }
+.policies-close:focus-visible, .policy-tab:focus-visible { outline: 2px solid var(--saffron-bright, #f0b94a); outline-offset: 2px; }
+.policy-tabs {
+  display: flex; gap: .3rem; padding: 0 1.2rem; background: var(--lake-950, #041a20);
+  overflow-x: auto; scrollbar-width: none;
+}
+.policy-tabs::-webkit-scrollbar { display: none; }
+.policy-tab {
+  flex: 0 0 auto; padding: .85rem 1rem; border: 0; background: none; cursor: pointer; font: inherit; font-weight: 600; font-size: .92rem;
+  color: rgba(255, 255, 255, .7); border-bottom: 3px solid transparent; transition: color .2s ease, border-color .2s ease;
+}
+.policy-tab:hover { color: #fff; }
+.policy-tab[aria-selected="true"] { color: #fff; border-bottom-color: var(--saffron-bright, #f0b94a); }
+.policy-panels { overflow-y: auto; padding: 1.4rem 1.6rem 1.8rem; overscroll-behavior: contain; }
+.policy-panel[hidden] { display: none; }
+.policy-panel-title { font-size: 1.35rem; margin: 0 0 .9rem; }
+.policy-panels .policy-footnote { margin-top: 1.8rem; padding-top: 1.2rem; border-top: 1px solid var(--line); font-size: .85rem; max-width: none; text-align: left; }
+@media (max-width: 700px) {
+  .policies-dialog { width: 100%; max-width: none; max-height: 92dvh; margin: auto 0 0; border-radius: 22px 22px 0 0; }
+  .policies-head { padding: 1.2rem 1.1rem .8rem; }
+  .policies-head p { display: none; }
+  .policy-tabs { padding: 0 .6rem; }
+  .policy-panels { padding: 1.1rem 1.1rem 1.6rem; }
 }
