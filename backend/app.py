@@ -1,7 +1,7 @@
 import json
 import os
 
-from flask import Flask, Response, send_from_directory
+from flask import Flask, Response, request, send_from_directory
 from flask_cors import CORS
 
 from backend.auth import admin_required
@@ -25,6 +25,33 @@ PUBLIC_DIR = ROOT_DIR
 PWA_DIR = ROOT_DIR
 ADMIN_DIST = os.path.join(ROOT_DIR, "admin", "dist")
 OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "/tmp/output")
+
+
+def _cache_if_versioned(response):
+    """index.html links css/js as file.min.css?v=<date>; a changed ?v= is a new URL,
+    so those files can be cached for a year. Unversioned requests keep default caching."""
+    if request.args.get("v"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
+
+
+def _hero_preload(manifest) -> str:
+    """Tell the browser to start fetching the hero photo straight away (it is the largest
+    paint on the page), instead of waiting for the script that sets the image source."""
+    try:
+        url = manifest["photos"]["hero"]["url"]
+    except (KeyError, TypeError):
+        return ""
+    marker = "/f_auto,q_auto/"
+    if "/image/upload" + marker in url:
+        widths = (800, 1280, 1920)
+        srcset = ", ".join(
+            f"{url.replace(marker, f'/f_auto,q_auto,c_limit,w_{w}/')} {w}w" for w in widths
+        )
+        return (
+            f'<link rel="preload" as="image" fetchpriority="high" imagesrcset="{srcset}" imagesizes="100vw">'
+        )
+    return f'<link rel="preload" as="image" fetchpriority="high" href="{url}">'
 
 
 def create_app():
@@ -79,10 +106,11 @@ def create_app():
         with open(os.path.join(PUBLIC_DIR, "index.html"), encoding="utf-8") as fh:
             html = fh.read()
         try:
-            payload = json.dumps(public_manifest()).replace("</", "<\\/")
+            manifest = public_manifest()
+            payload = json.dumps(manifest).replace("</", "<\\/")
             html = html.replace(
                 "<!--SITE_PHOTOS-->",
-                f"<script>window.__SITE_PHOTOS__={payload};</script>",
+                _hero_preload(manifest) + f"<script>window.__SITE_PHOTOS__={payload};</script>",
                 1,
             )
         except Exception as exc:  # never let a DB hiccup take the homepage down
@@ -106,7 +134,8 @@ def create_app():
 
     @app.get("/css/<path:filename>")
     def serve_public_css(filename):
-        return send_from_directory(os.path.join(PUBLIC_DIR, "css"), filename)
+        response = send_from_directory(os.path.join(PUBLIC_DIR, "css"), filename)
+        return _cache_if_versioned(response)
 
     @app.get("/fonts/<path:filename>")
     def serve_public_fonts(filename):
@@ -116,7 +145,8 @@ def create_app():
 
     @app.get("/js/<path:filename>")
     def serve_public_js(filename):
-        return send_from_directory(os.path.join(PUBLIC_DIR, "js"), filename)
+        response = send_from_directory(os.path.join(PUBLIC_DIR, "js"), filename)
+        return _cache_if_versioned(response)
 
     # --- PWA assets ---
     # sw.js and manifest.json must be served from the root ("/") so the
