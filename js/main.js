@@ -421,6 +421,14 @@ function initTestimonialSlider() {
 /* ------------------------------------------------------------------ */
 const REACH_START_WITH = 'Srinagar'; // a destination name, or null to start with the plain white chart
 
+const REACH_TONES = {
+  Srinagar: ['#2a6f86', '#0b2a36'],
+  Doodhpathri: ['#4f8f5f', '#0f3a2c'],
+  Gulmarg: ['#6f93b0', '#16384e'],
+  Sonamarg: ['#c79a4a', '#3a2c1a'],
+  Pahalgam: ['#4a8a7c', '#0d3a40']
+};
+
 function initReachChart() {
   const chart = document.getElementById('reach');
   if (!chart) return;
@@ -453,6 +461,9 @@ function initReachChart() {
     const prev = layers[(layerIndex + 1) % layers.length];
     const img = next.querySelector('img');
     next.classList.remove('has-photo');
+    // Until a photo is uploaded, each destination gets its own colour of light
+    const tone = REACH_TONES[stop.dataset.name];
+    next.style.setProperty('--tone', tone ? 'linear-gradient(160deg,' + tone[0] + ',' + tone[1] + ')' : '');
     if (photo) {
       img.onload = () => next.classList.add('has-photo');
       img.src = photo.url;
@@ -469,6 +480,7 @@ function initReachChart() {
       current = null;
       chart.classList.remove('is-photo');
       stops.forEach(s => { s.classList.remove('is-active'); s.querySelector('.reach-name').setAttribute('aria-pressed', 'false'); });
+      markActive();
       return;
     }
     current = stop;
@@ -485,9 +497,53 @@ function initReachChart() {
     cta.dataset.destination = name;
     showPhoto(stop);
     chart.classList.add('is-photo');
+    markActive();
   }
 
   stops.forEach(stop => stop.addEventListener('click', () => select(stop, true)));
+
+  // Route lines: from Srinagar to each destination, drawn over the plot (wide screens only).
+  const plot = chart.querySelector('.reach-plot');
+  const field = chart.querySelector('.reach-field');
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('class', 'reach-routes');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const routes = new Map();
+  stops.slice(1).forEach(stop => {
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('class', 'reach-route');
+    svg.appendChild(path);
+    routes.set(stop, path);
+  });
+  if (plot && field) plot.insertBefore(svg, field);
+
+  function drawRoutes() {
+    if (!plot || !field || !window.matchMedia('(min-width: 761px)').matches) return;
+    const p = plot.getBoundingClientRect();
+    const f = field.getBoundingClientRect();
+    // Final dot position (the stems grow in, so compute it from the data, not from the live boxes)
+    const pos = stop => ({
+      x: f.left - p.left + f.width * (parseFloat(stop.style.getPropertyValue('--km')) / 90),
+      y: f.top - p.top + f.height * (1 - parseFloat(stop.style.getPropertyValue('--elev')) / 3000)
+    });
+    svg.setAttribute('viewBox', '0 0 ' + p.width + ' ' + p.height);
+    const from = pos(stops[0]);
+    routes.forEach((path, stop) => {
+      const to = pos(stop);
+      path.setAttribute('d', 'M' + from.x.toFixed(1) + ' ' + from.y.toFixed(1) + ' L' + to.x.toFixed(1) + ' ' + to.y.toFixed(1));
+      path.style.setProperty('--len', Math.hypot(to.x - from.x, to.y - from.y).toFixed(0));
+      path.style.setProperty('--km', stop.style.getPropertyValue('--km'));
+    });
+    markActive();
+  }
+  function markActive() {
+    routes.forEach((path, stop) => path.classList.toggle('is-active', stop === current));
+  }
+  drawRoutes();
+  window.addEventListener('resize', drawRoutes);
+  if (window.ResizeObserver && plot) new ResizeObserver(drawRoutes).observe(plot);
 
   cta.addEventListener('click', e => {
     e.preventDefault();
@@ -714,11 +770,12 @@ function renderPackages(packages) {
   const template = document.getElementById('packageCardTemplate');
   if (!grid || !template) return;
   grid.removeAttribute('aria-busy');
+  let starters = false;
   if (!packages.length) {
-    grid.innerHTML = '<div class="packages-empty"><h3>Custom itineraries, built around you</h3>' +
-      '<p>Our fixed-departure list is being updated. Tell us your dates and group size and we will send a priced itinerary within one business day.</p>' +
-      '<a href="#contact" class="btn btn-primary">Request an itinerary</a></div>';
-    return;
+    // No fixed departures published (or the list could not load): show three routes people can start from.
+    // No prices or durations are invented; each card leads to a priced itinerary within one business day.
+    packages = starterRoutes();
+    starters = true;
   }
 
   grid.innerHTML = '';
@@ -726,6 +783,7 @@ function renderPackages(packages) {
     const node = template.content.firstElementChild.cloneNode(true);
 
     node.classList.toggle('package-card--featured', !!pkg.featured);
+    if (pkg.starter) node.classList.add('package-card--starter');
 
     const photoBox = node.querySelector('[data-package-photo]');
     if (pkg.placeholder === 'pine' || pkg.placeholder === 'slate') {
@@ -752,7 +810,7 @@ function renderPackages(packages) {
       node.querySelector('.package-price strong').textContent = `₹${pkg.price_label}`;
       node.querySelector('.package-per').textContent = pkg.price_note || '';
     } else {
-      node.querySelector('.package-price').textContent = 'Price on request';
+      node.querySelector('.package-price').textContent = pkg.starter ? 'Priced to your dates' : 'Price on request';
     }
 
     // Wire the Enquire CTA (existing behaviour).
@@ -766,7 +824,8 @@ function renderPackages(packages) {
 
     // Preview button: matched to the package so the modal knows which itinerary to render.
     const previewBtn = node.querySelector('[data-package-preview]');
-    if (previewBtn) {
+    if (previewBtn && pkg.starter) previewBtn.remove();
+    else if (previewBtn) {
       previewBtn.dataset.packageSlug = pkg.slug || pkg.id || '';
       previewBtn.dataset.packageName = pkg.name || '';
       previewBtn.dataset.packageDuration = pkg.duration || '';
@@ -788,8 +847,43 @@ function renderPackages(packages) {
       }
     }
 
+    if (pkg.starter) {
+      node.querySelector('[data-package]').textContent = 'Get a priced itinerary';
+      node.dataset.photoSlot = pkg.photoSlot || '';
+    }
     grid.appendChild(node);
   });
+
+  const note = document.querySelector('[data-packages-note]');
+  if (note) note.hidden = !starters;
+  if (starters) {
+    // Use the destination photos once they are available
+    const fill = () => grid.querySelectorAll('.package-card--starter').forEach(card => {
+      const photo = SITE_PHOTOS[card.dataset.photoSlot];
+      const box = card.querySelector('[data-package-photo]');
+      const img = box && box.querySelector('img');
+      if (!photo || !img || img.getAttribute('src')) return;
+      img.loading = 'lazy'; img.decoding = 'async';
+      img.addEventListener('load', () => box.classList.add('has-photo'), { once: true });
+      img.src = photo.url;
+    });
+    fill();
+    document.addEventListener('sitephotos', fill);
+  }
+}
+
+function starterRoutes() {
+  return [
+    { starter: true, featured: true, badge: 'Base city', duration: 'Srinagar', name: 'Srinagar and Dal Lake',
+      description: 'Shikara rides, Mughal gardens and the old city, from 1,585 m. The usual first stop, and the base for every other trip.',
+      features: ['Dal Lake and houseboats', 'Mughal gardens', 'Old city markets'], placeholder: 'lake', photoSlot: 'dest-srinagar' },
+    { starter: true, badge: 'Meadows and snow', duration: 'Gulmarg and Doodhpathri', name: 'Gulmarg and Doodhpathri',
+      description: 'Asia\u2019s highest gondola and alpine meadows. Gulmarg is 52 km from Srinagar and Doodhpathri is 42 km.',
+      features: ['Gulmarg gondola', 'Doodhpathri meadows', 'Skiing in winter'], placeholder: 'pine', photoSlot: 'dest-gulmarg' },
+    { starter: true, badge: 'Rivers and glaciers', duration: 'Pahalgam and Sonamarg', name: 'Pahalgam and Sonamarg',
+      description: 'The Lidder River and pine forests at Pahalgam, then Thajiwas Glacier at Sonamarg. 90 km and 80 km from Srinagar.',
+      features: ['Lidder River walks', 'Betaab Valley', 'Thajiwas Glacier'], placeholder: 'slate', photoSlot: 'dest-pahalgam' }
+  ];
 }
 
 /* ------------------------------------------------------------------ */
