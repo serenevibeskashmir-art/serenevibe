@@ -3931,6 +3931,39 @@ TRUST_STATS = [("4.9/5", "GOOGLE  \u00b7  200+ REVIEWS"), ("5,000+", "GUESTS SER
 TRUST_QUOTE = ("Transfers were punctual, hotels were exactly as described, and our guide in "
                "Gulmarg was exceptional.")
 TRUST_QUOTE_BY = "Arjun K., Grand Kashmir Circuit"
+# Real guest reviews: (review text, "Name, trip", places it is about). The PDF shows the review that
+# best matches the places in the trip (e.g. a Gulmarg review on a trip that stays in Gulmarg); if several
+# match equally, one is picked by quote number. Reviews with no places are general and fit any trip.
+# Places: "srinagar", "gulmarg", "pahalgam", "sonamarg", "doodhpathri", "gurez", "yusmarg", "kokernag".
+# Paste ONLY genuine reviews (e.g. from your Google reviews, with the guest's permission),
+# each under ~120 characters so it fits the band.
+TRUST_REVIEWS = [
+    (TRUST_QUOTE, TRUST_QUOTE_BY, ("gulmarg",)),
+    ("Houseboat package for our anniversary \u2014 thoughtfully planned and completely stress-free.",
+     "Priya S., Heritage & Houseboat", ("srinagar",)),
+    # ("Paste a real review here.", "Guest name, Trip name", ("pahalgam",)),
+    # ("A real review about the whole trip.", "Guest name, Trip name", ()),
+]
+_REVIEW_PLACES = ("srinagar", "gulmarg", "pahalgam", "sonamarg", "doodhpathri", "gurez", "yusmarg", "kokernag")
+
+
+def pick_review(ref, timeline=None):
+    """Review whose places best match the trip; ties go to a stable choice for this quote number."""
+    import zlib, json
+    try:
+        text = json.dumps(timeline or [], default=str).lower()
+    except Exception:
+        text = ""
+    trip = {k for k in _REVIEW_PLACES if k in text}
+    def score(r):
+        tags = set(r[2]) if len(r) > 2 else set()
+        return len(tags & trip) * 2 + (1 if not tags else 0)       # a match beats a general review
+    best = max(score(r) for r in TRUST_REVIEWS)
+    pool = [r for r in TRUST_REVIEWS if score(r) == best]
+    r = pool[zlib.crc32(str(ref).encode("utf-8")) % len(pool)]
+    return r[0], r[1]
+
+
 WA_GREEN = colors.HexColor("#1faa59")
 WA_GREEN_DK = colors.HexColor("#168a47")
 SAFFRON  = colors.HexColor("#f5b82e")
@@ -6052,7 +6085,8 @@ def generate_pdf(itinerary_data: dict) -> str:
     story.append(Spacer(1, 4*mm))
 
     # ── 2. Proof strip (the trip summary now lives in the merged card above) ──
-    _trust = TrustStrip(usable_w, TRUST_STATS, TRUST_QUOTE, TRUST_QUOTE_BY)
+    _rev_q, _rev_by = pick_review(_quote_ref(client_name), itinerary_data.get("timeline"))
+    _trust = TrustStrip(usable_w, TRUST_STATS, _rev_q, _rev_by)
     story.append(_trust)
     # ── Keep page 1 on ONE page: if it overflows, tighten gaps, then compact cards, then drop the strip
     def _p1_used():
