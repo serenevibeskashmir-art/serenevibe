@@ -814,6 +814,23 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
   const legacyExtras = (ex) => (ex || []).flatMap((k) => (k === "union_cab" ? ["union_cab_pahalgam", "union_cab_gulmarg"] : [k]));
   const [includedExtras, setIncludedExtras] = useState(legacyExtras(quote?.included_extras));   // union cabs per place / gondola phases counted in the package
   const toggleExtra = (k) => setIncludedExtras((a) => (a.includes(k) ? a.filter((x) => x !== k) : [...a, k]));
+  // Own places for "Union cab · Other", and own inclusion lines (each with its own on/off switch).
+  const [cabOtherPlaces, setCabOtherPlaces] = useState(Array.isArray(quote?.cab_other_places) ? quote.cab_other_places : []);
+  const [customIncl, setCustomIncl] = useState(Array.isArray(quote?.custom_inclusions) ? quote.custom_inclusions.map((t) => ({ t, on: true })) : []);
+  const [otherIn, setOtherIn] = useState("");
+  const [inclIn, setInclIn] = useState("");
+  const addOtherPlace = () => {
+    const v = otherIn.trim();
+    if (!v) return;
+    setCabOtherPlaces((a) => (a.some((x) => x.toLowerCase() === v.toLowerCase()) ? a : [...a, v].slice(0, 6)));
+    setOtherIn("");
+  };
+  const addCustomIncl = () => {
+    const v = inclIn.trim();
+    if (!v) return;
+    setCustomIncl((a) => (a.length >= 8 ? a : [...a, { t: v, on: true }]));
+    setInclIn("");
+  };
   const [mealPlan, setMealPlan] = useState(quote?.meta_summary?.meal_plan || "MAP");   // default MAP
   // Vehicle and meal plan are set in the trip form at the top; changing them there updates this quote.
   useEffect(() => { if (trip?.vehicle) setVehicleType(trip.vehicle); }, [trip?.vehicle]);
@@ -1063,7 +1080,7 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
   const draftKey = "qp-draft:" + (quote?.meta_summary?.client_name || "client");
   const saveDraft = (snap) => {
     try {
-      localStorage.setItem(draftKey, JSON.stringify({ ...snap, startPoint, endPoint, editableCost, showPerPerson, includedExtras, vehicleType, mealPlan, at: Date.now() }));
+      localStorage.setItem(draftKey, JSON.stringify({ ...snap, startPoint, endPoint, editableCost, showPerPerson, includedExtras, cabOtherPlaces, customIncl, vehicleType, mealPlan, at: Date.now() }));
     } catch (e) { /* storage unavailable: undo still works */ }
   };
   useEffect(() => {
@@ -1131,6 +1148,8 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
     if (d.editableCost) setEditableCost(d.editableCost);
     if (typeof d.showPerPerson === "boolean") setShowPerPerson(d.showPerPerson);
     if (Array.isArray(d.includedExtras)) setIncludedExtras(legacyExtras(d.includedExtras));
+    if (Array.isArray(d.cabOtherPlaces)) setCabOtherPlaces(d.cabOtherPlaces);
+    if (Array.isArray(d.customIncl)) setCustomIncl(d.customIncl);
     if (d.vehicleType) setVehicleType(d.vehicleType);
     if (d.mealPlan) setMealPlan(d.mealPlan);
     setActiveDay(0); setPickDraft({}); setDraftOffer(null);
@@ -1163,6 +1182,8 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
                     custom_cost: editableCost,
                     show_per_person: showPerPerson,
                     included_extras: [...includedExtras, ...(coupleOn ? (trip?.coupleExtras || []) : [])],
+                    cab_other_places: cabOtherPlaces,
+                    custom_inclusions: customIncl.filter((c) => c.on).map((c) => c.t),
                     couple: coupleOn,
                     vehicle_type: vehicleType,
                     meal_plan: mealPlan,
@@ -1540,10 +1561,54 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
             <button type="button" className={"sv-sw" + (showPerPerson ? " on" : "")} role="switch" aria-checked={showPerPerson} onClick={() => setShowPerPerson((v) => !v)}>
               <span>Show price per person</span><i className="box" /></button>
             <span className="sv-lbl">Included in the package</span>
-            {[["union_cab_pahalgam", "Union cab · Pahalgam"], ["union_cab_gulmarg", "Union cab · Gulmarg"], ["union_cab_other", "Union cab · Other places"], ["gondola_p1", "Gondola Phase 1"], ["gondola_p2", "Gondola Phase 2"]].map(([k, lab]) => (
+            <div className="sv-stack" style={{ border: "1.5px solid var(--sv-line)", borderRadius: 14, padding: 12, gap: 10 }}>
+              <span className="sv-lbl" style={{ color: "var(--sv-ink)", margin: 0 }}>Union cab included for</span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {[["union_cab_pahalgam", "Pahalgam"], ["union_cab_gulmarg", "Gulmarg"], ["union_cab_sonamarg", "Sonamarg"], ["union_cab_other", "Other"]].map(([k, lab]) => {
+                  const on = includedExtras.includes(k);
+                  return <button key={k} type="button" className={"sv-btn " + (on ? "sv-primary" : "sv-soft")} aria-pressed={on} onClick={() => toggleExtra(k)}>{on ? "✓ " : ""}{lab}</button>;
+                })}
+              </div>
+              {includedExtras.includes("union_cab_other") && (
+                <div className="sv-stack" style={{ gap: 8 }}>
+                  <label className="sv-sub" htmlFor="cab-other-in">Other place(s). Type a name and tap Add.</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input id="cab-other-in" className="sv-inp" value={otherIn} maxLength={40} placeholder="e.g. Doodhpathri" autoComplete="off"
+                      onChange={(e) => setOtherIn(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addOtherPlace(); } }} />
+                    <button type="button" className="sv-btn sv-accent" disabled={!otherIn.trim()} onClick={addOtherPlace}>Add</button>
+                  </div>
+                  {cabOtherPlaces.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {cabOtherPlaces.map((p, i) => (
+                        <button key={p} type="button" className="sv-btn sv-soft" style={{ minHeight: 40 }} aria-label={"Remove " + p}
+                          onClick={() => setCabOtherPlaces((a) => a.filter((_, j) => j !== i))}>{p} ×</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            {[["gondola_p1", "Gondola Phase 1"], ["gondola_p2", "Gondola Phase 2"]].map(([k, lab]) => (
               <button key={k} type="button" className={"sv-sw" + (includedExtras.includes(k) ? " on" : "")} role="switch" aria-checked={includedExtras.includes(k)} onClick={() => toggleExtra(k)}>
                 <span>{lab}</span><i className="box" /></button>
             ))}
+            <span className="sv-lbl">Your own inclusions</span>
+            {customIncl.length === 0 && <div className="sv-sub">None yet.</div>}
+            {customIncl.map((c, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <button type="button" className={"sv-sw" + (c.on ? " on" : "")} role="switch" aria-checked={c.on}
+                  onClick={() => setCustomIncl((a) => a.map((x, j) => (j === i ? { ...x, on: !x.on } : x)))}>
+                  <span style={{ overflowWrap: "anywhere" }}>{c.t}</span><i className="box" /></button>
+                <button type="button" className="sv-btn sv-danger" style={{ minHeight: 40, padding: "0 12px" }} aria-label={"Delete " + c.t}
+                  onClick={() => setCustomIncl((a) => a.filter((_, j) => j !== i))}>×</button>
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 8 }}>
+              <input id="incl-in" className="sv-inp" value={inclIn} maxLength={80} placeholder="e.g. Pony ride at Pahalgam" autoComplete="off" aria-label="New inclusion"
+                onChange={(e) => setInclIn(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomIncl(); } }} />
+              <button type="button" className="sv-btn sv-accent" disabled={!inclIn.trim() || customIncl.length >= 8} onClick={addCustomIncl}>Add</button>
+            </div>
+            <div className="sv-sub">Switched on, an inclusion prints under What's included on the PDF. Switched off, it is left out. Up to 8.</div>
             {coupleOn && <div className="sv-sub">Couple add-ons from the Trip step: {(trip?.coupleExtras || []).length ? (trip.coupleExtras || []).map((k) => ({ couple_cake: "Cake Cutting Celebration", couple_bed: "Bed decoration", couple_candle: "Candle light dinner" })[k]).join(", ") : "none ticked"}.</div>}
             <div className="sv-sub">Anything switched off is listed under exclusions on the PDF.</div>
           </section>
