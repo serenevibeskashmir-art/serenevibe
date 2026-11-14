@@ -817,13 +817,21 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
   // Own places for "Union cab · Other", and own inclusion lines (each with its own on/off switch).
   const [cabOtherPlaces, setCabOtherPlaces] = useState(Array.isArray(quote?.cab_other_places) ? quote.cab_other_places : []);
   const [customIncl, setCustomIncl] = useState(Array.isArray(quote?.custom_inclusions) ? quote.custom_inclusions.map((t) => ({ t, on: true })) : []);
+  const [snowOtherPlaces, setSnowOtherPlaces] = useState(Array.isArray(quote?.snow_chain_other_places) ? quote.snow_chain_other_places : []);
   const [otherIn, setOtherIn] = useState("");
+  const [snowIn, setSnowIn] = useState("");
   const [inclIn, setInclIn] = useState("");
   const addOtherPlace = () => {
     const v = otherIn.trim();
     if (!v) return;
     setCabOtherPlaces((a) => (a.some((x) => x.toLowerCase() === v.toLowerCase()) ? a : [...a, v].slice(0, 6)));
     setOtherIn("");
+  };
+  const addSnowPlace = () => {
+    const v = snowIn.trim();
+    if (!v) return;
+    setSnowOtherPlaces((a) => (a.some((x) => x.toLowerCase() === v.toLowerCase()) ? a : [...a, v].slice(0, 6)));
+    setSnowIn("");
   };
   const addCustomIncl = () => {
     const v = inclIn.trim();
@@ -1080,7 +1088,7 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
   const draftKey = "qp-draft:" + (quote?.meta_summary?.client_name || "client");
   const saveDraft = (snap) => {
     try {
-      localStorage.setItem(draftKey, JSON.stringify({ ...snap, startPoint, endPoint, editableCost, showPerPerson, includedExtras, cabOtherPlaces, customIncl, vehicleType, mealPlan, at: Date.now() }));
+      localStorage.setItem(draftKey, JSON.stringify({ ...snap, startPoint, endPoint, editableCost, showPerPerson, includedExtras, cabOtherPlaces, snowOtherPlaces, customIncl, vehicleType, mealPlan, at: Date.now() }));
     } catch (e) { /* storage unavailable: undo still works */ }
   };
   useEffect(() => {
@@ -1149,6 +1157,7 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
     if (typeof d.showPerPerson === "boolean") setShowPerPerson(d.showPerPerson);
     if (Array.isArray(d.includedExtras)) setIncludedExtras(legacyExtras(d.includedExtras));
     if (Array.isArray(d.cabOtherPlaces)) setCabOtherPlaces(d.cabOtherPlaces);
+    if (Array.isArray(d.snowOtherPlaces)) setSnowOtherPlaces(d.snowOtherPlaces);
     if (Array.isArray(d.customIncl)) setCustomIncl(d.customIncl);
     if (d.vehicleType) setVehicleType(d.vehicleType);
     if (d.mealPlan) setMealPlan(d.mealPlan);
@@ -1183,6 +1192,7 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
                     show_per_person: showPerPerson,
                     included_extras: [...includedExtras, ...(coupleOn ? (trip?.coupleExtras || []) : [])],
                     cab_other_places: cabOtherPlaces,
+                    snow_chain_other_places: snowOtherPlaces,
                     custom_inclusions: customIncl.filter((c) => c.on).map((c) => c.t),
                     couple: coupleOn,
                     vehicle_type: vehicleType,
@@ -1582,6 +1592,33 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
                       {cabOtherPlaces.map((p, i) => (
                         <button key={p} type="button" className="sv-btn sv-soft" style={{ minHeight: 40 }} aria-label={"Remove " + p}
                           onClick={() => setCabOtherPlaces((a) => a.filter((_, j) => j !== i))}>{p} ×</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="sv-stack" style={{ border: "1.5px solid var(--sv-line)", borderRadius: 14, padding: 12, gap: 10 }}>
+              <span className="sv-lbl" style={{ color: "var(--sv-ink)", margin: 0 }}>Snow chain included for</span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {[["snow_chain_pahalgam", "Pahalgam"], ["snow_chain_gulmarg", "Gulmarg"], ["snow_chain_sonamarg", "Sonamarg"], ["snow_chain_other", "Other"]].map(([k, lab]) => {
+                  const on = includedExtras.includes(k);
+                  return <button key={k} type="button" className={"sv-btn " + (on ? "sv-primary" : "sv-soft")} aria-pressed={on} onClick={() => toggleExtra(k)}>{on ? "✓ " : ""}{lab}</button>;
+                })}
+              </div>
+              {includedExtras.includes("snow_chain_other") && (
+                <div className="sv-stack" style={{ gap: 8 }}>
+                  <label className="sv-sub" htmlFor="snow-other-in">Other place(s). Type a name and tap Add.</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input id="snow-other-in" className="sv-inp" value={snowIn} maxLength={40} placeholder="e.g. Doodhpathri" autoComplete="off"
+                      onChange={(e) => setSnowIn(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSnowPlace(); } }} />
+                    <button type="button" className="sv-btn sv-accent" disabled={!snowIn.trim()} onClick={addSnowPlace}>Add</button>
+                  </div>
+                  {snowOtherPlaces.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {snowOtherPlaces.map((p, i) => (
+                        <button key={p} type="button" className="sv-btn sv-soft" style={{ minHeight: 40 }} aria-label={"Remove " + p}
+                          onClick={() => setSnowOtherPlaces((a) => a.filter((_, j) => j !== i))}>{p} ×</button>
                       ))}
                     </div>
                   )}
