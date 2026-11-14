@@ -1599,9 +1599,9 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
               )}
             </div>
             <div className="sv-stack" style={{ border: "1.5px solid var(--sv-line)", borderRadius: 14, padding: 12, gap: 10 }}>
-              <span className="sv-lbl" style={{ color: "var(--sv-ink)", margin: 0 }}>Snow chain included for</span>
+              <span className="sv-lbl" style={{ color: "var(--sv-ink)", margin: 0 }}>Snow chain vehicle included for</span>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {[["snow_chain_pahalgam", "Pahalgam"], ["snow_chain_gulmarg", "Gulmarg"], ["snow_chain_sonamarg", "Sonamarg"], ["snow_chain_other", "Other"]].map(([k, lab]) => {
+                {[["snow_chain_gulmarg", "Gulmarg"], ["snow_chain_sonamarg", "Sonamarg"], ["snow_chain_other", "Other"]].map(([k, lab]) => {
                   const on = includedExtras.includes(k);
                   return <button key={k} type="button" className={"sv-btn " + (on ? "sv-primary" : "sv-soft")} aria-pressed={on} onClick={() => toggleExtra(k)}>{on ? "✓ " : ""}{lab}</button>;
                 })}
