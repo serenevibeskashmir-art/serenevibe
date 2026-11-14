@@ -369,7 +369,8 @@ class HeroHeader(Flowable):
         self.route = route
         self.width  = width
         self.bg_reader = bg_reader          # website "hero" photo, or None -> classic navy banner
-        self.height = 78 * mm if bg_reader is not None else 68 * mm
+        # cover now carries only brand, tagline, quote no., package badge, registration no. and the two contact buttons
+        self.height = 52 * mm if bg_reader is not None else 46 * mm
         self.client_name  = client_name
         self.days         = days
         self.start_date   = start_date
@@ -438,36 +439,18 @@ class HeroHeader(Flowable):
         c.setFillColor(SKY)
         c.rect(0, 0, w, 1.2*mm, fill=1, stroke=0)
 
-        # ── Route strip along the bottom of the cover ────────────────────────
-        if self.route:
-            c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.30))
-            c.setLineWidth(0.4)
-            c.line(6*mm, 14.5*mm, w - 6*mm, 14.5*mm)
-            c.setFillColor(colors.HexColor("#93c5fd"))
-            c.setFont("Lato-Bold", 6.8)
-            c.drawString(6*mm, 8.2*mm, "YOUR JOURNEY")
-            c.setFillColor(WHITE)
-            c.setFont("Lato-Bold", 10)
-            route = _raw(self.route)
-            max_rw = w - 12*mm - 24*mm
-            # show EVERY stop: shrink the font (and arrow spacing) until the whole journey fits
-            _stops = route.split("  \u2192  ")
-            _fs = 10.0
-            _sep = "  \u2192  "
-            while c.stringWidth(_sep.join(_stops), "Lato-Bold", _fs) > max_rw and _fs > 5.6:
-                _fs -= 0.2
-                if _fs < 8.6:
-                    _sep = " \u2192 "
-            route = _sep.join(_stops)
-            c.setFont("Lato-Bold", _fs)
-            c.drawString(6*mm + 24*mm, 8*mm + (10 - _fs) * 0.15, route)
+        # ── Registration number (bottom-left of the cover) ──
+        c.setFillColor(colors.HexColor("#93c5fd"))
+        _spaced(c, 6*mm, 12.6*mm, "REGISTRATION NO.", "Lato-Bold", 6.4, 0.9)
+        c.setFillColor(WHITE)
+        c.setFont("Lato-Bold", 11)
+        c.drawString(6*mm, 7.4*mm, REGISTRATION_NO)
 
         # ── Clickable WhatsApp + Instagram buttons (bottom-right of the cover) ─
-        if self.route:
-            bh = 7.2*mm
-            _draw_instagram_button(c, w - 6*mm - 46*mm, 18.2*mm, 46*mm, bh)
-            _draw_whatsapp_button(c, w - 6*mm - 46*mm - 3*mm - 28*mm, 18.2*mm, 28*mm, bh,
-                                  _whatsapp_url(self.client_name, self.ref))
+        bh = 7.2*mm
+        _draw_instagram_button(c, w - 6*mm - 46*mm, 6.4*mm, 46*mm, bh)
+        _draw_whatsapp_button(c, w - 6*mm - 46*mm - 3*mm - 28*mm, 6.4*mm, 28*mm, bh,
+                              _whatsapp_url(self.client_name, self.ref))
 
         # ── Quote reference (top-right, understated) ─────────────────────────
         if self.ref:
@@ -499,33 +482,7 @@ class HeroHeader(Flowable):
         c.setFont("Lato", 7)
         c.drawString(6*mm, h - 24.5*mm, "CUSTOMISED TOUR ITINERARY")
 
-        # ── Client name ─────────────────────────────────────────────────────
-        c.setFillColor(WHITE)
-        c.setFont("Lato-Bold", 14)
-        c.drawString(6*mm, h - 32*mm, _raw(self.client_name))
-
-        # ── Stat pills (Days / Pax / Date / Vehicle) ────────────────────────
-        pills = [
-            (f"{self.days} Days / {max(int(self.days) - 1, 1)} Nights", SKY),
-            (f"{self.adults} Adults" + (f" + {self.kids} Kids" if int(self.kids or 0) else ""), TEAL),
-            (clean(str(self.start_date)), GOLD_MID),
-            (clean(str(self.vehicle_type)), colors.HexColor("#7c3aed")),
-        ]
-        px, py = 6*mm, h - 43.5*mm
-        pill_h = 6.5*mm
-        for label, bg in pills:
-            lw = c.stringWidth(label, "Lato-Bold", 8) + 12
-            # Pill shadow
-            c.setFillColor(colors.HexColor("#00000033"))
-            c.roundRect(px + 0.5, py - 2*mm, lw, pill_h, 2.2*mm, fill=1, stroke=0)
-            # Pill fill
-            c.setFillColor(bg)
-            c.roundRect(px, py - 1.5*mm, lw, pill_h, 2.2*mm, fill=1, stroke=0)
-            # Pill text
-            c.setFillColor(WHITE)
-            c.setFont("Lato-Bold", 8)
-            c.drawString(px + 6, py + 1*mm, label)
-            px += lw + 5
+        # (client name, trip facts, price and route are shown in the trip summary card, not on the cover)
 
         # ── Budget badge — ribbon style (top-right) ──────────────────────────
         badge_label = clean(str(self.budget_tier)) + " Package"
@@ -545,21 +502,6 @@ class HeroHeader(Flowable):
         c.setFont("Lato-Bold", 9)
         c.drawString(bx + 9, by + 0.8*mm, badge_label)
 
-        # ── Total cost (bottom-right) with emerald pill ───────────────────────
-        cost_str = f"INR {_amount_int(self.total_cost):,}" if _is_amount(self.total_cost) else "TBD"
-        # Cost label
-        c.setFillColor(colors.HexColor("#e2e8f0") if photo else GRAY_400)
-        c.setFont("Lato", 7)
-        c.drawRightString(w - 6*mm, h - 38*mm, "ESTIMATED TOTAL COST")
-        # Cost value in emerald pill
-        cw = c.stringWidth(cost_str, "Lato-Bold", 11.5) + 14
-        cx = w - cw - 6*mm
-        cy = h - 34.5*mm
-        c.setFillColor(EMERALD)
-        c.roundRect(cx, cy - 1.5*mm, cw, 7*mm, 2*mm, fill=1, stroke=0)
-        c.setFillColor(WHITE)
-        c.setFont("Lato-Bold", 11.5)
-        c.drawString(cx + 7, cy + 0.8*mm, cost_str)
 
 
 class DayBanner(Flowable):
@@ -3914,6 +3856,7 @@ def _register_custom_map_places():
 
 # ─── Page 1 decision blocks ──────────────────────────────────────────────────
 SVK_WA_NUMBER = "919419766510"
+REGISTRATION_NO = "JKEA00006400"      # printed on the cover
 # Same figures as the website (index.html). Edit here when the website numbers change.
 # (headline figure, small caption) - shown as five columns in the trust band.
 TRUST_STATS = [("4.9/5", "GOOGLE  \u00b7  200+ REVIEWS"), ("5,000+", "GUESTS SERVED"),
@@ -4072,9 +4015,11 @@ from reportlab.pdfbase.pdfdoc import PDFString as _PDFString
 
 class PriceBand(Flowable):
     """Price per person, validity, 25% start amount and a one-tap WhatsApp confirm button."""
-    def __init__(self, width, total, adults, kids, valid_until, first_amt, ref, show_per_person=False):
+    def __init__(self, width, total, adults, kids, valid_until, first_amt, ref, show_per_person=False,
+                 wa=True, merged=False):
         super().__init__()
         self.show_per_person = bool(show_per_person)
+        self.wa, self.merged = bool(wa), bool(merged)   # wa: navy WhatsApp panel on the right; merged: drawn inside SummaryPriceCard
         self.width, self.height = width, 33 * mm
         self.total, self.adults, self.kids = total, adults, kids
         self.valid_until, self.first_amt, self.ref = valid_until, first_amt, ref
@@ -4082,14 +4027,17 @@ class PriceBand(Flowable):
     def draw(self):
         import urllib.parse as _up
         c, w, h = self.canv, self.width, self.height
-        lw = w * 0.585
+        lw = w * 0.585 if self.wa else w
         R = 3 * mm
-        _soft_shadow(c, 0, 0, w, h, R)
         c.setFillColor(colors.HexColor("#fffdf8")); c.setStrokeColor(colors.HexColor("#ecdfc2")); c.setLineWidth(0.6)
-        c.roundRect(0, 0, w, h, R, fill=1, stroke=1)
+        if self.merged:
+            c.rect(0, 0, w, h, fill=1, stroke=0)          # the outer card draws the shadow, outline and corners
+        else:
+            _soft_shadow(c, 0, 0, w, h, R)
+            c.roundRect(0, 0, w, h, R, fill=1, stroke=1)
         # gold edge: gradient clipped to the card's rounded corner and a 1.5 mm strip
         c.saveState()
-        p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
+        p = c.beginPath(); p.roundRect(0, 0, w, h, 0 if self.merged else R); c.clipPath(p, stroke=0, fill=0)
         p2 = c.beginPath(); p2.rect(0, 0, 1.5 * mm, h); c.clipPath(p2, stroke=0, fill=0)
         c.linearGradient(0, h, 0, 0, (SAFFRON, GOLD_MID), extend=True)
         c.restoreState()
@@ -4105,8 +4053,8 @@ class PriceBand(Flowable):
         per = round(self.total / n_adults) if (self.show_per_person and has_total and n_adults and not n_kids) else 0
         guests_txt = f"for {n_adults} adult" + ("s" if n_adults != 1 else "") + (f", {n_kids} child" + ("ren" if n_kids != 1 else "") if n_kids else "")
         # ── left: label + hold pill on one row, price, inclusions, 25/25/50 steps (same 33 mm height) ──
-        left_r = lw - 4 * mm
-        row_y = h - 5.7 * mm                       # vertical centre of the label / pill row
+        left_r = (lw - 4 * mm) if self.wa else (w - 7 * mm)
+        row_y = h - 5.7 * mm                      # vertical centre of the label / pill row
         c.setFillColor(GOLD)
         _spaced(c, x, row_y - 0.8 * mm, "PRICE PER PERSON" if per else "TOTAL PACKAGE PRICE", "Lato-Bold", 6.4, 1.0)
         if self.valid_until:
@@ -4174,6 +4122,8 @@ class PriceBand(Flowable):
                 c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", f1); c.drawString(tx0, cy_ + 0.5 * mm, l1)
                 c.setFillColor(INK_SOFT); c.setFont("Lato", f2); c.drawString(tx0, cy_ - 2.5 * mm, l2)
 
+        if not self.wa:
+            return
         # right: deep navy action panel
         px, py, pw, ph = lw, 2.2 * mm, w - lw - 2.2 * mm, h - 4.4 * mm
         _grad_roundrect(c, px, py, pw, ph, 2.3 * mm, colors.HexColor("#14213d"), NAVY_DEEP, "d")
@@ -4782,9 +4732,14 @@ class TripSummary(Flowable):
     # (row A client, row B journey, row C facts, total bar), normal and compact
     _DIM = ((13.0 * mm, 12.0 * mm, 13.0 * mm, 11.0 * mm), (11.2 * mm, 10.4 * mm, 11.4 * mm, 10.0 * mm))
 
-    def __init__(self, width, left, right, ref="", valid="", email=""):
+    # big_name: the client name is set as large as the price (27 pt), so row A is taller
+    _DIM_BIG = ((19.0 * mm, 12.0 * mm, 13.0 * mm, 11.0 * mm), (16.0 * mm, 10.4 * mm, 11.4 * mm, 10.0 * mm))
+    NAME_FS = 27
+
+    def __init__(self, width, left, right, ref="", valid="", email="", big_name=False, merged=False):
         super().__init__()
         self.width, self.ref, self.valid, self.email = width, ref, valid, email
+        self.big_name, self.merged = bool(big_name), bool(merged)
         self.tier, self.cost = "", None
         self.info = {}
         for label, value, hot in list(left) + list(right):
@@ -4797,14 +4752,17 @@ class TripSummary(Flowable):
         self.compact = False
         self._recalc()
 
+    def _dims(self):
+        return (self._DIM_BIG if self.big_name else self._DIM)[1 if self.compact else 0]
+
     def _recalc(self):
-        a, j, f, bar = self._DIM[1 if self.compact else 0]
+        a, j, f, bar = self._dims()
         self.height = self.HEAD_H + a + j + f + (bar if self.cost else 0)
 
     def draw(self):
         c, w, h = self.canv, self.width, self.height
         R = 3.5 * mm
-        rowA, rowJ, rowF, BAR = self._DIM[1 if self.compact else 0]
+        rowA, rowJ, rowF, BAR = self._dims()
         if not self.cost:
             BAR = 0
         y_a = h - self.HEAD_H                 # top of row A
@@ -4812,9 +4770,10 @@ class TripSummary(Flowable):
         y_f = y_j - rowJ                      # top of facts row
         y_b = y_f - rowF                      # top of total bar (= BAR)
 
-        _soft_shadow(c, 0, 0, w, h, R, layers=5, alpha=0.03)
-        c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.6)
-        c.roundRect(0, 0, w, h, R, fill=1, stroke=1)
+        if not self.merged:                   # merged: SummaryPriceCard draws the shadow, fill and outline
+            _soft_shadow(c, 0, 0, w, h, R, layers=5, alpha=0.03)
+            c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.6)
+            c.roundRect(0, 0, w, h, R, fill=1, stroke=1)
 
         # ---- header band ----
         c.saveState()
@@ -4849,20 +4808,23 @@ class TripSummary(Flowable):
         c.restoreState()
         name = _raw(self.info.get("CLIENT NAME", "")) or "Guest"
         ymid = y_j + (rowA - 0.5 * mm) / 2
-        ar = min(4.1 * mm, (rowA - 3 * mm) / 2)
+        big = self.big_name
+        ar = min((5.0 if big else 4.1) * mm, (rowA - 3 * mm) / 2)
         _grad_roundrect(c, 6 * mm, ymid - ar, 2 * ar, 2 * ar, ar, SKY_MID, NAVY_MID, "d")
-        c.setFillColor(WHITE); c.setFont("Lato-Bold", 10.5)
-        c.drawCentredString(6 * mm + ar, ymid - 3.6, (name.strip()[:1] or "G").upper())
+        c.setFillColor(WHITE); c.setFont("Lato-Bold", 12.5 if big else 10.5)
+        c.drawCentredString(6 * mm + ar, ymid - (4.3 if big else 3.6), (name.strip()[:1] or "G").upper())
         nx = 6 * mm + 2 * ar + 3 * mm
         c.setFillColor(INK_SOFT)
-        lw_ = _spaced(c, nx, ymid + 2.9 * mm, "PREPARED FOR", "Lato-Bold", 5.8, 1.0)
+        lab_dy = 5.4 * mm if big else 2.9 * mm
+        lw_ = _spaced(c, nx, ymid + lab_dy, "PREPARED FOR", "Lato-Bold", 5.8, 1.0)
         if self.email:
             c.setFont("Lato", 6.2); c.setFillColor(colors.HexColor("#94a3b8"))
-            c.drawString(nx + lw_ + 3 * mm, ymid + 2.9 * mm, _raw(self.email))
+            c.drawString(nx + lw_ + 3 * mm, ymid + lab_dy, _raw(self.email))
         pill_w = 41 * mm
-        nm, nfs = _fit_text(c, name, "Lato-Bold", 13, w - nx - pill_w - 12 * mm, 9)
+        # same size as the price (27 pt); a very long name steps down until it fits
+        nm, nfs = _fit_text(c, name, "Lato-Bold", self.NAME_FS if big else 13, w - nx - pill_w - 12 * mm, 15 if big else 9)
         c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", nfs)
-        c.drawString(nx, ymid - 4.2 * mm, nm)
+        c.drawString(nx, ymid - (5.2 * mm if big else 4.2 * mm), nm)
         if self.valid:
             ph = min(9.2 * mm, rowA - 3 * mm)
             px, py = w - 6 * mm - pill_w, ymid - ph / 2
@@ -4945,6 +4907,43 @@ class TripSummary(Flowable):
             c.drawString(13 * mm, my - 3.0 * mm, "Stay, car, driver, meals and taxes as listed")
             c.setFillColor(WHITE); c.setFont("Lato-Bold", 16.5)
             c.drawRightString(w - 8 * mm, my - 2.3 * mm, _raw(self.cost))
+
+
+class SummaryPriceCard(Flowable):
+    """Trip summary on top and the price band underneath, as ONE card: one shadow, one outline and one
+    set of rounded corners. The client name is as large as the price; there is no WhatsApp panel."""
+    def __init__(self, width, summary, price):
+        super().__init__()
+        self.width, self.summary, self.price = width, summary, price
+        summary.merged = price.merged = True
+        self._recalc()
+
+    def _recalc(self):
+        self.height = self.summary.height + self.price.height
+
+    def set_compact(self):
+        self.summary.compact = True
+        self.summary._recalc()
+        self._recalc()
+
+    def wrap(self, aw, ah):
+        self._recalc()
+        return self.width, self.height
+
+    def draw(self):
+        c, w, h = self.canv, self.width, self.height
+        R = 3.5 * mm
+        _soft_shadow(c, 0, 0, w, h, R, layers=5, alpha=0.03)
+        c.setFillColor(WHITE); c.roundRect(0, 0, w, h, R, fill=1, stroke=0)
+        c.saveState()
+        p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
+        self.price.drawOn(c, 0, 0)
+        self.summary.drawOn(c, 0, self.price.height)
+        c.setStrokeColor(colors.HexColor("#ecdfc2")); c.setLineWidth(0.5)
+        c.line(0, self.price.height, w, self.price.height)
+        c.restoreState()
+        c.setStrokeColor(GRAY_200); c.setLineWidth(0.6)
+        c.roundRect(0, 0, w, h, R, fill=0, stroke=1)
 
 
 class TrustStrip(Flowable):
@@ -5766,9 +5765,24 @@ def generate_pdf(itinerary_data: dict) -> str:
     _nights      = max(int(days) - 1, 1)
     _meal_name   = {"MAP": "Breakfast + dinner", "CP": "Breakfast daily", "EP": "No meals",
                     "AP": "All meals"}.get(str(itinerary_data.get("meal_plan") or "MAP").strip().upper(), "Meals as planned")
-    story.append(PriceBand(usable_w, _total_now, adults, kids, _valid_until,
-                           round(_total_now * 0.25) if _total_now else 0, _quote_ref(client_name),
-                           show_per_person=bool(itinerary_data.get("show_per_person"))))
+    # Trip summary and price band are ONE card under the cover (no WhatsApp panel, client name as big as the price).
+    _price_band = PriceBand(usable_w, _total_now, adults, kids, _valid_until,
+                            round(_total_now * 0.25) if _total_now else 0, _quote_ref(client_name),
+                            show_per_person=bool(itinerary_data.get("show_per_person")), wa=False)
+    _valid_txt = (datetime.datetime.now(IST) + datetime.timedelta(days=7)).strftime("%d %b %Y")
+    _guests_txt = f"{adults} Adults" + (f", {kids} Kids" if int(kids or 0) else "")
+    _trip_summary = TripSummary(
+        usable_w,
+        [("CLIENT NAME", client_name, False),
+         ("TOUR DURATION", f"{days} Days", False),
+         ("GUESTS", _guests_txt, False),
+         ("START POINT", start_point, False),
+         ("BUDGET TIER", str(budget_tier), False)],
+        [("TRAVEL DATE", str(start_date), False),
+         ("VEHICLE", str(vehicle_type), False),
+         ("END POINT", end_point, False)],
+        ref=_quote_ref(client_name), valid=_valid_txt, email=client_email or "", big_name=True)
+    story.append(SummaryPriceCard(usable_w, _trip_summary, _price_band))
     story.append(Spacer(1, 3*mm))
     _extras = _extras_list(itinerary_data)
     _tiles = [
@@ -5797,24 +5811,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     ]))
     story.append(Spacer(1, 4*mm))
 
-    # ── 2. Quick-summary grid ─────────────────────────────────────────────────
-    _cost_txt = f"INR {_amount_int(custom_cost):,}" if _is_amount(custom_cost) else "TBD"
-    _valid_txt = (datetime.datetime.now(IST) + datetime.timedelta(days=7)).strftime("%d %b %Y")
-    _guests_txt = f"{adults} Adults" + (f", {kids} Kids" if int(kids or 0) else "")
-    summary_card = TripSummary(
-        usable_w,
-        [("CLIENT NAME", client_name, False),
-         ("TOUR DURATION", f"{days} Days", False),
-         ("GUESTS", _guests_txt, False),
-         ("START POINT", start_point, False),
-         ("BUDGET TIER", str(budget_tier), False)],
-        [("TRAVEL DATE", str(start_date), False),
-         ("VEHICLE", str(vehicle_type), False),
-         ("END POINT", end_point, False),
-         ("ESTIMATED COST", _cost_txt, _is_amount(custom_cost))],
-        ref=_quote_ref(client_name), valid=_valid_txt, email=client_email or "")
-    story.append(summary_card)
-    story.append(Spacer(1, 4*mm))
+    # ── 2. Proof strip (the trip summary now lives in the merged card above) ──
     _trust = TrustStrip(usable_w, TRUST_STATS, TRUST_QUOTE, TRUST_QUOTE_BY)
     story.append(_trust)
     # ── Keep page 1 on ONE page: if it overflows, tighten gaps, then compact cards, then drop the strip
@@ -5832,8 +5829,8 @@ def generate_pdf(itinerary_data: dict) -> str:
                     if isinstance(_ch, IncludedCards):
                         _ch.compact = True; _ch._recalc()
                 f.gap = 2 * mm; f._recalc()
-            elif isinstance(f, TripSummary):
-                f.compact = True; f._recalc()
+            elif isinstance(f, SummaryPriceCard):
+                f.set_compact()
     if _p1_used() > _p1_room:                             # 3) drop the italic tagline (the proof strip matters more)
         story.remove(_tagline); story.remove(_tagline_gap)
     if _p1_used() > _p1_room:                             # 4) slimmer proof strip + tighter gaps
