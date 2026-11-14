@@ -4949,6 +4949,19 @@ _TS_ICONS = {"CLIENT NAME": "user", "TOUR DURATION": "clock", "GUESTS": "users",
              "VEHICLE": "car", "END POINT": "flag", "ESTIMATED COST": "coin"}
 
 
+def _heart(c, cx, cy, size, color):
+    """Filled heart centred on (cx, cy), `size` wide."""
+    u = size / 2.0
+    c.saveState(); c.setFillColor(color)
+    p = c.beginPath()
+    p.moveTo(cx, cy - 0.95 * u)
+    p.curveTo(cx - 1.25 * u, cy - 0.10 * u, cx - 1.05 * u, cy + 0.95 * u, cx - 0.5 * u, cy + 0.95 * u)
+    p.curveTo(cx - 0.18 * u, cy + 0.95 * u, cx, cy + 0.70 * u, cx, cy + 0.45 * u)
+    p.curveTo(cx, cy + 0.70 * u, cx + 0.18 * u, cy + 0.95 * u, cx + 0.5 * u, cy + 0.95 * u)
+    p.curveTo(cx + 1.05 * u, cy + 0.95 * u, cx + 1.25 * u, cy - 0.10 * u, cx, cy - 0.95 * u)
+    p.close(); c.drawPath(p, fill=1, stroke=0); c.restoreState()
+
+
 class TripSummary(Flowable):
     """Trip facts card. Navy header (budget tier + quote no.), a 'prepared for' row with the
     validity pill, a journey line (start -> end), four fact columns with tinted icon discs,
@@ -5074,16 +5087,38 @@ class TripSummary(Flowable):
         nx = 6 * mm + 2 * ar + 4.2 * mm
         c.setFillColor(INK_SOFT)
         lab_dy = 5.4 * mm if big else 2.9 * mm
-        lw_ = _spaced(c, nx, ymid + lab_dy, "PREPARED FOR", "Lato-Bold", 5.8, 1.0)
+        honey = bool(getattr(self, "honeymoon", False))
+        ROSE, ROSE_DK = colors.HexColor("#e0457b"), colors.HexColor("#b3235a")
+        if honey:
+            _heart(c, nx + 1.5 * mm, ymid + lab_dy + 0.9, 3.0 * mm, ROSE)
+            c.setFillColor(ROSE_DK)
+            lw_ = 3.6 * mm + _spaced(c, nx + 3.6 * mm, ymid + lab_dy, "HONEYMOON PACKAGE FOR", "Lato-Bold", 5.8, 1.3)
+        else:
+            lw_ = _spaced(c, nx, ymid + lab_dy, "PREPARED FOR", "Lato-Bold", 5.8, 1.0)
         if self.email:
             c.setFont("Lato", 6.2); c.setFillColor(colors.HexColor("#94a3b8"))
             c.drawString(nx + lw_ + 3 * mm, ymid + lab_dy, _raw(self.email))
         pill_w = 41 * mm if self.valid else 0
         # same size as the price (27 pt); a very long name steps down until it fits
-        headline = f"Honeymoon Package for {name}" if getattr(self, "honeymoon", False) else name
-        nm, nfs = _fit_text(c, headline, "Lato-Bold", self.NAME_FS if big else 13, w - nx - pill_w - 12 * mm, 15 if big else 9)
+        deco_w = 15 * mm if honey else 0          # room kept for the rings + hearts after a honeymoon name
+        nm, nfs = _fit_text(c, name, "Lato-Bold", self.NAME_FS if big else 13, w - nx - pill_w - 12 * mm - deco_w, 15 if big else 9)
         c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", nfs)
         c.drawString(nx, ymid - (5.2 * mm if big else 4.2 * mm), nm)
+        if honey:
+            base = ymid - (5.2 * mm if big else 4.2 * mm)
+            nw = c.stringWidth(nm, "Lato-Bold", nfs)
+            c.saveState()                                        # rose-to-gold underline under the name
+            c.setLineCap(1)
+            c.setStrokeColor(ROSE); c.setLineWidth(1.1); c.line(nx, base - 1.8 * mm, nx + nw * 0.55, base - 1.8 * mm)
+            c.setStrokeColor(SAFFRON); c.setLineWidth(1.1); c.line(nx + nw * 0.55 + 1.2 * mm, base - 1.8 * mm, nx + nw, base - 1.8 * mm)
+            c.restoreState()
+            rx, ry = nx + nw + 5.2 * mm, base + nfs * 0.17          # two interlocked wedding rings
+            c.saveState(); c.setLineWidth(0.9)
+            c.setStrokeColor(SAFFRON); c.circle(rx, ry, 2.1 * mm, fill=0, stroke=1)
+            c.setStrokeColor(ROSE);    c.circle(rx + 2.6 * mm, ry, 2.1 * mm, fill=0, stroke=1)
+            c.restoreState()
+            _heart(c, rx + 7.4 * mm, ry + 2.4 * mm, 2.6 * mm, ROSE)
+            _heart(c, rx + 10.2 * mm, ry - 0.6 * mm, 1.7 * mm, colors.HexColor("#f4a3c0"))
         if self.valid:
             ph = min(9.2 * mm, rowA - 3 * mm)
             px, py = w - 6 * mm - pill_w, ymid - ph / 2
