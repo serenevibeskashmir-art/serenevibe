@@ -5080,7 +5080,8 @@ class TripSummary(Flowable):
             c.drawString(nx + lw_ + 3 * mm, ymid + lab_dy, _raw(self.email))
         pill_w = 41 * mm if self.valid else 0
         # same size as the price (27 pt); a very long name steps down until it fits
-        nm, nfs = _fit_text(c, name, "Lato-Bold", self.NAME_FS if big else 13, w - nx - pill_w - 12 * mm, 15 if big else 9)
+        headline = f"Honeymoon Package for {name}" if getattr(self, "honeymoon", False) else name
+        nm, nfs = _fit_text(c, headline, "Lato-Bold", self.NAME_FS if big else 13, w - nx - pill_w - 12 * mm, 15 if big else 9)
         c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", nfs)
         c.drawString(nx, ymid - (5.2 * mm if big else 4.2 * mm), nm)
         if self.valid:
@@ -6057,6 +6058,7 @@ def generate_pdf(itinerary_data: dict) -> str:
          ("VEHICLE", str(vehicle_type), False),
          ("END POINT", end_point, False)],
         ref=_quote_ref(client_name), valid="", email=client_email or "", big_name=True)   # validity is shown once, as "Price held until" in the price panel
+    _trip_summary.honeymoon = _is_couple          # couple ticked: "Honeymoon Package for <name>"
     story.append(SummaryPriceCard(usable_w, _trip_summary, _price_band))
     story.append(Spacer(1, 3*mm))
     _extras = _extras_list(itinerary_data)
