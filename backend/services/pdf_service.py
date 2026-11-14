@@ -4219,6 +4219,7 @@ _P1_SLACK = 3 * mm      # safety margin so page 1 never spills onto page 2
 UNION_CAB_PLACES = (
     ("union_cab_pahalgam", "Pahalgam"),
     ("union_cab_gulmarg", "Gulmarg"),
+    ("union_cab_sonamarg", "Sonamarg"),
     ("union_cab_other", "others"),
 )
 COUPLE_EXTRAS = (
@@ -4238,6 +4239,33 @@ def normalize_extras(value):
     if "union_cab" in ex:
         ex |= {"union_cab_pahalgam", "union_cab_gulmarg"}
     return [k for k in EXTRA_KEYS if k in ex]
+
+
+def clean_text_list(value, limit=8, max_len=80):
+    """Admin-typed lines (own cab places, own inclusions): trimmed, de-duplicated, capped in number and length."""
+    if not isinstance(value, (list, tuple)):
+        return []
+    out, seen = [], set()
+    for v in value:
+        t = " ".join(str(v or "").split())[:max_len].strip()
+        if t and t.lower() not in seen:
+            seen.add(t.lower())
+            out.append(t)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def union_cab_split(itinerary_data, extras):
+    """(places with a union cab included, places left out). 'Other' expands to the places the admin typed."""
+    typed = clean_text_list(itinerary_data.get("cab_other_places"), 6, 40)
+    on, off = [], []
+    for key, name in UNION_CAB_PLACES:
+        if key in extras:
+            on.extend((typed or [name]) if key == "union_cab_other" else [name])
+        else:
+            off.append(name)
+    return on, off
 
 
 def _join_places(names):
@@ -5751,7 +5779,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         ("Shikara ride", "1 hour, on us"),
         ("All taxes", "toll, fuel, parking"),
     ]
-    _union_on = [name for key, name in UNION_CAB_PLACES if key in _extras]
+    _union_on, _ = union_cab_split(itinerary_data, _extras)
     if _union_on:
         _tiles.append(("Union cab", _join_places(_union_on), "cab"))
     for _k, _ph in (("gondola_p1", "Phase 1"), ("gondola_p2", "Phase 2")):
@@ -6134,7 +6162,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         "Toll taxes, fuel charges, parking fees and driver's allowance",
     ]
     _extras = _extras_list(itinerary_data)
-    _union_on = [name for key, name in UNION_CAB_PLACES if key in _extras]
+    _union_on, _union_off = union_cab_split(itinerary_data, _extras)
     if _union_on:
         inc_items.append("Union cabs for " + _join_places(_union_on))
     for _k, _label in COUPLE_EXTRAS:
@@ -6143,6 +6171,7 @@ def generate_pdf(itinerary_data: dict) -> str:
     for _k in ("gondola_p1", "gondola_p2"):
         if _k in _extras:
             inc_items.append(_GONDOLA_LABELS[_k])
+    inc_items.extend(clean_text_list(itinerary_data.get("custom_inclusions")))
     _gondola_inc = [k for k in _extras if k.startswith("gondola")]
     _act = "Activities: River Rafting, Paragliding and Skiing"
     if len(_gondola_inc) == 2:
@@ -6159,7 +6188,6 @@ def generate_pdf(itinerary_data: dict) -> str:
         _act,
         "All personal expenses such as tips, laundry, telephone bills, beverages and camera fees",
     ]
-    _union_off = [name for key, name in UNION_CAB_PLACES if key not in _extras]
     if _union_off:
         exc_items.append("Union cabs for " + _join_places(_union_off) + " if required")
     exc_items.append("Any claim due to road blocks, curfews, accidents etc.")
