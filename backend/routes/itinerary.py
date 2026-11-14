@@ -5,7 +5,7 @@ from flask import Blueprint, jsonify, request, send_file
 
 from backend.auth import admin_required
 from backend.services.pdf_service import (generate_pdf, _quote_ref, normalize_extras, _extras_list, _amount_int,
-                                          UNION_CAB_PLACES, COUPLE_EXTRAS, _GONDOLA_LABELS)
+                                          UNION_CAB_PLACES, COUPLE_EXTRAS, _GONDOLA_LABELS, clean_text_list)
 from backend.services.pdf_archive import archive_pdf, get_archived_pdf, list_archive
 from backend.services.sheet_log import log_quote, send_row
 
@@ -194,7 +194,13 @@ def _inclusion_labels(payload):
     names = {k: f"Union cab - {n}" for k, n in UNION_CAB_PLACES}
     names.update(_GONDOLA_LABELS)
     names.update(dict(COUPLE_EXTRAS))
-    return [names.get(k, k) for k in _extras_list(payload)]
+    out = []
+    for k in _extras_list(payload):
+        if k == "union_cab_other" and payload.get("cab_other_places"):
+            out.append("Union cab - " + ", ".join(payload["cab_other_places"]))
+        else:
+            out.append(names.get(k, k))
+    return out + clean_text_list(payload.get("custom_inclusions"))
 
 
 @itinerary_bp.route("/sheet-test", methods=["GET", "POST"])
@@ -249,6 +255,8 @@ def generate_custom_itinerary():
         "custom_cost": custom_cost,
         "show_per_person": bool(data.get("show_per_person", False)),
         "included_extras": _included_extras(data.get("included_extras")),
+        "cab_other_places": clean_text_list(data.get("cab_other_places"), 6, 40),
+        "custom_inclusions": clean_text_list(data.get("custom_inclusions")),
         "couple": bool(data.get("couple")) and adults == 2,
         "meta_summary": {
             "client_name": client_name,
