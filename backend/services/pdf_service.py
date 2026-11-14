@@ -4175,7 +4175,7 @@ class PriceBand(Flowable):
         heads = n_adults + n_kids
         per = round(self.total / heads) if (self.show_per_person and has_total and heads > 1) else 0
         per_label = "per person" if not n_kids else "avg. per person"
-        guests_txt = f"{n_adults} adult" + ("s" if n_adults != 1 else "") + (f", {n_kids} child" + ("ren" if n_kids != 1 else "") if n_kids else "")
+        guests_txt = ("a couple" if getattr(self, "couple", False) and n_adults == 2 else f"{n_adults} adult" + ("s" if n_adults != 1 else "")) + (f", {n_kids} child" + ("ren" if n_kids != 1 else "") if n_kids else "")
         left_r = (lw - 5 * mm) if self.wa else (w - 7 * mm)
         row_y = h - 6.4 * mm
 
@@ -6040,7 +6040,12 @@ def generate_pdf(itinerary_data: dict) -> str:
                             round(_total_now * 0.25) if _total_now else 0, _quote_ref(client_name),
                             show_per_person=bool(itinerary_data.get("show_per_person")), wa=False)
     _valid_txt = (datetime.datetime.now(IST) + datetime.timedelta(days=7)).strftime("%d %b %Y")
-    _guests_txt = f"{adults} Adults" + (f", {kids} Kids" if int(kids or 0) else "")
+    try:
+        _is_couple = bool(itinerary_data.get("couple")) and int(adults) == 2
+    except (TypeError, ValueError):
+        _is_couple = False
+    _price_band.couple = _is_couple
+    _guests_txt = ("Couple" if _is_couple else f"{adults} Adults") + (f", {kids} Kids" if int(kids or 0) else "")
     _trip_summary = TripSummary(
         usable_w,
         [("CLIENT NAME", client_name, False),
