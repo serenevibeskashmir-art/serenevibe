@@ -360,6 +360,45 @@ class SocialButtons(Flowable):
             x += bw + gap
 
 
+_ASSET_CACHE = {}
+
+
+def _find_logo_reader(env_var, names):
+    """Return an ImageReader for the first logo file found, else None (the cover then simply omits it).
+    Search order: the env var path, then backend/assets, the project root and its icons folder."""
+    import os
+    key = (env_var, tuple(names))
+    if key in _ASSET_CACHE:
+        return _ASSET_CACHE[key]
+    here = os.path.dirname(os.path.abspath(__file__))
+    root = os.path.abspath(os.path.join(here, "..", ".."))
+    cands = [os.environ.get(env_var, "")]
+    for n in names:
+        cands += [os.path.join(here, "..", "assets", n), os.path.join(here, "assets", n),
+                  os.path.join(root, "assets", n), os.path.join(root, n), os.path.join(os.getcwd(), n)]
+    reader = None
+    for path in cands:
+        if path and os.path.isfile(path):
+            try:
+                reader = ImageReader(path)
+                break
+            except Exception as e:
+                print(f"logo: could not read {path}: {e}")
+    if reader is None:
+        print(f"logo: not found ({env_var}); looked for {names}")
+    _ASSET_CACHE[key] = reader
+    return reader
+
+
+def _brand_logo_reader():
+    return _find_logo_reader("SVK_LOGO_PATH", ["svk_logo.png", "svk_logo.jpg", "icons/icon-512.png"])
+
+
+def _jktourism_logo_reader():
+    return _find_logo_reader("JKTD_LOGO_PATH", ["jktourism_logo.png", "jktourism_logo.jpg", "jktourism_logo.jpeg",
+                                                "jktd_logo.png", "jk_tourism_logo.png"])
+
+
 class HeroHeader(Flowable):
     """Full-width branded cover banner (compact layout)."""
     def __init__(self, width, client_name, days, start_date, adults, kids,
@@ -446,6 +485,49 @@ class HeroHeader(Flowable):
         c.setFont("Lato-Bold", 11)
         c.drawString(6*mm, 7.4*mm, REGISTRATION_NO)
 
+        # ── J&K Tourism Department logo, on a white plate right beside the registration number ──
+        jk = _jktourism_logo_reader()
+        if jk is not None:
+            try:
+                reg_w = c.stringWidth(REGISTRATION_NO, "Lato-Bold", 11)
+                ph_, pad = 11.4 * mm, 1.1 * mm
+                jw, jh = jk.getSize()
+                lh = ph_ - 2 * pad
+                lw = min(lh * jw / jh, 17 * mm)
+                lh = lw * jh / jw if lw < lh * jw / jh else lh
+                plw = lw + 2 * pad
+                plx, ply = 6 * mm + reg_w + 4.5 * mm, 3.3 * mm
+                c.saveState()
+                c.setFillColor(colors.Color(0, 0, 0, alpha=0.25)); c.roundRect(plx + 0.3, ply - 0.5, plw, ph_, 2 * mm, fill=1, stroke=0)
+                c.restoreState()
+                c.setFillAlpha(1)
+                c.setFillColor(WHITE); c.setStrokeColor(colors.HexColor("#f5b82e")); c.setLineWidth(0.6)
+                c.roundRect(plx, ply, plw, ph_, 2 * mm, fill=1, stroke=1)
+                c.drawImage(jk, plx + pad, ply + (ph_ - lh) / 2, width=lw, height=lh, mask="auto", preserveAspectRatio=True)
+            except Exception as e:
+                print(f"J&K Tourism logo skipped: {e}")
+
+        # ── Serene Vibes Kashmir logo: gold-ringed circle, top-right ──
+        bl = _brand_logo_reader()
+        if bl is not None:
+            try:
+                dia = 19.5 * mm
+                cx_, cy_ = w - 6 * mm - dia / 2, h - 11.2 * mm - dia / 2
+                c.saveState()
+                for k_, a_ in ((3.2, 0.05), (2.2, 0.07), (1.2, 0.10)):
+                    c.setFillColor(colors.Color(0.96, 0.72, 0.18, alpha=a_)); c.circle(cx_, cy_, dia / 2 + k_ * 0.6 * mm, fill=1, stroke=0)
+                c.restoreState()
+                c.saveState()
+                c.setFillAlpha(1)
+                clip = c.beginPath(); clip.circle(cx_, cy_, dia / 2); c.clipPath(clip, stroke=0, fill=0)
+                big = dia / 0.80          # the artwork's own ring sits at ~80% of the square: crop to it
+                c.drawImage(bl, cx_ - big / 2, cy_ - big / 2, width=big, height=big, mask="auto")
+                c.restoreState()
+                c.setStrokeColor(colors.HexColor("#f5b82e")); c.setLineWidth(1.0); c.circle(cx_, cy_, dia / 2, fill=0, stroke=1)
+                c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.55)); c.setLineWidth(0.4); c.circle(cx_, cy_, dia / 2 + 0.7 * mm, fill=0, stroke=1)
+            except Exception as e:
+                print(f"brand logo skipped: {e}")
+
         # ── Clickable WhatsApp + Instagram buttons (bottom-right of the cover) ─
         bh = 7.2*mm
         _draw_instagram_button(c, w - 6*mm - 46*mm, 6.4*mm, 46*mm, bh)
@@ -484,23 +566,7 @@ class HeroHeader(Flowable):
 
         # (client name, trip facts, price and route are shown in the trip summary card, not on the cover)
 
-        # ── Budget badge — ribbon style (top-right) ──────────────────────────
-        badge_label = clean(str(self.budget_tier)) + " Package"
-        bw = c.stringWidth(badge_label, "Lato-Bold", 9) + 18
-        bx = w - bw - 6*mm
-        by = h - 19*mm
-        # Badge shadow
-        c.setFillColor(colors.HexColor("#00000033"))
-        c.roundRect(bx + 0.8, by - 2.8*mm, bw, 9*mm, 3*mm, fill=1, stroke=0)
-        # Badge fill
-        c.setFillColor(GOLD_MID)
-        c.roundRect(bx, by - 2.5*mm, bw, 9*mm, 3*mm, fill=1, stroke=0)
-        # Ribbon notch on left edge
-        c.setFillColor(GOLD)
-        c.roundRect(bx, by - 2.5*mm, 5*mm, 9*mm, 0, fill=1, stroke=0)
-        c.setFillColor(WHITE)
-        c.setFont("Lato-Bold", 9)
-        c.drawString(bx + 9, by + 0.8*mm, badge_label)
+        # (the budget-tier badge was removed from the cover on request; the tier is not shown here)
 
 
 
@@ -4014,13 +4080,15 @@ from reportlab.pdfbase.pdfdoc import PDFString as _PDFString
 
 
 class PriceBand(Flowable):
-    """Price per person, validity, 25% start amount and a one-tap WhatsApp confirm button."""
+    """The price panel, a dark navy 'hero' block: total package price as a glowing gold figure (with the
+    per-person price in braces when the builder switch is on), what it covers, the price-held pill, and the
+    25 / 25 / 50 payment timeline."""
     def __init__(self, width, total, adults, kids, valid_until, first_amt, ref, show_per_person=False,
                  wa=True, merged=False):
         super().__init__()
         self.show_per_person = bool(show_per_person)
         self.wa, self.merged = bool(wa), bool(merged)   # wa: navy WhatsApp panel on the right; merged: drawn inside SummaryPriceCard
-        self.width, self.height = width, 33 * mm
+        self.width, self.height = width, 45 * mm
         self.total, self.adults, self.kids = total, adults, kids
         self.valid_until, self.first_amt, self.ref = valid_until, first_amt, ref
 
@@ -4029,98 +4097,152 @@ class PriceBand(Flowable):
         c, w, h = self.canv, self.width, self.height
         lw = w * 0.585 if self.wa else w
         R = 3 * mm
-        c.setFillColor(colors.HexColor("#fffdf8")); c.setStrokeColor(colors.HexColor("#ecdfc2")); c.setLineWidth(0.6)
-        if self.merged:
-            c.rect(0, 0, w, h, fill=1, stroke=0)          # the outer card draws the shadow, outline and corners
-        else:
+        if not self.merged:
             _soft_shadow(c, 0, 0, w, h, R)
-            c.roundRect(0, 0, w, h, R, fill=1, stroke=1)
-        # gold edge: gradient clipped to the card's rounded corner and a 1.5 mm strip
+        # ── dark navy base with diagonal gradient, clipped to the card ──
+        c.saveState()
+        p = c.beginPath(); p.roundRect(0, 0, lw, h, 0 if self.merged else R); c.clipPath(p, stroke=0, fill=0)
+        c.linearGradient(0, h, lw, 0, (colors.HexColor("#14264a"), colors.HexColor("#0a1226")), extend=True)
+        # golden glow behind the figure + cool glow bottom right
+        for k in range(9, 0, -1):
+            c.setFillColor(colors.Color(0.96, 0.72, 0.18, alpha=0.020))
+            c.circle(34 * mm, h - 20 * mm, k * 5.2 * mm, fill=1, stroke=0)
+        for k in range(7, 0, -1):
+            c.setFillColor(colors.Color(0.05, 0.65, 0.91, alpha=0.020))
+            c.circle(lw - 10 * mm, 2 * mm, k * 6.0 * mm, fill=1, stroke=0)
+        # faint snow-peak silhouette across the right side
+        c.setFillColor(colors.Color(1, 1, 1, alpha=0.035))
+        rg = c.beginPath(); rg.moveTo(lw * 0.50, 0)
+        for fx, fy in ((0.60, 0.46), (0.67, 0.30), (0.76, 0.78), (0.84, 0.40), (0.91, 0.58), (1.0, 0.30)):
+            rg.lineTo(lw * fx, h * fy)
+        rg.lineTo(lw, 0); rg.close(); c.drawPath(rg, fill=1, stroke=0)
+        c.setFillColor(colors.Color(1, 1, 1, alpha=0.05))
+        rg = c.beginPath(); rg.moveTo(lw * 0.70, h * 0.78 - 4.2 * mm)
+        rg.lineTo(lw * 0.76, h * 0.78); rg.lineTo(lw * 0.81, h * 0.78 - 3.0 * mm)
+        rg.lineTo(lw * 0.76, h * 0.78 - 2.0 * mm); rg.close(); c.drawPath(rg, fill=1, stroke=0)
+        # fine top highlight
+        c.setFillColor(colors.Color(1, 1, 1, alpha=0.10)); c.rect(0, h - 0.35 * mm, lw, 0.35 * mm, fill=1, stroke=0)
+        c.restoreState()
+        # gold edge: gradient clipped to the card's corner and a 1.8 mm strip
         c.saveState()
         p = c.beginPath(); p.roundRect(0, 0, w, h, 0 if self.merged else R); c.clipPath(p, stroke=0, fill=0)
-        p2 = c.beginPath(); p2.rect(0, 0, 1.5 * mm, h); c.clipPath(p2, stroke=0, fill=0)
+        p2 = c.beginPath(); p2.rect(0, 0, 1.8 * mm, h); c.clipPath(p2, stroke=0, fill=0)
         c.linearGradient(0, h, 0, 0, (SAFFRON, GOLD_MID), extend=True)
         c.restoreState()
 
-        x = 7 * mm
+        x = 8.5 * mm
         try:
             n_adults = int(self.adults)
         except (TypeError, ValueError):
             n_adults = 0
         has_total = bool(self.total)
         n_kids = int(self.kids or 0)
-        # per-person price is OPT-IN (itinerary builder switch); otherwise the headline is the package total
-        per = round(self.total / n_adults) if (self.show_per_person and has_total and n_adults and not n_kids) else 0
-        guests_txt = f"for {n_adults} adult" + ("s" if n_adults != 1 else "") + (f", {n_kids} child" + ("ren" if n_kids != 1 else "") if n_kids else "")
-        # ── left: label + hold pill on one row, price, inclusions, 25/25/50 steps (same 33 mm height) ──
-        left_r = (lw - 4 * mm) if self.wa else (w - 7 * mm)
-        row_y = h - 5.7 * mm                      # vertical centre of the label / pill row
-        c.setFillColor(GOLD)
-        _spaced(c, x, row_y - 0.8 * mm, "PRICE PER PERSON" if per else "TOTAL PACKAGE PRICE", "Lato-Bold", 6.4, 1.0)
+        # per-person price is OPT-IN (itinerary builder switch). It never replaces the total: the total is the
+        # headline and the per-person figure sits next to it in braces. With children it is averaged over everyone.
+        heads = n_adults + n_kids
+        per = round(self.total / heads) if (self.show_per_person and has_total and heads > 1) else 0
+        per_label = "per person" if not n_kids else "avg. per person"
+        guests_txt = f"{n_adults} adult" + ("s" if n_adults != 1 else "") + (f", {n_kids} child" + ("ren" if n_kids != 1 else "") if n_kids else "")
+        left_r = (lw - 5 * mm) if self.wa else (w - 7 * mm)
+        row_y = h - 6.4 * mm
+
+        # ── eyebrow: diamond + label (left), price-held pill (right) ──
+        _diamond(c, x + 1.1 * mm, row_y, 1.2 * mm, SAFFRON)
+        c.setFillColor(SAFFRON)
+        _spaced(c, x + 4.2 * mm, row_y - 0.85 * mm, "TOTAL PACKAGE PRICE", "Lato-Bold", 6.8, 1.4)
         if self.valid_until:
             txt = f"Price held until {self.valid_until}"
-            c.setFont("Lato-Bold", 6.6)
-            tw = c.stringWidth(txt, "Lato-Bold", 6.6) + 8.2 * mm
-            px0, ph0 = left_r - tw, 4.6 * mm
-            c.setFillColor(GOLD_LITE); c.setStrokeColor(colors.HexColor("#f6dfa0")); c.setLineWidth(0.5)
+            c.setFont("Lato-Bold", 6.8)
+            tw = c.stringWidth(txt, "Lato-Bold", 6.8) + 9.4 * mm
+            px0, ph0 = left_r - tw, 5.2 * mm
+            c.setFillColor(colors.Color(0.96, 0.72, 0.18, alpha=0.14)); c.setStrokeColor(colors.Color(0.96, 0.72, 0.18, alpha=0.55)); c.setLineWidth(0.6)
             c.roundRect(px0, row_y - ph0 / 2, tw, ph0, ph0 / 2, fill=1, stroke=1)
-            _clock_icon(c, px0 + 3.0 * mm, row_y, 1.1 * mm, GOLD)
-            c.setFillColor(GOLD); c.setFont("Lato-Bold", 6.6)
-            c.drawString(px0 + 5.4 * mm, row_y - 2.2, txt)
-        base = h - 15.4 * mm
-        amount = per if per else (self.total if has_total else 0)
-        if amount:
-            c.setFillColor(INK_SOFT); c.setFont("Lato-Bold", 10.5)
-            c.drawString(x, base, "INR")
-            iw = c.stringWidth("INR", "Lato-Bold", 10.5) + 1.6 * mm
-            c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", 27)
-            c.drawString(x + iw, base, f"{amount:,}")
-            nw = c.stringWidth(f"{amount:,}", "Lato-Bold", 27)
-            c.setFillColor(INK_SOFT); c.setFont("Lato", 8.4)
-            c.drawString(x + iw + nw + 2.4 * mm, base, f"for {n_adults} adults" if per else guests_txt)
-        else:
-            c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", 20)
-            c.drawString(x, base, "Price on request")
+            _clock_icon(c, px0 + 3.4 * mm, row_y, 1.25 * mm, SAFFRON)
+            c.setFillColor(colors.HexColor("#fde7a6")); c.setFont("Lato-Bold", 6.8)
+            c.drawString(px0 + 6.1 * mm, row_y - 2.25, txt)
+
+        # ── hero figure: INR 19,500  ( INR 9,750 per person ) ──
+        base = h - 19.4 * mm
         if has_total:
-            avail = left_r - x
+            c.setFillColor(colors.HexColor("#8fa6c8")); c.setFont("Lato-Bold", 11.5)
+            c.drawString(x, base, "INR")
+            iw = c.stringWidth("INR", "Lato-Bold", 11.5) + 2 * mm
+            tot_txt = f"{int(self.total):,}"
+            fs_big = 34
+            # soft gold bloom under the digits, then a white-to-gold look: gold shadow offset + white face
+            c.setFillColor(colors.Color(0.96, 0.72, 0.18, alpha=0.55)); c.setFont("Lato-Bold", fs_big)
+            c.drawString(x + iw + 0.28, base - 0.28, tot_txt)
+            c.setFillColor(colors.HexColor("#fff6dc")); c.drawString(x + iw, base, tot_txt)
+            nw = c.stringWidth(tot_txt, "Lato-Bold", fs_big)
+            # short gold underline accent
+            c.setStrokeColor(SAFFRON); c.setLineWidth(1.1); c.setLineCap(1)
+            c.line(x + iw, base - 2.1 * mm, x + iw + min(nw, 24 * mm), base - 2.1 * mm)
+            cx_ = x + iw + nw + 5 * mm
             if per:
-                a, b, d = "Trip total ", f"INR {self.total:,}", "  \u00b7  stay, car, driver, meals and taxes included"
-            else:
-                a, b, d = "All-inclusive: ", "stay, car, driver, meals and taxes", ""
-            sz = 7.4
-            while sz > 5 and (c.stringWidth(a, "Lato", sz) + c.stringWidth(b, "Lato-Bold", sz) + c.stringWidth(d, "Lato", sz)) > avail:
+                a = f"(INR {per:,} {per_label})"
+                fs = 11.4
+                while fs > 7 and c.stringWidth(a, "Lato-Bold", fs) + 9 * mm > left_r - cx_:
+                    fs -= 0.2
+                aw = c.stringWidth(a, "Lato-Bold", fs) + 8 * mm
+                ph_ = 8.8 * mm
+                py_ = base - 2.0 * mm
+                c.setFillColor(colors.Color(0.20, 0.83, 0.60, alpha=0.16)); c.setStrokeColor(colors.Color(0.43, 0.91, 0.72, alpha=0.75)); c.setLineWidth(0.8)
+                c.roundRect(cx_, py_, aw, ph_, ph_ / 2, fill=1, stroke=1)
+                c.setFillColor(colors.HexColor("#86efc4")); c.setFont("Lato-Bold", fs)
+                c.drawString(cx_ + 4 * mm, py_ + ph_ / 2 - fs * 0.17, a)
+        else:
+            c.setFillColor(WHITE); c.setFont("Lato-Bold", 22)
+            c.drawString(x, base, "Price on request")
+
+        # ── what it covers ──
+        yy = h - 26.4 * mm
+        if has_total:
+            _check_badge(c, x + 1.5 * mm, yy + 0.9 * mm, 1.55 * mm, colors.HexColor("#10b981"))
+            a, d = f"for {guests_txt}", "   \u00b7   stay, car, driver, meals and taxes included"
+            sz = 7.9
+            while sz > 5 and (c.stringWidth(a, "Lato-Bold", sz) + c.stringWidth(d, "Lato", sz)) > (left_r - x - 5 * mm):
                 sz -= 0.2
-            yy = h - 20.2 * mm; cx_ = x
-            c.setFillColor(SLATE); c.setFont("Lato", sz); c.drawString(cx_, yy, a); cx_ += c.stringWidth(a, "Lato", sz)
-            c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", sz); c.drawString(cx_, yy, b); cx_ += c.stringWidth(b, "Lato-Bold", sz)
-            c.setFillColor(SLATE); c.setFont("Lato", sz); c.drawString(cx_, yy, d)
-            # payment steps: 25% now / 25% before arrival / 50% on arrival
-            c.setStrokeColor(colors.HexColor("#efe6d0")); c.setLineWidth(0.5)
-            c.line(x, h - 22.6 * mm, left_r, h - 22.6 * mm)
+            tx0 = x + 4.8 * mm
+            c.setFillColor(WHITE); c.setFont("Lato-Bold", sz); c.drawString(tx0, yy, a)
+            c.setFillColor(colors.HexColor("#b4c3dc")); c.setFont("Lato", sz); c.drawString(tx0 + c.stringWidth(a, "Lato-Bold", sz), yy, d)
+
+            # ── payment timeline on a frosted strip: 25% now / 25% a week before / 50% on arrival ──
+            sy0, sh = 3.3 * mm, 14.4 * mm
+            c.setFillColor(colors.Color(1, 1, 1, alpha=0.07)); c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.16)); c.setLineWidth(0.5)
+            c.roundRect(x - 2.4 * mm, sy0, left_r - x + 4.8 * mm, sh, 2.6 * mm, fill=1, stroke=1)
             i1 = int(self.first_amt or round(self.total * 0.25))
             i3 = int(self.total) - 2 * i1
             steps = [
-                (SKY,                       f"25%  INR {i1:,}", "on confirmation"),
-                (colors.HexColor("#7c3aed"), f"25%  INR {i1:,}", "7 days before arrival"),
-                (EMERALD,                   f"50%  INR {i3:,}", "on arrival"),
+                (colors.HexColor("#38bdf8"), "25%", f"INR {i1:,}", "on confirmation"),
+                (colors.HexColor("#a78bfa"), "25%", f"INR {i1:,}", "7 days before arrival"),
+                (colors.HexColor("#34d399"), "50%", f"INR {i3:,}", "on arrival"),
             ]
             colw = (left_r - x) / 3.0
-            r_c = 2.1 * mm; cy_ = 5.6 * mm
-            for k, (col, l1, l2) in enumerate(steps):
+            r_c = 1.9 * mm
+            ny = sy0 + sh - 3.7 * mm
+            for k in range(2):
+                x0 = x + k * colw + 2 * r_c; x1 = x + (k + 1) * colw
+                c.setStrokeColor(steps[k][0]); c.setLineWidth(1.2); c.setLineCap(1)
+                c.line(x0 + 0.8 * mm, ny, x1 - 0.8 * mm, ny)
+            for k, (col, pct, amt, cap) in enumerate(steps):
                 sx0 = x + k * colw
-                c.setFillColor(col); c.circle(sx0 + r_c, cy_, r_c, fill=1, stroke=0)
-                c.setFillColor(WHITE); c.setFont("Lato-Bold", 7.2)
-                c.drawCentredString(sx0 + r_c, cy_ - 2.5, str(k + 1))
-                tx0 = sx0 + 2 * r_c + 1.6 * mm
-                maxw = colw - 2 * r_c - 2.6 * mm
-                f1 = 6.9
-                while f1 > 5.2 and c.stringWidth(l1, "Lato-Bold", f1) > maxw:
+                c.setFillColor(colors.Color(col.red, col.green, col.blue, alpha=0.22)); c.circle(sx0 + r_c, ny, r_c + 1.0 * mm, fill=1, stroke=0)
+                c.setFillColor(col); c.circle(sx0 + r_c, ny, r_c, fill=1, stroke=0)
+                c.setFillColor(colors.HexColor("#0a1226")); c.setFont("Lato-Bold", 6.8)
+                c.drawCentredString(sx0 + r_c, ny - 2.35, str(k + 1))
+                maxw = colw - 3 * mm
+                l1 = f"{pct}   {amt}"
+                f1 = 8.0
+                while f1 > 5.4 and c.stringWidth(l1, "Lato-Bold", f1) > maxw:
                     f1 -= 0.2
-                f2 = 6.0
-                while f2 > 4.8 and c.stringWidth(l2, "Lato", f2) > maxw:
+                c.setFillColor(WHITE); c.setFont("Lato-Bold", f1)
+                c.drawString(sx0, ny - 5.1 * mm, l1)
+                c.setFillColor(col); c.drawString(sx0, ny - 5.1 * mm, pct)
+                f2 = 6.3
+                while f2 > 4.8 and c.stringWidth(cap, "Lato", f2) > maxw:
                     f2 -= 0.2
-                c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", f1); c.drawString(tx0, cy_ + 0.5 * mm, l1)
-                c.setFillColor(INK_SOFT); c.setFont("Lato", f2); c.drawString(tx0, cy_ - 2.5 * mm, l2)
+                c.setFillColor(colors.HexColor("#9fb0c8")); c.setFont("Lato", f2)
+                c.drawString(sx0, ny - 8.2 * mm, cap)
 
         if not self.wa:
             return
@@ -4302,6 +4424,7 @@ class IncludedCards(Flowable):
     tinted caption. One row for up to 4 items, otherwise two balanced rows (last row centred)."""
     CARD_H = 11.6 * mm
     GAP = 2.4 * mm
+    HEAD_H = 5.4 * mm      # section label row ("WHAT'S INCLUDED") above the cards
 
     def __init__(self, width, items):
         super().__init__()
@@ -4319,11 +4442,18 @@ class IncludedCards(Flowable):
         rows, _ = self._layout()
         ch = self.CARD_H - (1.4 * mm if self.compact else 0)
         self.card_h = ch
-        self.height = rows * ch + (rows - 1) * (self.GAP - (0.6 * mm if self.compact else 0)) + 1.2 * mm
+        self.height = rows * ch + (rows - 1) * (self.GAP - (0.6 * mm if self.compact else 0)) + 1.2 * mm + self.HEAD_H
 
     def draw(self):
         c, w = self.canv, self.width
         rows, cols = self._layout()
+        # section label: gold diamond, spaced caps, hairline
+        hy = self.height - 2.6 * mm
+        _diamond(c, 1.9 * mm, hy, 1.25 * mm, SAFFRON)
+        c.setFillColor(GOLD)
+        lw_ = _spaced(c, 5.6 * mm, hy - 0.9 * mm, "WHAT'S INCLUDED IN YOUR PRICE", "Lato-Bold", 6.8, 1.1)
+        c.setStrokeColor(colors.HexColor("#ecd9a6")); c.setLineWidth(0.5)
+        c.line(5.6 * mm + lw_ + 3 * mm, hy, w, hy)
         gap = self.GAP - (0.6 * mm if self.compact else 0)
         ch = self.card_h
         cw = (w - gap * (cols - 1)) / cols
@@ -4338,9 +4468,17 @@ class IncludedCards(Flowable):
             in_row = cols if r < rows - 1 else n - cols * (rows - 1)
             x0 = col * (cw + gap) + (cols - in_row) * (cw + gap) / 2
             y0 = (rows - 1 - r) * (ch + gap) + 1.2 * mm
-            _soft_shadow(c, x0, y0, cw, ch, R, layers=3, alpha=0.022)
+            _soft_shadow(c, x0, y0, cw, ch, R, layers=4, alpha=0.026)
             c.setFillColor(WHITE); c.setStrokeColor(colors.HexColor("#e3ebf2")); c.setLineWidth(0.6)
             c.roundRect(x0, y0, cw, ch, R, fill=1, stroke=1)
+            # gradient wash (tinted at the icon, white at the far end) + coloured line along the bottom edge
+            c.saveState()
+            pth = c.beginPath(); pth.roundRect(x0, y0, cw, ch, R); c.clipPath(pth, stroke=0, fill=0)
+            c.linearGradient(x0, 0, x0 + cw, 0, (tint, WHITE), extend=True)
+            c.setFillColor(bot_c); c.rect(x0, y0, cw, 0.7 * mm, fill=1, stroke=0)
+            c.restoreState()
+            c.setStrokeColor(colors.Color(bot_c.red, bot_c.green, bot_c.blue, alpha=0.30)); c.setLineWidth(0.6)
+            c.roundRect(x0, y0, cw, ch, R, fill=0, stroke=1)
             c.saveState()
             pth = c.beginPath(); pth.roundRect(x0, y0, cw, ch, R); c.clipPath(pth, stroke=0, fill=0)
             c.setFillColor(tint); c.circle(x0 + 6.4 * mm, y0 + ch / 2, ch * 1.05, fill=1, stroke=0)
@@ -4637,7 +4775,14 @@ class PromiseBox(Flowable):
             pth = c.beginPath(); pth.roundRect(x, 0, cw, ch, R); c.clipPath(pth, stroke=0, fill=0)
             tint = colors.Color(bot_c.red, bot_c.green, bot_c.blue, alpha=0.07)
             c.setFillColor(tint); c.circle(x + 5 * mm, ch - 4 * mm, 17 * mm, fill=1, stroke=0)
-            c.setFillColor(bot_c); c.rect(x, 0, 1.1 * mm, ch, fill=1, stroke=0)
+            # concentric rings in the bottom-right corner + a gradient bar across the top edge
+            for k, a_ in ((16, 0.05), (11, 0.05), (6, 0.06)):
+                c.setStrokeColor(colors.Color(bot_c.red, bot_c.green, bot_c.blue, alpha=a_ * 2)); c.setLineWidth(0.5)
+                c.circle(x + cw, 0, k * mm, fill=0, stroke=1)
+            c.saveState()
+            pb = c.beginPath(); pb.rect(x, ch - 1.0 * mm, cw, 1.0 * mm); c.clipPath(pb, stroke=0, fill=0)
+            c.linearGradient(x, 0, x + cw, 0, (top_c, bot_c), extend=True)
+            c.restoreState()
             c.restoreState()
             tx = x + 4.2 * mm
             ty = ch - 2.6 * mm - tile
@@ -4733,7 +4878,7 @@ class TripSummary(Flowable):
     _DIM = ((13.0 * mm, 12.0 * mm, 13.0 * mm, 11.0 * mm), (11.2 * mm, 10.4 * mm, 11.4 * mm, 10.0 * mm))
 
     # big_name: the client name is set as large as the price (27 pt), so row A is taller
-    _DIM_BIG = ((19.0 * mm, 12.0 * mm, 13.0 * mm, 11.0 * mm), (16.0 * mm, 10.4 * mm, 11.4 * mm, 10.0 * mm))
+    _DIM_BIG = ((19.0 * mm, 12.0 * mm, 15.6 * mm, 11.0 * mm), (16.0 * mm, 10.4 * mm, 13.6 * mm, 10.0 * mm))
     NAME_FS = 27
 
     def __init__(self, width, left, right, ref="", valid="", email="", big_name=False, merged=False):
@@ -4781,16 +4926,31 @@ class TripSummary(Flowable):
         p2 = c.beginPath(); p2.rect(0, y_a, w, self.HEAD_H); c.clipPath(p2, stroke=0, fill=0)
         c.linearGradient(0, 0, w, 0, (NAVY_DEEP, NAVY_MID), extend=True)
         c.restoreState()
-        c.setFillColor(GOLD_MID); c.rect(0, y_a - 0.5 * mm, w, 0.9 * mm, fill=1, stroke=0)
+        # diagonal light sheen across the navy band
+        c.saveState()
+        p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
+        p2 = c.beginPath(); p2.rect(0, y_a, w, self.HEAD_H); c.clipPath(p2, stroke=0, fill=0)
+        c.setFillColor(colors.Color(1, 1, 1, alpha=0.045))
+        sh = c.beginPath(); sh.moveTo(w * 0.52, y_a); sh.lineTo(w * 0.70, y_a); sh.lineTo(w * 0.62, h); sh.lineTo(w * 0.44, h); sh.close()
+        c.drawPath(sh, fill=1, stroke=0)
+        c.restoreState()
+        c.saveState()
+        p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
+        p2 = c.beginPath(); p2.rect(0, y_a - 0.5 * mm, w, 0.9 * mm); c.clipPath(p2, stroke=0, fill=0)
+        c.linearGradient(0, 0, w, 0, (GOLD_MID, SAFFRON, GOLD_MID), (0, 0.5, 1), extend=False)
+        c.restoreState()
         _diamond(c, 7 * mm, h - self.HEAD_H / 2, 1.5 * mm, colors.HexColor("#f5b82e"))
         c.setFillColor(WHITE)
         _spaced(c, 11.5 * mm, h - self.HEAD_H / 2 - 1.1 * mm, "TRIP SUMMARY", "Lato-Bold", 9, 1.6)
         rx = w - 6 * mm
         if self.ref:
-            c.setFillColor(colors.HexColor("#93c5fd"))
             ref_txt = "QUOTE  " + _raw(self.ref)
-            _spaced(c, rx, h - self.HEAD_H / 2 - 1.0 * mm, ref_txt, "Lato-Bold", 7.4, 0.8, "r")
-            rx -= c.stringWidth(ref_txt, "Lato-Bold", 7.4) + len(ref_txt) * 0.8 + 4 * mm
+            rw_ = c.stringWidth(ref_txt, "Lato-Bold", 7.4) + len(ref_txt) * 0.8 + 6 * mm
+            c.setFillColor(colors.Color(1, 1, 1, alpha=0.09)); c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.20)); c.setLineWidth(0.5)
+            c.roundRect(rx - rw_, h - self.HEAD_H / 2 - 2.7 * mm, rw_, 5.4 * mm, 2.7 * mm, fill=1, stroke=1)
+            c.setFillColor(colors.HexColor("#bfdbfe"))
+            _spaced(c, rx - 3 * mm, h - self.HEAD_H / 2 - 1.0 * mm, ref_txt, "Lato-Bold", 7.4, 0.8, "r")
+            rx -= rw_ + 3 * mm
         if self.tier:
             t = _raw(self.tier).upper()
             c.setFont("Lato-Bold", 7)
@@ -4806,21 +4966,39 @@ class TripSummary(Flowable):
         p2 = c.beginPath(); p2.rect(0, y_j, w, rowA - 0.5 * mm); c.clipPath(p2, stroke=0, fill=0)
         c.linearGradient(0, 0, w, 0, (colors.HexColor("#f6f9fd"), WHITE), extend=True)
         c.restoreState()
+        # faint mountain ridge behind the right half of the row (a quiet nod to Kashmir)
+        c.saveState()
+        p = c.beginPath(); p.roundRect(0, 0, w, h, R); c.clipPath(p, stroke=0, fill=0)
+        p2 = c.beginPath(); p2.rect(0, y_j, w, rowA - 0.5 * mm); c.clipPath(p2, stroke=0, fill=0)
+        c.setFillColor(colors.Color(0.01, 0.52, 0.78, alpha=0.055))
+        rg = c.beginPath(); rg.moveTo(w * 0.40, y_j)
+        for fx, fy in ((0.50, 0.55), (0.57, 0.30), (0.66, 0.92), (0.75, 0.42), (0.83, 0.70), (0.92, 0.28), (1.0, 0.50)):
+            rg.lineTo(w * fx, y_j + (rowA - 0.5 * mm) * fy)
+        rg.lineTo(w, y_j); rg.close(); c.drawPath(rg, fill=1, stroke=0)
+        c.setFillColor(colors.Color(0.96, 0.72, 0.18, alpha=0.07))
+        rg = c.beginPath(); rg.moveTo(w * 0.58, y_j)
+        for fx, fy in ((0.66, 0.60), (0.72, 0.30), (0.80, 0.58), (0.88, 0.20), (1.0, 0.38)):
+            rg.lineTo(w * fx, y_j + (rowA - 0.5 * mm) * fy)
+        rg.lineTo(w, y_j); rg.close(); c.drawPath(rg, fill=1, stroke=0)
+        c.restoreState()
         name = _raw(self.info.get("CLIENT NAME", "")) or "Guest"
         ymid = y_j + (rowA - 0.5 * mm) / 2
         big = self.big_name
         ar = min((5.0 if big else 4.1) * mm, (rowA - 3 * mm) / 2)
-        _grad_roundrect(c, 6 * mm, ymid - ar, 2 * ar, 2 * ar, ar, SKY_MID, NAVY_MID, "d")
+        c.setFillColor(colors.Color(0.96, 0.72, 0.18, alpha=0.22)); c.circle(6 * mm + ar, ymid, ar + 1.5 * mm, fill=1, stroke=0)
+        c.setFillColor(WHITE); c.circle(6 * mm + ar, ymid, ar + 0.9 * mm, fill=1, stroke=0)
+        c.setStrokeColor(SAFFRON); c.setLineWidth(0.9); c.circle(6 * mm + ar, ymid, ar + 0.9 * mm, fill=0, stroke=1)
+        _grad_roundrect(c, 6 * mm + 0.0, ymid - ar, 2 * ar, 2 * ar, ar, SKY_MID, NAVY_MID, "d")
         c.setFillColor(WHITE); c.setFont("Lato-Bold", 12.5 if big else 10.5)
         c.drawCentredString(6 * mm + ar, ymid - (4.3 if big else 3.6), (name.strip()[:1] or "G").upper())
-        nx = 6 * mm + 2 * ar + 3 * mm
+        nx = 6 * mm + 2 * ar + 4.2 * mm
         c.setFillColor(INK_SOFT)
         lab_dy = 5.4 * mm if big else 2.9 * mm
         lw_ = _spaced(c, nx, ymid + lab_dy, "PREPARED FOR", "Lato-Bold", 5.8, 1.0)
         if self.email:
             c.setFont("Lato", 6.2); c.setFillColor(colors.HexColor("#94a3b8"))
             c.drawString(nx + lw_ + 3 * mm, ymid + lab_dy, _raw(self.email))
-        pill_w = 41 * mm
+        pill_w = 41 * mm if self.valid else 0
         # same size as the price (27 pt); a very long name steps down until it fits
         nm, nfs = _fit_text(c, name, "Lato-Bold", self.NAME_FS if big else 13, w - nx - pill_w - 12 * mm, 15 if big else 9)
         c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", nfs)
@@ -4865,31 +5043,47 @@ class TripSummary(Flowable):
             c.setFillColor(WHITE); c.setStrokeColor(colors.HexColor("#b9d4e8")); c.setLineWidth(0.8)
             c.circle(mx, jm, 3.3 * mm, fill=1, stroke=1)
             _ts_icon(c, "car", mx, jm, 1.9 * mm, SKY)
+            c.setStrokeColor(colors.HexColor("#8fbfdc")); c.setLineWidth(0.9); c.setLineCap(1); c.setLineJoin(1)
+            ah = c.beginPath(); ah.moveTo(lx1 - 1.5 * mm, jm + 1.1 * mm); ah.lineTo(lx1, jm); ah.lineTo(lx1 - 1.5 * mm, jm - 1.1 * mm)
+            c.drawPath(ah, fill=0, stroke=1)
 
-        # ---- row C: four facts ----
+        # ---- row C: four fact tiles ----
         c.setStrokeColor(colors.HexColor("#e8eef5")); c.setLineWidth(0.5)
         c.line(5 * mm, y_f, w - 5 * mm, y_f)
-        facts = (("TOUR DURATION", "clock", "#0284c7"), ("GUESTS", "users", "#6a3fd8"),
-                 ("VEHICLE", "car", "#e5780b"), ("TRAVEL DATE", "calendar", "#0a8f86"))
-        cw = w / 4
-        fm = y_f - rowF / 2
-        for i, (label, icon, hexc) in enumerate(facts):
-            col = colors.HexColor(hexc)
-            x0 = cw * i
-            if i:
-                c.setStrokeColor(colors.HexColor("#e8eef5")); c.setLineWidth(0.5)
-                c.line(x0, y_f - 2.2 * mm, x0, y_b + 2.2 * mm)
-            dr = 3.4 * mm
-            dx = x0 + 5 * mm + dr
-            c.setFillColor(colors.Color(col.red, col.green, col.blue, alpha=0.12))
-            c.circle(dx, fm, dr, fill=1, stroke=0)
-            _ts_icon(c, icon, dx, fm, 1.9 * mm, col)
-            tx = dx + dr + 2.4 * mm
-            c.setFillColor(INK_SOFT)
-            _spaced(c, tx, fm + 1.5 * mm, label, "Lato-Bold", 5.6, 0.8)
-            v, fs = _fit_text(c, _raw(self.info.get(label, "")) or "-", "Lato-Bold", 10, x0 + cw - 3 * mm - tx, 7)
+        facts = (("TOUR DURATION", "clock", "#0284c7", "#38bdf8"), ("GUESTS", "users", "#6a3fd8", "#a78bfa"),
+                 ("VEHICLE", "car", "#e5780b", "#fbbf24"), ("TRAVEL DATE", "calendar", "#0a8f86", "#2dd4bf"))
+        pad_x, gap_t = 5 * mm, 2.6 * mm
+        tw_ = (w - 2 * pad_x - 3 * gap_t) / 4
+        th_ = rowF - 3.4 * mm
+        ty_ = y_b + 1.7 * mm
+        RT = 2.6 * mm
+        for i, (label, icon, hexc, hexl) in enumerate(facts):
+            col, coll = colors.HexColor(hexc), colors.HexColor(hexl)
+            x0 = pad_x + i * (tw_ + gap_t)
+            pale = colors.Color(1 - (1 - col.red) * 0.09, 1 - (1 - col.green) * 0.09, 1 - (1 - col.blue) * 0.09)
+            _soft_shadow(c, x0, ty_, tw_, th_, RT, layers=3, alpha=0.022)
+            c.setFillColor(WHITE); c.setStrokeColor(colors.Color(col.red, col.green, col.blue, alpha=0.30)); c.setLineWidth(0.6)
+            c.roundRect(x0, ty_, tw_, th_, RT, fill=1, stroke=1)
+            c.saveState()
+            pth = c.beginPath(); pth.roundRect(x0, ty_, tw_, th_, RT); c.clipPath(pth, stroke=0, fill=0)
+            c.linearGradient(x0, 0, x0 + tw_, 0, (pale, WHITE), extend=True)
+            c.setFillColor(col); c.rect(x0, ty_, tw_, 0.7 * mm, fill=1, stroke=0)
+            c.restoreState()
+            dr = min(3.5 * mm, th_ / 2 - 1.2 * mm)
+            dx, dy = x0 + 2.2 * mm + dr, ty_ + th_ / 2 + 0.2 * mm
+            c.saveState()
+            for k in range(3, 0, -1):
+                c.setFillColor(colors.Color(col.red, col.green, col.blue, alpha=0.07))
+                c.circle(dx, dy - 0.2 * mm, dr + k * 0.45 * mm, fill=1, stroke=0)
+            c.restoreState()
+            _grad_roundrect(c, dx - dr, dy - dr, 2 * dr, 2 * dr, dr, coll, col, "d")
+            _ts_icon(c, icon, dx, dy, dr * 0.56, WHITE)
+            tx = dx + dr + 2.2 * mm
+            c.setFillColor(col)
+            _spaced(c, tx, dy + 1.35 * mm, label, "Lato-Bold", 5.4, 0.8)
+            v, fs = _fit_text(c, _raw(self.info.get(label, "")) or "-", "Lato-Bold", 10.6, x0 + tw_ - 2 * mm - tx, 6.8)
             c.setFillColor(NAVY_DEEP); c.setFont("Lato-Bold", fs)
-            c.drawString(tx, fm - 3.3 * mm, v)
+            c.drawString(tx, dy - 3.1 * mm, v)
 
         # ---- total bar ----
         if self.cost:
@@ -5043,11 +5237,7 @@ class NextSteps(Flowable):
 
 
 def _trip_story(timeline):
-    blob = " ".join(str(d.get("transit_route") or "") + " " + str(d.get("title") or "") for d in (timeline or [])).lower()
-    n = sum(1 for k in ("sonamarg", "gulmarg", "pahalgam", "doodhpathri") if k in blob)
-    if n >= 2:
-        return f"{n} valleys, 1 shikara ride, and a driver who looks after everything"
-    return "A Kashmir trip planned around you, with a driver who looks after everything"
+    return "Your Kashmir trip, handled with care, from the first step to the last."
 
 
 class IncludedExcluded(Flowable):
@@ -5753,8 +5943,8 @@ def generate_pdf(itinerary_data: dict) -> str:
     ))
     story.append(Spacer(1, 3*mm))
     _tagline = Paragraph(clean(_trip_story(itinerary_data.get("timeline", []))),
-                         ParagraphStyle("story", fontName="Lato-Italic", fontSize=10.5, leading=13,
-                                        textColor=NAVY, alignment=TA_CENTER))
+                         ParagraphStyle("story", fontName="Lato-Italic", fontSize=13, leading=16,
+                                        textColor=GOLD, alignment=TA_CENTER))
     _tagline_gap = Spacer(1, 3*mm)
     story.append(_tagline)
     story.append(_tagline_gap)
@@ -5774,14 +5964,14 @@ def generate_pdf(itinerary_data: dict) -> str:
     _trip_summary = TripSummary(
         usable_w,
         [("CLIENT NAME", client_name, False),
-         ("TOUR DURATION", f"{days} Days", False),
+         ("TOUR DURATION", (f"{int(days) - 1}N/{int(days)}D" if int(days) > 1 else "1 Day"), False),
          ("GUESTS", _guests_txt, False),
          ("START POINT", start_point, False),
          ("BUDGET TIER", str(budget_tier), False)],
         [("TRAVEL DATE", str(start_date), False),
          ("VEHICLE", str(vehicle_type), False),
          ("END POINT", end_point, False)],
-        ref=_quote_ref(client_name), valid=_valid_txt, email=client_email or "", big_name=True)
+        ref=_quote_ref(client_name), valid="", email=client_email or "", big_name=True)   # validity is shown once, as "Price held until" in the price panel
     story.append(SummaryPriceCard(usable_w, _trip_summary, _price_band))
     story.append(Spacer(1, 3*mm))
     _extras = _extras_list(itinerary_data)
