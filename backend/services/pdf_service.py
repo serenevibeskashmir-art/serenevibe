@@ -4295,7 +4295,6 @@ UNION_CAB_PLACES = (
     ("union_cab_other", "others"),
 )
 SNOW_CHAIN_PLACES = (
-    ("snow_chain_pahalgam", "Pahalgam"),
     ("snow_chain_gulmarg", "Gulmarg"),
     ("snow_chain_sonamarg", "Sonamarg"),
     ("snow_chain_other", "others"),
@@ -6036,7 +6035,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         _tiles.append(("Union cab", _tile_places(_union_on), "cab"))
     _chain_on, _ = snow_chain_split(itinerary_data, _extras)
     if _chain_on:
-        _tiles.append(("Snow chain", _tile_places(_chain_on), "chain"))
+        _tiles.append(("Snow chain vehicle", _tile_places(_chain_on), "chain"))
     for _k, _ph in (("gondola_p1", "Phase 1"), ("gondola_p2", "Phase 2")):
         if _k in _extras:
             _tiles.append(("Gondola", _ph, "gondola"))
@@ -6405,7 +6404,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         inc_items.append("Union cabs for " + _join_places(_union_on))
     _chain_on, _chain_off = snow_chain_split(itinerary_data, _extras)
     if _chain_on:
-        inc_items.append("Snow chains for " + _join_places(_chain_on))
+        inc_items.append("Snow chain vehicle for " + _join_places(_chain_on) + " if required")
     for _k, _label in COUPLE_EXTRAS:
         if _k in _extras:
             inc_items.append(_label)
@@ -6431,8 +6430,8 @@ def generate_pdf(itinerary_data: dict) -> str:
     ]
     if _union_off:
         exc_items.append("Union cabs for " + _join_places(_union_off) + " if required")
-    if _chain_off:
-        exc_items.append("Snow chains for " + _join_places(_chain_off) + " if required")
+    exc_items.append(("Snow chain vehicle other than " + _join_places(_chain_on) + " if required") if _chain_on
+                     else "Snow chain vehicle if required")
     exc_items.append("Any claim due to road blocks, curfews, accidents etc.")
 
     # Calculate payment milestones dynamically (25% / 25% / 50% split per policy)
