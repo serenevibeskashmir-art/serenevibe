@@ -192,7 +192,7 @@ def _build_default_timeline(days):
 def _inclusion_labels(payload):
     """Readable names of the optional extras ticked for this quote (cabs, gondola, couple items)."""
     names = {k: f"Union cab - {n}" for k, n in UNION_CAB_PLACES}
-    names.update({k: f"Snow chain - {n}" for k, n in SNOW_CHAIN_PLACES})
+    names.update({k: f"Snow chain vehicle - {n}" for k, n in SNOW_CHAIN_PLACES})
     names.update(_GONDOLA_LABELS)
     names.update(dict(COUPLE_EXTRAS))
     out = []
@@ -200,7 +200,7 @@ def _inclusion_labels(payload):
         if k == "union_cab_other" and payload.get("cab_other_places"):
             out.append("Union cab - " + ", ".join(payload["cab_other_places"]))
         elif k == "snow_chain_other" and payload.get("snow_chain_other_places"):
-            out.append("Snow chain - " + ", ".join(payload["snow_chain_other_places"]))
+            out.append("Snow chain vehicle - " + ", ".join(payload["snow_chain_other_places"]))
         else:
             out.append(names.get(k, k))
     return out + clean_text_list(payload.get("custom_inclusions"))
