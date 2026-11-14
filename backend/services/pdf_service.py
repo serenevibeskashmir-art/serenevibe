@@ -4294,13 +4294,19 @@ UNION_CAB_PLACES = (
     ("union_cab_sonamarg", "Sonamarg"),
     ("union_cab_other", "others"),
 )
+SNOW_CHAIN_PLACES = (
+    ("snow_chain_pahalgam", "Pahalgam"),
+    ("snow_chain_gulmarg", "Gulmarg"),
+    ("snow_chain_sonamarg", "Sonamarg"),
+    ("snow_chain_other", "others"),
+)
 COUPLE_EXTRAS = (
     ("couple_cake", "Cake Cutting Celebration"),
     ("couple_bed", "Bed decoration"),
     ("couple_candle", "Candle light dinner"),
 )
 _GONDOLA_LABELS = {"gondola_p1": "Gondola Phase 1", "gondola_p2": "Gondola Phase 2"}
-EXTRA_KEYS = tuple(k for k, _ in UNION_CAB_PLACES) + tuple(_GONDOLA_LABELS) + tuple(k for k, _ in COUPLE_EXTRAS)
+EXTRA_KEYS = tuple(k for k, _ in UNION_CAB_PLACES) + tuple(k for k, _ in SNOW_CHAIN_PLACES) + tuple(_GONDOLA_LABELS) + tuple(k for k, _ in COUPLE_EXTRAS)
 
 
 def normalize_extras(value):
@@ -4340,11 +4346,36 @@ def union_cab_split(itinerary_data, extras):
     return on, off
 
 
+def snow_chain_split(itinerary_data, extras):
+    """(places with snow chains included, places left out). 'Other' expands to the places the admin typed."""
+    typed = clean_text_list(itinerary_data.get("snow_chain_other_places"), 6, 40)
+    on, off = [], []
+    for key, name in SNOW_CHAIN_PLACES:
+        if key in extras:
+            on.extend((typed or [name]) if key == "snow_chain_other" else [name])
+        else:
+            off.append(name)
+    return on, off
+
+
 def _join_places(names):
     names = list(names)
     if len(names) <= 1:
         return "".join(names)
     return ", ".join(names[:-1]) + " & " + names[-1]
+
+
+def _tile_places(names, max_chars=22):
+    """Places for a small tile caption: all of them if they fit, else the first ones plus '+N'."""
+    names = list(names)
+    full = _join_places(names)
+    if len(full) <= max_chars or len(names) <= 1:
+        return full
+    for keep in range(len(names) - 1, 0, -1):
+        txt = ", ".join(names[:keep]) + f" +{len(names) - keep}"
+        if len(txt) <= max_chars:
+            return txt
+    return f"{names[0]} +{len(names) - 1}"
 
 
 def _extras_list(itinerary_data):
@@ -4525,6 +4556,7 @@ class IncludedStrip(Flowable):
     _KINDS = ("car", "bed", "meal", "boat", "tax")
     _KIND_PAL = {
         "cab":     ("#5fb0ff", "#1a6fc9", "#e6f2ff", "#175aa3"),   # union cab - sky blue
+        "chain":   ("#8fa4bd", "#4a617f", "#eef2f7", "#3f5473"),   # snow chain - steel blue
         "gondola": ("#7ddc6e", "#2b9a3f", "#eaf9e6", "#237a33"),   # gondola   - green
     }
 
@@ -4606,6 +4638,13 @@ class IncludedStrip(Flowable):
             for dx in (-0.55, 0.55):
                 c.setFillColor(hole); c.circle(cx + dx*u, cy - 0.46*u, 0.30*u, fill=1, stroke=0)
                 c.setFillColor(W);    c.circle(cx + dx*u, cy - 0.46*u, 0.20*u, fill=1, stroke=0)
+        elif kind == "chain":    # tyre with snow-chain links
+            c.circle(cx, cy, 0.78*u, fill=1, stroke=0)
+            c.setFillColor(hole); c.circle(cx, cy, 0.50*u, fill=1, stroke=0)
+            c.setFillColor(W);    c.circle(cx, cy, 0.20*u, fill=1, stroke=0)
+            c.setStrokeColor(hole); c.setLineWidth(0.09*u)
+            for dx in (-0.45, 0.0, 0.45):
+                c.line(cx + dx*u - 0.30*u, cy - 0.74*u, cx + dx*u + 0.30*u, cy + 0.74*u)
         elif kind == "gondola":  # cable car: sloped cable, hanger and cabin
             c.setLineWidth(0.10*u)
             c.line(cx - 1.05*u, cy + 0.78*u, cx + 1.05*u, cy + 0.50*u)                        # cable
@@ -4672,8 +4711,17 @@ class IncludedStrip(Flowable):
             c.setFont("Lato-Bold", hfs)
             c.drawCentredString(cx, ty - (4.0 if self.compact else 4.6) * mm, head)
             c.setFillColor(cap)
-            c.setFont("Lato", _fit_font(c, sub, "Lato", 6.6, cw - 4 * mm))
-            c.drawCentredString(cx, ty - (7.2 if self.compact else 8.0) * mm, sub)
+            sub_y = ty - (7.2 if self.compact else 8.0) * mm
+            if c.stringWidth(sub, "Lato", 5.8) > cw - 4 * mm and " " in sub:
+                # long place list: break into two short lines instead of squeezing it
+                words = sub.split(" "); best = len(words) // 2
+                l1, l2 = " ".join(words[:best]), " ".join(words[best:])
+                c.setFont("Lato", _fit_font(c, max(l1, l2, key=len), "Lato", 6.2, cw - 4 * mm))
+                c.drawCentredString(cx, sub_y + 0.9 * mm, l1)
+                c.drawCentredString(cx, sub_y - 2.1 * mm, l2)
+            else:
+                c.setFont("Lato", _fit_font(c, sub, "Lato", 6.6, cw - 4 * mm))
+                c.drawCentredString(cx, sub_y, sub)
 
 
 class PromiseBox(Flowable):
@@ -5985,7 +6033,10 @@ def generate_pdf(itinerary_data: dict) -> str:
     ]
     _union_on, _ = union_cab_split(itinerary_data, _extras)
     if _union_on:
-        _tiles.append(("Union cab", _join_places(_union_on), "cab"))
+        _tiles.append(("Union cab", _tile_places(_union_on), "cab"))
+    _chain_on, _ = snow_chain_split(itinerary_data, _extras)
+    if _chain_on:
+        _tiles.append(("Snow chain", _tile_places(_chain_on), "chain"))
     for _k, _ph in (("gondola_p1", "Phase 1"), ("gondola_p2", "Phase 2")):
         if _k in _extras:
             _tiles.append(("Gondola", _ph, "gondola"))
@@ -6352,6 +6403,9 @@ def generate_pdf(itinerary_data: dict) -> str:
     _union_on, _union_off = union_cab_split(itinerary_data, _extras)
     if _union_on:
         inc_items.append("Union cabs for " + _join_places(_union_on))
+    _chain_on, _chain_off = snow_chain_split(itinerary_data, _extras)
+    if _chain_on:
+        inc_items.append("Snow chains for " + _join_places(_chain_on))
     for _k, _label in COUPLE_EXTRAS:
         if _k in _extras:
             inc_items.append(_label)
@@ -6377,6 +6431,8 @@ def generate_pdf(itinerary_data: dict) -> str:
     ]
     if _union_off:
         exc_items.append("Union cabs for " + _join_places(_union_off) + " if required")
+    if _chain_off:
+        exc_items.append("Snow chains for " + _join_places(_chain_off) + " if required")
     exc_items.append("Any claim due to road blocks, curfews, accidents etc.")
 
     # Calculate payment milestones dynamically (25% / 25% / 50% split per policy)
