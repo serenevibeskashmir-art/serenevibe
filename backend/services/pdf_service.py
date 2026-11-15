@@ -2866,17 +2866,28 @@ class KashmirRouteMap(Flowable):
         self._gap_w = 3 * mm
         self._inset_w = 56 * mm if self._south else 0.0
         self._mw = width - ((self._inset_w + self._gap_w) if self._south else 0.0)
+        self._base_table_h = self.TABLE_H
+        self._size_to(max_height)
+        self._sat = None            # JPEG bytes once loaded
+        self._sat_tried = False
+        self._fit_viewport()
+
+    def _size_to(self, max_height=None):
+        """Set legend row height, map height and total height for a block of at most max_height."""
         n = max(len(self._rows), 1)
         min_h = self._min_map_h()
         if max_height:
             fixed = self.HDR_H + 2 * mm
-            self.TABLE_H = max(self.MIN_ROW_H, min(self.TABLE_H, (max_height - fixed - min_h) / n))
+            self.TABLE_H = max(self.MIN_ROW_H, min(self._base_table_h, (max_height - fixed - min_h) / n))
             self.MAP_H = max(min_h, min(self.MAX_MAP_H, max_height - fixed - n * self.TABLE_H))
         else:
+            self.TABLE_H = self._base_table_h
             self.MAP_H = max(self.MAP_H, min_h)
         self.height = self.MAP_H + self.HDR_H + self.TABLE_H * len(self._rows) + 2 * mm
-        self._sat = None            # JPEG bytes once loaded
-        self._sat_tried = False
+
+    def refit(self, max_height):
+        """Resize the whole block (map + legend) to max_height, e.g. so Day 1 fits beneath it."""
+        self._size_to(max_height)
         self._fit_viewport()
 
     @classmethod
@@ -6972,6 +6983,24 @@ def generate_pdf(itinerary_data: dict) -> str:
         block = [spread, Spacer(1, 3*mm)]
         if idx == 1:
             block = [KeepTogether(_day_title + [spread]), Spacer(1, 3*mm)]   # the heading never sits alone at the foot of a page
+            # Page 2 = map block + Day 1.  The map is the flexible part, so give it whatever Day 1 leaves free;
+            # a fixed map height left Day 1 a few mm short, pushed it to page 3 and left page 2 mostly blank.
+            try:
+                _probe = DayBookSpread(usable_w, idx, banner_title, _day_date(start_date, idx),
+                                       ("x" if (overnight and str(overnight).lower() != "departure") else ""),
+                                       travel=_travel, route=_route_show, photo=day_bg,
+                                       photo_label=KashmirRouteMap.DISPLAY.get(_pk, str(_pk).title()),
+                                       steps=steps, client_name=client_name)
+                _day1_h = sum(f.wrap(usable_w, 10000)[1] for f in _day_title) + _probe.wrap(usable_w, 10000)[1]
+                _frame_h = doc.height - 12                       # the frame's own 6 pt padding, top and bottom
+                _gap = 4 * mm + 1.5 * mm                         # spacer under the map + a little safety
+                _map_room = _frame_h - _day1_h - _gap            # whole map block (title + gap + map + legend)
+                route_map.refit(_map_room - map_title.height - gap_h)
+                if map_title.height + gap_h + route_map.height + _gap + _day1_h > _frame_h + 0.5 * mm:
+                    # Day 1 cannot share the page even with the smallest map: let the map fill page 2 instead
+                    route_map.refit(_frame_h - 4 * mm - map_title.height - gap_h)
+            except Exception as _exc:
+                print(f"WARNING: could not fit Day 1 under the route map ({_exc})")
         # Each spread is one unbroken book; platypus moves a spread that does not fit to the next page.
         story.extend(block)
 
