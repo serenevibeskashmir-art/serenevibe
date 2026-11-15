@@ -23,6 +23,7 @@ const TABS = [
 
 const STEPS = [
   { id: 'trip',   label: 'Trip'   },
+  { id: 'incexc', label: 'Inc/Exc' },
   { id: 'days',   label: 'Days'   },
   { id: 'review', label: 'Review' },
 ];
@@ -118,7 +119,7 @@ export default function App() {
             </div>
             {quote && (
               <div hidden={step === 'trip'}>
-                <QuotePreview quote={quote} trip={trip} step={step === 'review' ? 'review' : 'days'} onStep={setStep} />
+                <QuotePreview quote={quote} trip={trip} step={step === 'review' || step === 'incexc' ? step : 'days'} onStep={setStep} />
               </div>
             )}
           </section>
