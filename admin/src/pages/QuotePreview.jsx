@@ -155,7 +155,7 @@ export const VEHICLE_OPTIONS = ["Sedan", "Ertiga/Innova", "Innova Crysta", "Temp
 export const MEAL_PLANS = [
   { code: "EP",  name: "European Plan",          desc: "Room only. No meals included." },
   { code: "CP",  name: "Continental Plan",       desc: "Room + Breakfast" },
-  { code: "MAP", name: "Modified American Plan", desc: "Room + Breakfast + One major meal (Lunch or Dinner)" },
+  { code: "MAP", name: "Modified American Plan", desc: "Room + Breakfast + Dinner" },
   { code: "AP",  name: "American Plan",          desc: "Room + Breakfast + Lunch + Dinner (All meals)" },
 ];
 const PICKUP_ROUTE = "Airport Pickup and Local Sightseeing: Overnight Srinagar";
