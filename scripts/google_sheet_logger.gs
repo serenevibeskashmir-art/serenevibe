@@ -22,6 +22,7 @@ const AUTO_COLS = 16;                // the server writes columns 1-16 only
 const COST_COL = 3, AMOUNT_COL = 17, STATUS_COL = 18, BALANCE_COL = 19;
 const STATUS_TOKEN = "Token paid", STATUS_FULL = "Paid in full";
 const STATUSES = ["Pending", STATUS_TOKEN, STATUS_FULL];
+const CONFIRMED_BG = "#b7e1cd";      // a quote row with this background colour is a CONFIRMED booking (set by the Confirm button in the admin panel)
 
 // ---- Expenses & profit tab ----
 const LEDGER_SHEET = "Expenses";
@@ -42,6 +43,7 @@ function doPost(e) {
     const ss = SHEET_ID ? SpreadsheetApp.openById(SHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
     if (d.action === "list") return out(listRows(ss));
     if (d.action === "pay") return out(payRow(ss, d));
+    if (d.action === "confirm") return out(confirmRow(ss, d));
     if (d.action === "ledger_list") return out(ledgerList(ss));
     if (d.action === "ledger_add") return out(ledgerAdd(ss, d));
     if (d.action === "ledger_delete") return out(ledgerDelete(ss, d));
@@ -93,11 +95,13 @@ function listRows(ss) {
   const sh = ss.getSheetByName(SHEET_NAME);
   if (!sh || sh.getLastRow() < 2) return { ok: true, rows: [] };
   const vals = sh.getRange(2, 1, sh.getLastRow() - 1, AMOUNT_COL).getValues();
-  const rows = vals.map(function (v) {
+  const bgs = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getBackgrounds();
+  const rows = vals.map(function (v, idx) {
     const cost = Number(v[COST_COL - 1]) || 0, paid = Number(v[AMOUNT_COL - 1]) || 0;
     return { name: cellText(v[0]), quote_no: cellText(v[1]), cost: cost, travel_date: cellText(v[3]),
              generated_at: cellText(v[4]), email: cellText(v[5]), booking_amount: paid,
-             status: statusFor(paid, cost), balance: cost - paid };
+             status: statusFor(paid, cost), balance: cost - paid,
+             confirmed: String(bgs[idx][0]).toLowerCase() === CONFIRMED_BG };
   }).filter(function (r) { return r.name || r.quote_no; });
   return { ok: true, rows: rows.reverse() };      // newest first
 }
@@ -123,15 +127,41 @@ function payRow(ss, d) {
   return { ok: false, error: "That quote is not in the sheet." };
 }
 
+// Run one formatting step; if the sheet refuses it (e.g. "can't set the number format of cells in a typed column",
+// which happens when the columns are a Google Sheets table), skip it. The data itself has already been written.
+function tryStep(fn) {
+  try { fn(); } catch (err) { Logger.log("skipped formatting: " + err); }
+}
+
+// Admin panel: Confirm button. Paints the whole quote row green (confirmed: true) or clears the colour (confirmed: false).
+function confirmRow(ss, d) {
+  const sh = ss.getSheetByName(SHEET_NAME);
+  if (!sh || sh.getLastRow() < 2) return { ok: false, error: "Quotes sheet is empty." };
+  const keys = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues();
+  for (let i = keys.length - 1; i >= 0; i--) {         // newest match first
+    if (String(keys[i][0]) === String(d.name) && String(keys[i][1]) === String(d.quote_no)) {
+      const on = d.confirmed === true || d.confirmed === "true";
+      sh.getRange(i + 2, 1, 1, HEADERS.length).setBackground(on ? CONFIRMED_BG : null);
+      return { ok: true, confirmed: on };
+    }
+  }
+  return { ok: false, error: "That quote is not in the sheet." };
+}
+
 // Number formats, the Payment Status dropdown and the Balance formula for one row.
 function finishRow(sh, r) {
-  sh.getRange(r, COST_COL).setNumberFormat("#,##0");
-  sh.getRange(r, AMOUNT_COL).setNumberFormat("#,##0");
+  tryStep(function () { sh.getRange(r, COST_COL).setNumberFormat("#,##0"); });
+  tryStep(function () { sh.getRange(r, AMOUNT_COL).setNumberFormat("#,##0"); });
   const status = sh.getRange(r, STATUS_COL);
-  status.setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(STATUSES, true).setAllowInvalid(true).build());
-  if (status.isBlank()) status.setValue(STATUSES[0]);
-  const bal = sh.getRange(r, BALANCE_COL);
-  bal.setFormula('=IF(OR(Q' + r + '="",C' + r + '=""),"",C' + r + '-Q' + r + ')').setNumberFormat("#,##0");
+  tryStep(function () {
+    status.setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(STATUSES, true).setAllowInvalid(true).build());
+  });
+  tryStep(function () { if (status.isBlank()) status.setValue(STATUSES[0]); });
+  tryStep(function () {
+    const bal = sh.getRange(r, BALANCE_COL);
+    bal.setFormula('=IF(OR(Q' + r + '="",C' + r + '=""),"",C' + r + '-Q' + r + ')');
+    tryStep(function () { bal.setNumberFormat("#,##0"); });
+  });
 }
 
 // Runs by itself whenever you edit the sheet (a simple trigger: nothing to install or authorise).
