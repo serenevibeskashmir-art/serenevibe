@@ -25,6 +25,27 @@ _STANDARD_INCLUDED = (
 )
 
 
+_LABELS = ("START POINT", "END POINT", "TOUR DURATION", "TRAVEL DATE", "TOTAL PACKAGE PRICE", "TRIP SUMMARY",
+           "YOUR STAYS AT A GLANCE", "SIGNATURE EXPERIENCES", "MEAL PLAN", "ROOM TYPE")
+
+
+def _normalize(text):
+    """The headings are letter-spaced, and some readers return them as 'S T A R T' / 'P O I N T' on separate lines.
+    Join the letters back into words and the words back into the labels we look for."""
+    out = []
+    for ln in (text or "").splitlines():
+        ln = ln.strip()
+        if re.fullmatch(r"(?:\S ){2,}\S", ln):
+            ln = ln.replace(" ", "")
+        if ln:
+            out.append(ln)
+    joined = "\n".join(out)
+    for label in _LABELS:
+        joined = re.sub(r"(?m)^" + re.escape(label.replace(" ", "")) + r"$", label, joined)     # 'STARTPOINT' -> 'START POINT'
+        joined = re.sub(r"\n".join(map(re.escape, label.split())), label, joined)
+    return joined
+
+
 def _lines(text):
     return [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
 
@@ -75,12 +96,18 @@ def _hotels(all_lines):
     return names
 
 
-def _generated_at(reader, quote_no):
-    created = None
+def _pdf_date(raw):
+    """'D:20261115081222+05'30'' (PDF date) -> datetime, or None."""
+    m = re.match(r"D?:?(\d{4})(\d{2})(\d{2})(\d{2})?(\d{2})?", str(raw or ""))
+    if not m:
+        return None
     try:
-        created = reader.metadata.creation_date if reader.metadata else None
-    except Exception:
-        created = None
+        return datetime.datetime(int(m[1]), int(m[2]), int(m[3]), int(m[4] or 0), int(m[5] or 0))
+    except ValueError:
+        return None
+
+
+def _generated_at(created, quote_no):
     if created:
         return created.strftime("%d %b %Y %H:%M")
     m = re.match(r"SVK-(\d{2})(\d{2})(\d{2})-", quote_no or "")
@@ -93,14 +120,24 @@ def _generated_at(reader, quote_no):
 
 
 def parse_quote_pdf(data: bytes) -> dict:
-    """Returns {"fields": {...}, "missing": [...]}; raises ValueError when the file is not one of our quotes."""
+    """Read a whole PDF file (used when the PDF itself is uploaded)."""
     try:
         reader = PdfReader(io.BytesIO(data))
         pages = [(p.extract_text() or "") for p in reader.pages]
+        created = reader.metadata.creation_date if reader.metadata else None
     except Exception as exc:
         raise ValueError(f"Could not read this PDF ({exc}).")
-    if not pages or not any(pages):
+    return parse_pages(pages, created)
+
+
+def parse_pages(pages, created=None) -> dict:
+    """Returns {"fields": {...}, "missing": [...]}; raises ValueError when the text is not one of our quotes.
+    `pages` is the text of each PDF page, one text piece per line (the browser sends this, so big PDFs need no upload)."""
+    pages = [_normalize(str(p or "")) for p in (pages or [])][:40]
+    if not pages or not any(p.strip() for p in pages):
         raise ValueError("This PDF has no readable text (it may be a scan or a photo).")
+    if isinstance(created, str):
+        created = _pdf_date(created)
 
     full = "\n".join(pages)
     first = _lines(pages[0])
@@ -162,7 +199,7 @@ def parse_quote_pdf(data: bytes) -> dict:
         "quote_no": quote_no,
         "cost": cost,
         "travel_date": _after(first, "TRAVEL DATE"),
-        "generated_at": _generated_at(reader, quote_no),
+        "generated_at": _generated_at(created, quote_no),
         "email": email,
         "days": days or "",
         "adults": adults or "",
