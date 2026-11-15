@@ -1278,6 +1278,34 @@ def _step_kind(head, desc):
     return "Sightseeing"
 
 
+_PAY_AMBER_BG, _PAY_AMBER_TX = colors.HexColor("#fef3c7"), colors.HexColor("#b45309")
+
+
+def _pay_local_note(head, desc, kind, meal_code, extras):
+    """A short 'pay locally' sentence for a day step whose item is NOT in the package price
+    (lunch, gondola, ...). Empty string when the step is covered or has nothing to pay for.
+    Mirrors the Inclusions & Exclusions page so the day cards never contradict it."""
+    h, d = str(head or "").lower(), str(desc or "").lower()
+    mp = str(meal_code or "MAP").strip().upper()
+    extras = set(extras or [])
+    # Gondola / cable car: only when the step is about riding it (not just "step off the gondola").
+    if re.search(r"gondola|cable car", h) or re.search(r"(second|another|upper)\s+gondola|gondola\s+(lift|ride)", d):
+        phase2 = bool(re.search(r"phase\s*(2|ii)\b|second gondola|apharwat", h + " " + d))
+        key, price, label = (("gondola_p2", "INR 1000", "Phase II") if phase2 else ("gondola_p1", "INR 800", "Phase I"))
+        if key not in extras:
+            return f"Gondola {label} ticket (about {price} per person) is not included. Pay locally."
+        return ""
+    # Meals not covered by the meal plan.
+    if re.search(r"lunch", h) or (kind == "Meal" and "lunch" in d):
+        if mp != "AP":
+            return "Lunch is not included in your meal plan. Pay locally."
+    if re.search(r"dinner", h) and mp in ("EP", "CP"):
+        return "Dinner is not included in your meal plan. Pay locally."
+    if re.search(r"breakfast", h) and mp == "EP":
+        return "Breakfast is not included in your meal plan. Pay locally."
+    return ""
+
+
 class DayBookSpread(Flowable):
     PAD     = 1.5 * mm     # cover border around the pages
     RIB     = 3.0 * mm     # ribbon hanging below the book
@@ -1338,7 +1366,8 @@ class DayBookSpread(Flowable):
                         f = i / (n - 1)
                         kicker = "Morning" if f < 0.34 else "Afternoon" if f < 0.67 else "Evening"
                     sub = _STEP_SUB.get(kind, "")
-            self.rows.append({"kind": kind, "head": head, "desc": desc, "kicker": kicker, "sub": sub})
+            self.rows.append({"kind": kind, "head": head, "desc": desc, "kicker": kicker, "sub": sub,
+                              "pay_note": _raw(s.get("pay_note", "")), "pay_flag": bool(s.get("pay_note"))})
 
     # ── layout ──────────────────────────────────────────────────────────────
     def _page_w(self):
@@ -1361,8 +1390,16 @@ class DayBookSpread(Flowable):
             r["pill_w"] = pdfmetrics.stringWidth(r["kind"], "Lato-Bold", 6.3 * f) + 4.6 * mm * f
             last_w = pdfmetrics.stringWidth(r["h_lines"][-1], "Lato-Bold", self.hs)
             r["pill_inline"] = last_w + 2 * mm + r["pill_w"] <= self.tw
+            r["pay_w"] = pdfmetrics.stringWidth("PAY LOCALLY", "Lato-Bold", 6.3 * f) + 4.6 * mm * f
+            r["pay_said"] = bool(re.search(r"pay (?:for (?:it|them|this) )?(?:locally|yourself|directly)|paid locally", r["desc"], re.I))
+            if r["pay_said"]:
+                r["pay_flag"], r["pay_note"] = True, ""          # the text already says it: keep the tag, skip the repeat line
+            r["pay_pill"] = r["pay_flag"] and ((not r["pill_inline"]) or
+                last_w + 2 * mm + r["pill_w"] + 1.5 * mm + r["pay_w"] <= self.tw)
+            r["p_lines"] = simpleSplit(r["pay_note"], "Lato-Bold", self.ds, self.tw) if r["pay_note"] else []
             head_h = len(r["h_lines"]) * self.hl + (0 if r["pill_inline"] else self.pill_h + 0.6 * mm)
-            body_h = head_h + 0.8 * mm + len(r["d_lines"]) * self.dl
+            body_h = (head_h + 0.8 * mm + len(r["d_lines"]) * self.dl
+                      + (0.8 * mm + len(r["p_lines"]) * self.dl if r["p_lines"] else 0))
             r["h"] = max(2 * self.ICON_R + 0.6 * mm, body_h)
             self.row_h.append(r["h"] + gap)
         self.gap = gap
@@ -1721,11 +1758,21 @@ class DayBookSpread(Flowable):
             c.setFillColor(ring if r["kind"] != "Transfer" else colors.HexColor("#0369a1"))
             c.setFont("Lato-Bold", 6.3 * f)
             c.drawCentredString(px + r["pill_w"] / 2, py + self.pill_h / 2 - 0.85 * mm * f, r["kind"])
+            if r["pay_pill"]:                                   # amber "PAY LOCALLY" tag beside the kind tag
+                qx = px + r["pill_w"] + 1.5 * mm
+                c.setFillColor(_PAY_AMBER_BG); c.roundRect(qx, py, r["pay_w"], self.pill_h, self.pill_h / 2, fill=1, stroke=0)
+                c.setFillColor(_PAY_AMBER_TX); c.setFont("Lato-Bold", 6.3 * f)
+                c.drawCentredString(qx + r["pay_w"] / 2, py + self.pill_h / 2 - 0.85 * mm * f, "PAY LOCALLY")
             # description
             dy = ty - self.dl - 0.2 * mm
             c.setFillColor(GRAY_600); c.setFont("Lato", self.ds)
             for ln in r["d_lines"]:
                 c.drawString(txx, dy, ln); dy -= self.dl
+            if r["p_lines"]:                                    # what to pay for, in amber bold
+                dy -= 0.8 * mm
+                c.setFillColor(_PAY_AMBER_TX); c.setFont("Lato-Bold", self.ds)
+                for ln in r["p_lines"]:
+                    c.drawString(txx, dy, ln); dy -= self.dl
 
         # right footer
         c.setStrokeColor(GRAY_200); c.setLineWidth(0.4)
@@ -6839,6 +6886,10 @@ def generate_pdf(itinerary_data: dict) -> str:
                 first = re.split(r"(?<=[.!?])\s", s_["desc"], 1)[0]
                 words = first.split()
                 s_["head"] = " ".join(words[:5]).rstrip(".,;:") + ("\u2026" if len(words) > 5 else "")
+
+        _mp_code, _ex_list = itinerary_data.get("meal_plan") or "MAP", _extras_list(itinerary_data)
+        for s_ in steps:                                  # lunch / gondola etc. that are not in the price
+            s_["pay_note"] = _pay_local_note(s_["head"], s_["desc"], _step_kind(s_["head"], s_["desc"]), _mp_code, _ex_list)
 
         day_bg = dest_bgs.get(_day_photo_key(day_info))
         _pk = _day_photo_key(day_info)
