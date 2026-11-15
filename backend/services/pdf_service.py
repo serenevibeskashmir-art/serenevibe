@@ -1262,7 +1262,7 @@ def _step_kind(head, desc):
     h, d = str(head or "").lower(), str(desc or "").lower()
     tests = (
         ("Stay",     ("check-in", "check in", "checkin", "overnight", "check-out", "check out", "houseboat stay", "settle in")),
-        ("Transfer", ("transfer", "pickup", "pick-up", "pick up", "drop", "drive", "airport", "departure", "arrival", "journey", "proceed")),
+        ("Transfer", ("transfer", "pickup", "pick-up", "pick up", "drop", "drive", "airport", "departure", "arrival", "journey", "proceed", "return to", "return journey", "travel back", "head back")),
         ("Meal",     ("breakfast", "lunch", "dinner", "meal", "kahwa", "wazwan")),
         ("Activity", ("shikara", "gondola", "ride", "trek", "pony", "sledge", "skiing", "rafting", "cable car", "boat")),
         ("Sightseeing", ("sightseeing", "visit", "explore", "garden", "lake", "temple", "valley", "meadow", "tour", "market", "shrine", "view")),
@@ -1276,6 +1276,62 @@ def _step_kind(head, desc):
             if has(t, words):
                 return kind
     return "Sightseeing"
+
+
+# "... for a tranquil start to your afternoon": the card prints its own Morning / Afternoon label, so the
+# words in the text could only contradict it (also cleans text saved before the AI was fixed).
+_TOD_PHRASE = re.compile(
+    r"\s*,?\s*(?:for|as)\s+(?:a|an|the)\s+[A-Za-z\- ]{0,40}?\b(?:start|beginning|end|close|finish)\s+to\s+(?:your|the)\s+"
+    r"(?:morning|afternoon|evening|day)\b", re.I)
+
+
+def order_day_steps(steps, is_first=False, is_last=False, hk="head", dk="desc"):
+    """Put one day's steps in the order they really happen, and drop repeats.
+    - same heading twice -> one step (the longer text wins)
+    - arrival day: airport pickup first; stay days: drive first, check-in / overnight last,
+      "Return to X" before dinner and check-in
+    - lunch always sits in the middle of the day (never after the afternoon activities)
+    - departure day: breakfast, check-out, the drive, then arrival / drop at the end point"""
+    head = lambda x: str(x.get(hk) or "").lower()
+    out, seen = [], {}
+    for x in steps:
+        x = dict(x)
+        key = re.sub(r"[^a-z0-9]+", " ", head(x)).strip()
+        if key and key in seen:
+            j = seen[key]
+            if len(str(x.get(dk) or "")) > len(str(out[j].get(dk) or "")):
+                out[j][dk] = x.get(dk)
+            continue
+        if key:
+            seen[key] = len(out)
+        out.append(x)
+
+    if is_last:
+        def rank(x):
+            h = head(x)
+            if re.search(r"breakfast|check-?\s?out", h):
+                return 0
+            if re.search(r"drive|journey|scenic|road", h):
+                return 1
+            return 2                                   # arrival / drop / "tour concludes"
+        return sorted(out, key=rank)
+
+    first_re = re.compile(r"pick-?up|airport|meet|arrival|scenic drive|drive to|drive from|depart")
+    last_re = re.compile(r"check-?\s?in|overnight|settle|return|drive back|head back|back to|dinner")
+    lunch_re = re.compile(r"lunch")
+    idx = list(range(len(out)))
+    last_i = [i for i in idx if last_re.search(head(out[i]))]
+    first_i = [i for i in idx if i not in last_i and first_re.search(head(out[i]))]
+    lunch_i = [i for i in idx if i not in last_i and i not in first_i and lunch_re.search(head(out[i]))]
+    mid_i = [i for i in idx if i not in last_i and i not in first_i and i not in lunch_i]
+    if is_first:
+        first_i.sort(key=lambda i: 0 if re.search(r"pick-?up|airport|meet|arrival", head(out[i])) else 1)
+    last_i.sort(key=lambda i: 0 if re.search(r"return|drive back|head back|back to", head(out[i]))
+                else 1 if "dinner" in head(out[i]) else 2)
+    mid_i = [i for i in mid_i if re.search(r"breakfast", head(out[i]))] + [i for i in mid_i if not re.search(r"breakfast", head(out[i]))]
+    pos = (len(mid_i) + 1) // 2
+    mid_i[pos:pos] = lunch_i
+    return [out[i] for i in first_i + mid_i + last_i]
 
 
 _PAY_AMBER_BG, _PAY_AMBER_TX = colors.HexColor("#fef3c7"), colors.HexColor("#b45309")
@@ -1335,6 +1391,8 @@ class DayBookSpread(Flowable):
         n = len(self.steps)
         used_travel = False
         self.rows = []
+        _has_lunch = any("lunch" in str(x.get("head", "")).lower() for x in self.steps)
+        _seen_lunch = _used_afternoon = False
         for i, s in enumerate(self.steps):
             head, desc = _raw(s.get("head", "")), _raw(s.get("desc", ""))
             kind = s.get("kind") or _step_kind(head, desc)
@@ -1350,11 +1408,23 @@ class DayBookSpread(Flowable):
                     sub = _raw(_fmt_drive_time(self.travel["hours"])).capitalize() if self.travel.get("hours") else ""
                 elif kind == "Transfer" and any(w in t for w in ("drop", "departure", "depart")):
                     kicker, sub = "On departure", "Safe journey"
+                elif kind == "Stay" and re.search(r"check-?\s?out", t):
+                    kicker, sub = "Morning", "Check-out"
                 elif kind == "Stay":
                     kicker, sub = "Evening", "Settle in"
                 elif kind == "Meal":
                     kicker = "Morning" if "breakfast" in t else "Midday" if "lunch" in t else "Evening"
                     sub = "Dine"
+                    if "lunch" in t:
+                        _seen_lunch = True
+                elif _has_lunch:                      # labels follow the lunch: before = Morning, after = Afternoon, then Evening
+                    if not _seen_lunch:
+                        kicker = "Morning"
+                    elif not _used_afternoon and kind != "Transfer":
+                        kicker, _used_afternoon = "Afternoon", True
+                    else:
+                        kicker = "Evening"
+                    sub = _STEP_SUB.get(kind, "")
                 else:
                     if n == 1:
                         kicker = "All day"
@@ -1388,10 +1458,11 @@ class DayBookSpread(Flowable):
             r["pill_inline"] = last_w + 2 * mm + r["pill_w"] <= self.tw
             r["pay_w"] = pdfmetrics.stringWidth("PAY LOCALLY", "Lato-Bold", 6.3 * f) + 4.6 * mm * f
             r["pay_said"] = bool(re.search(r"pay (?:for (?:it|them|this) )?(?:locally|yourself|directly)|paid locally", r["desc"], re.I))
-            if r["pay_said"]:
-                r["pay_flag"], r["pay_note"] = True, ""          # the text already says it: keep the tag, skip the repeat line
-            r["pay_pill"] = r["pay_flag"] and ((not r["pill_inline"]) or
-                last_w + 2 * mm + r["pill_w"] + 1.5 * mm + r["pay_w"] <= self.tw)
+            if r["pay_said"] and r["pay_flag"]:
+                r["pay_note"] = ""                               # the text already says it: keep the tag, skip the repeat line
+            if r["pay_flag"] and r["pill_inline"] and last_w + 2 * mm + r["pill_w"] + 1.5 * mm + r["pay_w"] > self.tw:
+                r["pill_inline"] = False                         # both tags together do not fit beside the title: give them their own line
+            r["pay_pill"] = bool(r["pay_flag"])
             r["p_lines"] = simpleSplit(r["pay_note"], "Lato-Bold", self.ds, self.tw) if r["pay_note"] else []
             head_h = len(r["h_lines"]) * self.hl + (0 if r["pill_inline"] else self.pill_h + 0.6 * mm)
             body_h = (head_h + 0.8 * mm + len(r["d_lines"]) * self.dl
@@ -6883,6 +6954,10 @@ def generate_pdf(itinerary_data: dict) -> str:
                 words = first.split()
                 s_["head"] = " ".join(words[:5]).rstrip(".,;:") + ("\u2026" if len(words) > 5 else "")
 
+        _is_dep = idx == len(timeline) and str(overnight or "").strip().lower() in ("", "departure")
+        for s_ in steps:
+            s_["desc"] = _TOD_PHRASE.sub("", s_["desc"]).strip()
+        steps = order_day_steps(steps, is_first=(idx == 1), is_last=_is_dep)
         _mp_code, _ex_list = itinerary_data.get("meal_plan") or "MAP", _extras_list(itinerary_data)
         for s_ in steps:                                  # lunch / gondola etc. that are not in the price
             s_["pay_note"] = _pay_local_note(s_["head"], s_["desc"], _step_kind(s_["head"], s_["desc"]), _mp_code, _ex_list)
