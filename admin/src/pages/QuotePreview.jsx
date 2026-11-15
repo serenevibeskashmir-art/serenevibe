@@ -924,6 +924,8 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
         start_point: startPoint || DEFAULT_POINT,
         end_point: endPoint || DEFAULT_POINT,
         hints: aiHints,
+        meal_plan: mealPlan,
+        included_extras: includedExtras,
         ...extra,
       }),
     });
