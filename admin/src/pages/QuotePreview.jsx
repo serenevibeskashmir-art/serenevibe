@@ -840,6 +840,17 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
     setInclIn("");
   };
   const [mealPlan, setMealPlan] = useState(quote?.meta_summary?.meal_plan || "MAP");   // default MAP
+  // Everything the package does NOT cover. Shown on the Inc/Exc step and sent to the Days AI writer.
+  const excludedList = [
+    ...(mealPlan !== "AP" ? ["Lunch"] : []),
+    ...(includedExtras.includes("gondola_p1") ? [] : ["Gondola Phase 1"]),
+    ...(includedExtras.includes("gondola_p2") ? [] : ["Gondola Phase 2"]),
+    ...[["union_cab_pahalgam", "Pahalgam"], ["union_cab_gulmarg", "Gulmarg"], ["union_cab_sonamarg", "Sonamarg"]]
+      .filter(([k]) => !includedExtras.includes(k)).map(([, p]) => "Union cab, " + p),
+    ...[["snow_chain_gulmarg", "Gulmarg"], ["snow_chain_sonamarg", "Sonamarg"]]
+      .filter(([k]) => !includedExtras.includes(k)).map(([, p]) => "Snow chain vehicle, " + p),
+    ...customIncl.filter((c) => !c.on).map((c) => c.t),
+  ];
   // Vehicle and meal plan are set in the trip form at the top; changing them there updates this quote.
   useEffect(() => { if (trip?.vehicle) setVehicleType(trip.vehicle); }, [trip?.vehicle]);
   useEffect(() => { if (trip?.meal) setMealPlan(trip.meal); }, [trip?.meal]);
@@ -926,6 +937,10 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
         hints: aiHints,
         meal_plan: mealPlan,
         included_extras: includedExtras,
+        cab_other_places: cabOtherPlaces,
+        snow_chain_other_places: snowOtherPlaces,
+        custom_included: customIncl.filter((c) => c.on).map((c) => c.t),
+        custom_excluded: customIncl.filter((c) => !c.on).map((c) => c.t),
         ...extra,
       }),
     });
@@ -1263,7 +1278,7 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
     setActiveDay(n);
   };
   useEffect(() => {
-    if (step === "review") return;
+    if (step === "review" || step === "incexc") return;
     const up = () => {
       window.scrollTo({ top: 0, left: 0 });
       document.documentElement.scrollTop = 0;
@@ -1388,7 +1403,107 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
         </div>
       )}
 
-      {step !== "review" ? (
+      {step === "incexc" ? (
+        /* ───────────── INC / EXC STEP ───────────── */
+        <div className="sv-stack">
+          <section className="sv-card sv-stack">
+            <span className="sv-lbl">Included in the package</span>
+            <div className="sv-stack" style={{ border: "1.5px solid var(--sv-line)", borderRadius: 14, padding: 12, gap: 10 }}>
+              <span className="sv-lbl" style={{ color: "var(--sv-ink)", margin: 0 }}>Union cab included for</span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {[["union_cab_pahalgam", "Pahalgam"], ["union_cab_gulmarg", "Gulmarg"], ["union_cab_sonamarg", "Sonamarg"], ["union_cab_other", "Other"]].map(([k, lab]) => {
+                  const on = includedExtras.includes(k);
+                  return <button key={k} type="button" className={"sv-btn " + (on ? "sv-primary" : "sv-soft")} aria-pressed={on} onClick={() => toggleExtra(k)}>{on ? "✓ " : ""}{lab}</button>;
+                })}
+              </div>
+              {includedExtras.includes("union_cab_other") && (
+                <div className="sv-stack" style={{ gap: 8 }}>
+                  <label className="sv-sub" htmlFor="cab-other-in">Other place(s). Type a name and tap Add.</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input id="cab-other-in" className="sv-inp" value={otherIn} maxLength={40} placeholder="e.g. Doodhpathri" autoComplete="off"
+                      onChange={(e) => setOtherIn(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addOtherPlace(); } }} />
+                    <button type="button" className="sv-btn sv-accent" disabled={!otherIn.trim()} onClick={addOtherPlace}>Add</button>
+                  </div>
+                  {cabOtherPlaces.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {cabOtherPlaces.map((p, i) => (
+                        <button key={p} type="button" className="sv-btn sv-soft" style={{ minHeight: 40 }} aria-label={"Remove " + p}
+                          onClick={() => setCabOtherPlaces((a) => a.filter((_, j) => j !== i))}>{p} ×</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="sv-stack" style={{ border: "1.5px solid var(--sv-line)", borderRadius: 14, padding: 12, gap: 10 }}>
+              <span className="sv-lbl" style={{ color: "var(--sv-ink)", margin: 0 }}>Snow chain vehicle included for</span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {[["snow_chain_gulmarg", "Gulmarg"], ["snow_chain_sonamarg", "Sonamarg"], ["snow_chain_other", "Other"]].map(([k, lab]) => {
+                  const on = includedExtras.includes(k);
+                  return <button key={k} type="button" className={"sv-btn " + (on ? "sv-primary" : "sv-soft")} aria-pressed={on} onClick={() => toggleExtra(k)}>{on ? "✓ " : ""}{lab}</button>;
+                })}
+              </div>
+              {includedExtras.includes("snow_chain_other") && (
+                <div className="sv-stack" style={{ gap: 8 }}>
+                  <label className="sv-sub" htmlFor="snow-other-in">Other place(s). Type a name and tap Add.</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input id="snow-other-in" className="sv-inp" value={snowIn} maxLength={40} placeholder="e.g. Doodhpathri" autoComplete="off"
+                      onChange={(e) => setSnowIn(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSnowPlace(); } }} />
+                    <button type="button" className="sv-btn sv-accent" disabled={!snowIn.trim()} onClick={addSnowPlace}>Add</button>
+                  </div>
+                  {snowOtherPlaces.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      {snowOtherPlaces.map((p, i) => (
+                        <button key={p} type="button" className="sv-btn sv-soft" style={{ minHeight: 40 }} aria-label={"Remove " + p}
+                          onClick={() => setSnowOtherPlaces((a) => a.filter((_, j) => j !== i))}>{p} ×</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            {[["gondola_p1", "Gondola Phase 1"], ["gondola_p2", "Gondola Phase 2"]].map(([k, lab]) => (
+              <button key={k} type="button" className={"sv-sw" + (includedExtras.includes(k) ? " on" : "")} role="switch" aria-checked={includedExtras.includes(k)} onClick={() => toggleExtra(k)}>
+                <span>{lab}</span><i className="box" /></button>
+            ))}
+            <span className="sv-lbl">Your own inclusions</span>
+            {customIncl.length === 0 && <div className="sv-sub">None yet.</div>}
+            {customIncl.map((c, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <button type="button" className={"sv-sw" + (c.on ? " on" : "")} role="switch" aria-checked={c.on}
+                  onClick={() => setCustomIncl((a) => a.map((x, j) => (j === i ? { ...x, on: !x.on } : x)))}>
+                  <span style={{ overflowWrap: "anywhere" }}>{c.t}</span><i className="box" /></button>
+                <button type="button" className="sv-btn sv-danger" style={{ minHeight: 40, padding: "0 12px" }} aria-label={"Delete " + c.t}
+                  onClick={() => setCustomIncl((a) => a.filter((_, j) => j !== i))}>×</button>
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 8 }}>
+              <input id="incl-in" className="sv-inp" value={inclIn} maxLength={80} placeholder="e.g. Pony ride at Pahalgam" autoComplete="off" aria-label="New inclusion"
+                onChange={(e) => setInclIn(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomIncl(); } }} />
+              <button type="button" className="sv-btn sv-accent" disabled={!inclIn.trim() || customIncl.length >= 8} onClick={addCustomIncl}>Add</button>
+            </div>
+            <div className="sv-sub">Switched on, an inclusion prints under What's included on the PDF. Switched off, it is left out. Up to 8.</div>
+            {coupleOn && <div className="sv-sub">Couple add-ons from the Trip step: {(trip?.coupleExtras || []).length ? (trip.coupleExtras || []).map((k) => ({ couple_cake: "Cake Cutting Celebration", couple_bed: "Bed decoration", couple_candle: "Candle light dinner" })[k]).join(", ") : "none ticked"}.</div>}
+            <div className="sv-sub">Anything switched off is listed under exclusions on the PDF.</div>
+          </section>
+
+          <section className="sv-card sv-stack">
+            <div className="sv-sechead">
+              <h3 className="sv-h3">Not included (paid locally)</h3>
+              <span className={"sv-pill " + (excludedList.length ? "warn" : "ok")}>{excludedList.length || "None"}</span>
+            </div>
+            {excludedList.length === 0
+              ? <div className="sv-sub">Everything is in the package price.</div>
+              : <ul style={{ margin: 0, paddingLeft: 18 }}>{excludedList.map((x) => <li key={x} className="sv-sub" style={{ overflowWrap: "anywhere" }}>{x}</li>)}</ul>}
+            <div className="sv-sub">The Days step reads this list: when you write a day with AI, anything here is described as not included and paid locally.{mealPlan !== "AP" ? ` Lunch comes from the meal plan (${mealPlan}) set in Trip.` : ""}</div>
+          </section>
+
+          <div className="sv-pair">
+            <button type="button" className="sv-btn sv-soft" onClick={() => goStep("trip")}><Icon name="back" />Trip</button>
+            <button type="button" className="sv-btn sv-primary" onClick={() => goStep("days")}>Days<Icon name="chev" /></button>
+          </div>
+        </div>
+      ) : step !== "review" ? (
         /* ───────────── DAYS STEP ───────────── */
         <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
           <div className="sv-chips" role="tablist" aria-label="Days" ref={chipsRef}>
@@ -1572,84 +1687,10 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
               <input className="sv-inp sv-big" type="number" inputMode="numeric" value={editableCost} onChange={(e) => setEditableCost(e.target.value)} /></label>
             <button type="button" className={"sv-sw" + (showPerPerson ? " on" : "")} role="switch" aria-checked={showPerPerson} onClick={() => setShowPerPerson((v) => !v)}>
               <span>Show price per person</span><i className="box" /></button>
-            <span className="sv-lbl">Included in the package</span>
-            <div className="sv-stack" style={{ border: "1.5px solid var(--sv-line)", borderRadius: 14, padding: 12, gap: 10 }}>
-              <span className="sv-lbl" style={{ color: "var(--sv-ink)", margin: 0 }}>Union cab included for</span>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {[["union_cab_pahalgam", "Pahalgam"], ["union_cab_gulmarg", "Gulmarg"], ["union_cab_sonamarg", "Sonamarg"], ["union_cab_other", "Other"]].map(([k, lab]) => {
-                  const on = includedExtras.includes(k);
-                  return <button key={k} type="button" className={"sv-btn " + (on ? "sv-primary" : "sv-soft")} aria-pressed={on} onClick={() => toggleExtra(k)}>{on ? "✓ " : ""}{lab}</button>;
-                })}
-              </div>
-              {includedExtras.includes("union_cab_other") && (
-                <div className="sv-stack" style={{ gap: 8 }}>
-                  <label className="sv-sub" htmlFor="cab-other-in">Other place(s). Type a name and tap Add.</label>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input id="cab-other-in" className="sv-inp" value={otherIn} maxLength={40} placeholder="e.g. Doodhpathri" autoComplete="off"
-                      onChange={(e) => setOtherIn(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addOtherPlace(); } }} />
-                    <button type="button" className="sv-btn sv-accent" disabled={!otherIn.trim()} onClick={addOtherPlace}>Add</button>
-                  </div>
-                  {cabOtherPlaces.length > 0 && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      {cabOtherPlaces.map((p, i) => (
-                        <button key={p} type="button" className="sv-btn sv-soft" style={{ minHeight: 40 }} aria-label={"Remove " + p}
-                          onClick={() => setCabOtherPlaces((a) => a.filter((_, j) => j !== i))}>{p} ×</button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="sv-stack" style={{ border: "1.5px solid var(--sv-line)", borderRadius: 14, padding: 12, gap: 10 }}>
-              <span className="sv-lbl" style={{ color: "var(--sv-ink)", margin: 0 }}>Snow chain vehicle included for</span>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {[["snow_chain_gulmarg", "Gulmarg"], ["snow_chain_sonamarg", "Sonamarg"], ["snow_chain_other", "Other"]].map(([k, lab]) => {
-                  const on = includedExtras.includes(k);
-                  return <button key={k} type="button" className={"sv-btn " + (on ? "sv-primary" : "sv-soft")} aria-pressed={on} onClick={() => toggleExtra(k)}>{on ? "✓ " : ""}{lab}</button>;
-                })}
-              </div>
-              {includedExtras.includes("snow_chain_other") && (
-                <div className="sv-stack" style={{ gap: 8 }}>
-                  <label className="sv-sub" htmlFor="snow-other-in">Other place(s). Type a name and tap Add.</label>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input id="snow-other-in" className="sv-inp" value={snowIn} maxLength={40} placeholder="e.g. Doodhpathri" autoComplete="off"
-                      onChange={(e) => setSnowIn(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSnowPlace(); } }} />
-                    <button type="button" className="sv-btn sv-accent" disabled={!snowIn.trim()} onClick={addSnowPlace}>Add</button>
-                  </div>
-                  {snowOtherPlaces.length > 0 && (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      {snowOtherPlaces.map((p, i) => (
-                        <button key={p} type="button" className="sv-btn sv-soft" style={{ minHeight: 40 }} aria-label={"Remove " + p}
-                          onClick={() => setSnowOtherPlaces((a) => a.filter((_, j) => j !== i))}>{p} ×</button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-            {[["gondola_p1", "Gondola Phase 1"], ["gondola_p2", "Gondola Phase 2"]].map(([k, lab]) => (
-              <button key={k} type="button" className={"sv-sw" + (includedExtras.includes(k) ? " on" : "")} role="switch" aria-checked={includedExtras.includes(k)} onClick={() => toggleExtra(k)}>
-                <span>{lab}</span><i className="box" /></button>
-            ))}
-            <span className="sv-lbl">Your own inclusions</span>
-            {customIncl.length === 0 && <div className="sv-sub">None yet.</div>}
-            {customIncl.map((c, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <button type="button" className={"sv-sw" + (c.on ? " on" : "")} role="switch" aria-checked={c.on}
-                  onClick={() => setCustomIncl((a) => a.map((x, j) => (j === i ? { ...x, on: !x.on } : x)))}>
-                  <span style={{ overflowWrap: "anywhere" }}>{c.t}</span><i className="box" /></button>
-                <button type="button" className="sv-btn sv-danger" style={{ minHeight: 40, padding: "0 12px" }} aria-label={"Delete " + c.t}
-                  onClick={() => setCustomIncl((a) => a.filter((_, j) => j !== i))}>×</button>
-              </div>
-            ))}
-            <div style={{ display: "flex", gap: 8 }}>
-              <input id="incl-in" className="sv-inp" value={inclIn} maxLength={80} placeholder="e.g. Pony ride at Pahalgam" autoComplete="off" aria-label="New inclusion"
-                onChange={(e) => setInclIn(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomIncl(); } }} />
-              <button type="button" className="sv-btn sv-accent" disabled={!inclIn.trim() || customIncl.length >= 8} onClick={addCustomIncl}>Add</button>
-            </div>
-            <div className="sv-sub">Switched on, an inclusion prints under What's included on the PDF. Switched off, it is left out. Up to 8.</div>
-            {coupleOn && <div className="sv-sub">Couple add-ons from the Trip step: {(trip?.coupleExtras || []).length ? (trip.coupleExtras || []).map((k) => ({ couple_cake: "Cake Cutting Celebration", couple_bed: "Bed decoration", couple_candle: "Candle light dinner" })[k]).join(", ") : "none ticked"}.</div>}
-            <div className="sv-sub">Anything switched off is listed under exclusions on the PDF.</div>
+            <button type="button" className="sv-sum link" onClick={() => onStep("incexc")}>
+              <span>Inclusions &amp; exclusions</span>
+              <b>{excludedList.length ? `${excludedList.length} paid locally` : "All included"}<small>Tap to change</small></b>
+            </button>
           </section>
 
           <details className="sv-more">
