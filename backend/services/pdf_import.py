@@ -119,7 +119,7 @@ def _generated_at(created, quote_no):
     return ""
 
 
-def parse_quote_pdf(data: bytes) -> dict:
+def parse_quote_pdf(data: bytes, filename="") -> dict:
     """Read a whole PDF file (used when the PDF itself is uploaded)."""
     try:
         reader = PdfReader(io.BytesIO(data))
@@ -127,10 +127,10 @@ def parse_quote_pdf(data: bytes) -> dict:
         created = reader.metadata.creation_date if reader.metadata else None
     except Exception as exc:
         raise ValueError(f"Could not read this PDF ({exc}).")
-    return parse_pages(pages, created)
+    return parse_pages(pages, created, filename)
 
 
-def parse_pages(pages, created=None) -> dict:
+def parse_pages(pages, created=None, filename="") -> dict:
     """Returns {"fields": {...}, "missing": [...]}; raises ValueError when the text is not one of our quotes.
     `pages` is the text of each PDF page, one text piece per line (the browser sends this, so big PDFs need no upload)."""
     pages = [_normalize(str(p or "")) for p in (pages or [])][:40]
@@ -152,11 +152,20 @@ def parse_pages(pages, created=None) -> dict:
     m = re.search(r"Prepared for\s+(.+)", full)
     if m:
         name = m.group(1).strip()
-    if not name:                                                   # one-page fallback: line after "... FOR"
+    notes = []
+    if not name:                                                   # older layout: "CLIENT NAME" label
+        name = _after(first, "CLIENT NAME")
+    if not name:                                                   # line after "... FOR"
         for i, ln in enumerate(first):
             if ln.upper().endswith(" FOR") and i + 1 < len(first):
                 name = first[i + 1]
                 break
+    if not name and filename:                                      # last resort: Kashmir_Tour_Mr.Deepak_Prajapat.pdf
+        stem = re.sub(r"\.pdf$", "", str(filename), flags=re.I)
+        stem = re.sub(r"^Kashmir[_ ]Tour[_ -]*", "", stem, flags=re.I)
+        name = re.sub(r"[_\s]+", " ", stem).strip()
+        if name:
+            notes.append("Client name taken from the file name.")
 
     emails = [e for e in re.findall(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", pages[0]) if e.lower() not in OWN_EMAILS]
     email = next((e for e in emails if not e.startswith("@")), "")
@@ -181,6 +190,17 @@ def parse_pages(pages, created=None) -> dict:
     m = re.search(r"TOTAL PACKAGE PRICE.*?\n\s*INR\s*\n?\s*([\d,]+)", pages[0], re.S)
     if m:
         cost = int(m.group(1).replace(",", ""))
+    if not cost:                                                   # older layout: the biggest INR amount is the total
+        amounts = [int(a.replace(",", "")) for a in re.findall(r"(?:INR|Rs\.?|\u20b9)\s*([\d][\d,]{3,})", full)]
+        amounts = [a for a in amounts if 1000 <= a <= 100_000_000]
+        if amounts:
+            cost = max(amounts)
+            notes.append("Cost taken as the largest amount in the PDF - please check it.")
+
+    if not quote_no and name and created:                          # same format the site prints: SVK-yymmdd-initials
+        initials = "".join(w[0] for w in re.findall(r"[A-Za-z]+", name)[:3]).upper() or "GU"
+        quote_no = f"SVK-{created.strftime('%y%m%d')}-{initials}"
+        notes.append("This PDF has no quote number, so one was made from its date and the client's initials.")
 
     meal = ""
     m = re.search(r"Meal Plan\s+(EP|CP|MAP|AP)\b", full) or re.search(r"MEAL PLAN\s*\n\s*(EP|CP|MAP|AP)\b", full)
@@ -213,4 +233,4 @@ def parse_pages(pages, created=None) -> dict:
         "inclusions": ", ".join(_extras(all_lines)),
     }
     missing = [k for k in ("name", "quote_no", "cost", "travel_date") if not fields[k]]
-    return {"fields": fields, "missing": missing}
+    return {"fields": fields, "missing": missing, "notes": notes}
