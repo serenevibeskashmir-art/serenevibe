@@ -6002,7 +6002,7 @@ class IncludedExcluded(Flowable):
     def draw(self):
         c = self.canv
         self._card(c, 0, self.inc, "What's included", f"{len(self.inc)} items in your price", EMERALD, EMERALD_LITE, True)
-        self._card(c, self.cw + self.GAP, self.exc, "Not included", "Pay directly if you need these", ROSE, colors.HexColor("#ffe4e6"), False)
+        self._card(c, self.cw + self.GAP, self.exc, "Not included", "Pay locally, yourself, if you need these", ROSE, colors.HexColor("#ffe4e6"), False)
 
 
 class PaymentPlan(Flowable):
