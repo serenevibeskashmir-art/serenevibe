@@ -9,6 +9,27 @@ const FILTERS = ['All', 'Pending', 'Token paid', 'Paid in full'];
 const TINT = { 'Pending': ['#fdecc8', '#8a5a00'], 'Token paid': ['#dbeafe', '#1d4ed8'], 'Paid in full': ['#d6f5e3', '#14703b'] };
 const inr = (n) => '₹' + Math.round(n || 0).toLocaleString('en-IN');
 const key = (r) => `${r.name}||${r.quote_no}`;
+const MON = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+
+/* "2027-01-25" or "25 Jan 2027" -> day number (null when the quote says "Flexible" or has no date) */
+function travelDay(s) {
+  const t = String(s || '').trim();
+  let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return Math.floor(Date.UTC(+m[1], +m[2] - 1, +m[3]) / 864e5);
+  m = t.match(/(\d{1,2})\s+([A-Za-z]{3})[A-Za-z]*\.?,?\s+(\d{4})/);
+  if (m && MON[m[2].toLowerCase()] !== undefined) return Math.floor(Date.UTC(+m[3], MON[m[2].toLowerCase()], +m[1]) / 864e5);
+  return null;
+}
+
+/* Nearest upcoming trip first; then quotes with no date; then trips already past (most recent first). */
+function byTravel(a, b) {
+  const now = new Date(), today = Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 864e5);
+  const rank = (d) => (d === null ? 1 : d >= today ? 0 : 2);
+  const da = travelDay(a.travel_date), db = travelDay(b.travel_date);
+  if (rank(da) !== rank(db)) return rank(da) - rank(db);
+  if (da === null) return 0;
+  return rank(da) === 0 ? da - db : db - da;
+}
 
 export default function Payments({ onUnauthorized }) {
   const [rows, setRows]     = useState(null);
@@ -19,6 +40,7 @@ export default function Payments({ onUnauthorized }) {
   const [amount, setAmount] = useState('');
   const [busy, setBusy]     = useState(false);
   const [saved, setSaved]   = useState('');       // key of the row just saved
+  const [confirming, setConfirming] = useState('');   // key of the row whose Confirm is being saved
   const [importing, setImporting] = useState(false);   // the "import old PDFs" panel is open
 
   const load = useCallback(async () => {
@@ -47,8 +69,23 @@ export default function Payments({ onUnauthorized }) {
     const s = q.trim().toLowerCase();
     return (rows || []).filter((r) =>
       (filter === 'All' || r.status === filter) &&
-      (!s || [r.name, r.quote_no, r.email].some((v) => (v || '').toLowerCase().includes(s))));
+      (!s || [r.name, r.quote_no, r.email].some((v) => (v || '').toLowerCase().includes(s)))).sort(byTravel);
   }, [rows, filter, q]);
+
+  const toggleConfirm = async (r) => {
+    const k = key(r), next = !r.confirmed;
+    setConfirming(k); setError('');
+    try {
+      const res = await apiFetch('/api/admin/payments/confirm', {
+        method: 'POST', body: JSON.stringify({ name: r.name, quote_no: r.quote_no, confirmed: next }),
+      });
+      if (res.status === 401) { onUnauthorized && onUnauthorized(); return; }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Could not update the sheet.');
+      setRows((prev) => prev.map((x) => (key(x) === k ? { ...x, confirmed: next } : x)));
+    } catch (e) { setError(e.message); }
+    setConfirming('');
+  };
 
   const start = (r) => {
     setOpen(key(r)); setSaved(''); setError('');
@@ -110,7 +147,7 @@ export default function Payments({ onUnauthorized }) {
         {shown.map((r) => {
           const k = key(r), editing = open === k, [bg, fg] = TINT[r.status] || TINT.Pending;
           return (
-            <div key={k} style={S.card}>
+            <div key={k} style={{ ...S.card, ...(r.confirmed ? S.cardOn : {}) }}>
               <div style={S.top}>
                 <div style={{ minWidth: 0 }}>
                   <b style={S.name}>{r.name}</b>
@@ -125,9 +162,16 @@ export default function Payments({ onUnauthorized }) {
               </div>
 
               {!editing && (
-                <button type="button" style={{ ...S.primary, minHeight: 38, padding: '4px 14px', fontSize: 14 }} onClick={() => start(r)}>
-                  {r.booking_amount > 0 ? 'Change amount' : 'Add booking amount'}
-                </button>
+                <div style={S.btns}>
+                  <button type="button" style={{ ...S.primary, minHeight: 38, padding: '4px 14px', fontSize: 14 }} onClick={() => start(r)}>
+                    {r.booking_amount > 0 ? 'Change amount' : 'Add booking amount'}
+                  </button>
+                  <button type="button" disabled={confirming === k} onClick={() => toggleConfirm(r)}
+                    style={{ ...S.confirm, ...(r.confirmed ? S.confirmOn : {}) }}
+                    title={r.confirmed ? 'Row is green in the sheet. Tap to undo.' : 'Turn this row green in the sheet'}>
+                    {confirming === k ? 'Saving…' : r.confirmed ? '✓ Confirmed' : 'Confirm'}
+                  </button>
+                </div>
               )}
               {saved === k && !editing && <div style={S.ok}>Saved to the sheet.</div>}
 
@@ -186,6 +230,10 @@ const S = {
   nums: { display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, margin: '8px 0' },
   primary: { flex: 1, width: '100%', font: 'inherit', fontWeight: 600, borderRadius: 9, padding: '6px 14px', minHeight: 42, cursor: 'pointer', background: GOLD, border: `1px solid ${GOLD}`, color: '#fff' },
   ghost: { flex: '0 0 auto', font: 'inherit', fontWeight: 600, borderRadius: 9, padding: '6px 14px', minHeight: 42, cursor: 'pointer', background: '#fff', border: `1px solid ${LINE}`, color: INK },
+  cardOn: { background: '#eaf7f0', borderColor: '#7cc8a0' },
+  btns: { display: 'flex', gap: 8 },
+  confirm: { flex: '0 0 auto', font: 'inherit', fontSize: 14, fontWeight: 700, borderRadius: 9, padding: '4px 14px', minHeight: 38, cursor: 'pointer', background: '#fff', border: '1px solid #2e9e66', color: '#1b7a4b' },
+  confirmOn: { background: '#2e9e66', color: '#fff' },
   edit: { borderTop: `1px solid ${LINE}`, paddingTop: 8 },
   label: { display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 },
   quick: { display: 'flex', gap: 6, flexWrap: 'wrap', margin: '8px 0 4px' },
