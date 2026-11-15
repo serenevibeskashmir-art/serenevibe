@@ -18,7 +18,7 @@ _STANDARD_INCLUDED = (
     re.compile(r"^0?1\s+.+\s+for all tours and transfers", re.I),
     re.compile(r"^Sightseeing tours as per the itinerary", re.I),
     re.compile(r"^Stay at the hotels mentioned", re.I),
-    re.compile(r"^Meal Plan\b", re.I),
+    re.compile(r"^Meals?\b", re.I),
     re.compile(r"^Accommodation (as per|on)\b", re.I),
     re.compile(r"^0?1 Hour complimentary Shikara", re.I),
     re.compile(r"^Toll taxes, fuel charges", re.I),
@@ -61,20 +61,74 @@ def _after(lines, label, skip=()):
 
 def _extras(all_lines):
     """Optional extras printed in 'What's included' (Union cab, Snow chain, Gondola, couple items ...)."""
-    try:
-        start = next(i for i, ln in enumerate(all_lines) if ln.lower() == "what's included")
-        end = next(i for i in range(start, len(all_lines)) if all_lines[i].lower() == "not included")
-    except StopIteration:
+    start = end = None
+    for i, ln in enumerate(all_lines):
+        if ln.lower() == "what's included":
+            start = i
+        elif start is None and ln.upper() == "INCLUSIONS" and i + 1 < len(all_lines) and all_lines[i + 1].upper() == "EXCLUSIONS":
+            start = i + 1                                           # older layout: INCLUSIONS / EXCLUSIONS columns
+        if start is not None and i > start and ln.lower() in ("not included", "exclusions", "payment schedule"):
+            end = i
+            break
+    if start is None or end is None:
         return []
-    items = []
-    for ln in all_lines[start + 1:end]:
-        if re.match(r"^\d+\s+items?\s+in your price", ln, re.I):
+    segment = all_lines[start + 1:end]
+    marked = any(ln in ("+", "x") for ln in segment)                # older layout marks each line + (included) or x (excluded)
+    items, keep = [], not marked
+    for ln in segment:
+        if ln == "+":
+            keep = True
+            continue
+        if ln == "x":
+            keep = False
+            continue
+        if not keep or re.match(r"^\d+\s+items?\s+in your price", ln, re.I) or ln in ("\u2713", "\u2717"):
             continue
         if items and (ln[0].islower() or ln[0] in ")(&"):      # wrapped line: belongs to the item above
             items[-1] += " " + ln
         else:
             items.append(ln)
     return [it for it in items if not any(p.match(it) for p in _STANDARD_INCLUDED)]
+
+
+_MEAL_WORDS = (("EP", r"room only|no meals"), ("AP", r"lunch"), ("MAP", r"dinner"), ("CP", r"breakfast"))
+
+
+def _meal_code(text):
+    """'Breakfast & Dinner' -> MAP, 'Breakfast' -> CP, all three meals -> AP, 'Room only' -> EP."""
+    t = str(text or "")
+    for code, pat in _MEAL_WORDS:
+        if re.search(pat, t, re.I):
+            if code == "AP" and not re.search(r"breakfast", t, re.I):
+                continue
+            return code
+    return ""
+
+
+def _assignments(all_lines):
+    """Older layout: a 'HOTEL ASSIGNMENTS' table of Day / Hotel / Location / Meal plan rows."""
+    try:
+        start = next(i for i, ln in enumerate(all_lines) if ln.upper() == "HOTEL ASSIGNMENTS")
+    except StopIteration:
+        return [], ""
+    hotels, meals = [], []
+    i = start + 1
+    while i < len(all_lines) and not re.match(r"^Day \d+$", all_lines[i]):
+        if all_lines[i].upper() == "YOUR STAYS AT A GLANCE":
+            return [], ""
+        i += 1
+    while i < len(all_lines) and re.match(r"^Day \d+$", all_lines[i]):
+        row = []
+        i += 1
+        while i < len(all_lines) and not re.match(r"^Day \d+$", all_lines[i]) and all_lines[i].upper() != "YOUR STAYS AT A GLANCE":
+            row.append(all_lines[i])
+            i += 1
+        if len(row) >= 3 and row[0].lower() != "departure":
+            if row[0] not in hotels:
+                hotels.append(row[0])
+            meals.append(_meal_code(row[2]))
+    meal = next((m for m in meals if m), "")
+    return hotels, meal
 
 
 def _hotels(all_lines):
@@ -98,13 +152,17 @@ def _hotels(all_lines):
 
 def _pdf_date(raw):
     """'D:20261115081222+05'30'' (PDF date) -> datetime, or None."""
-    m = re.match(r"D?:?(\d{4})(\d{2})(\d{2})(\d{2})?(\d{2})?", str(raw or ""))
+    m = re.match(r"D?:?(\d{4})(\d{2})(\d{2})(\d{2})?(\d{2})?(\d{2})?(?:([+-])(\d{2})'?(\d{2})?)?", str(raw or ""))
     if not m:
         return None
     try:
-        return datetime.datetime(int(m[1]), int(m[2]), int(m[3]), int(m[4] or 0), int(m[5] or 0))
+        d = datetime.datetime(int(m[1]), int(m[2]), int(m[3]), int(m[4] or 0), int(m[5] or 0))
     except ValueError:
         return None
+    if m[7]:                                                        # has a UTC offset: show it in Indian time
+        off = datetime.timedelta(hours=int(m[8]), minutes=int(m[9] or 0)) * (1 if m[7] == "+" else -1)
+        d = d - off + datetime.timedelta(hours=5, minutes=30)
+    return d
 
 
 def _generated_at(created, quote_no):
@@ -174,6 +232,10 @@ def parse_pages(pages, created=None, filename="") -> dict:
     m = re.search(r"(\d+)\s*N\s*/\s*(\d+)\s*D", pages[0])
     if m:
         days = int(m.group(2))
+    if not days:                                                   # older layout: "6 Days"
+        m = re.search(r"(\d+)\s*Days?\b", _after(first, "TOUR DURATION") or "", re.I)
+        if m:
+            days = int(m.group(1))
 
     guests_txt = _after(first, "GUESTS")
     adults, kids = 0, 0
@@ -190,7 +252,11 @@ def parse_pages(pages, created=None, filename="") -> dict:
     m = re.search(r"TOTAL PACKAGE PRICE.*?\n\s*INR\s*\n?\s*([\d,]+)", pages[0], re.S)
     if m:
         cost = int(m.group(1).replace(",", ""))
-    if not cost:                                                   # older layout: the biggest INR amount is the total
+    if not cost:                                                   # older layout: "ESTIMATED TOTAL COST  INR 62,000"
+        m = re.search(r"ESTIMATED\s+TOTAL\s+COST\s*\n?\s*INR\s*([\d,]+)", full, re.I)
+        if m:
+            cost = int(m.group(1).replace(",", ""))
+    if not cost:                                                   # last resort: the biggest INR amount is the total
         amounts = [int(a.replace(",", "")) for a in re.findall(r"(?:INR|Rs\.?|\u20b9)\s*([\d][\d,]{3,})", full)]
         amounts = [a for a in amounts if 1000 <= a <= 100_000_000]
         if amounts:
@@ -206,6 +272,13 @@ def parse_pages(pages, created=None, filename="") -> dict:
     m = re.search(r"Meal Plan\s+(EP|CP|MAP|AP)\b", full) or re.search(r"MEAL PLAN\s*\n\s*(EP|CP|MAP|AP)\b", full)
     if m:
         meal = m.group(1)
+    assigned_hotels, assigned_meal = _assignments(all_lines)
+    if not meal:
+        meal = assigned_meal
+    if not meal:                                                   # "Meals - Breakfast and Dinner" in the inclusions
+        m = re.search(r"^Meals?\s*[-:]\s*(.+)$", full, re.M | re.I)
+        if m:
+            meal = _meal_code(m.group(1))
 
     tier = ""
     if quote_no:
@@ -213,6 +286,8 @@ def parse_pages(pages, created=None, filename="") -> dict:
         if m:
             cand = m.group(1).strip().upper()
             tier = next((t.title() if t != "MID-RANGE" else "Mid-Range" for t in TIERS if cand.startswith(t)), "")
+    if not tier:
+        tier = _after(first, "BUDGET TIER")                        # older layout
 
     fields = {
         "name": name,
@@ -229,7 +304,7 @@ def parse_pages(pages, created=None, filename="") -> dict:
         "meal_plan": meal,
         "pickup": _after(first, "START POINT"),
         "drop": _after(first, "END POINT"),
-        "hotels": ", ".join(_hotels(all_lines)),
+        "hotels": ", ".join(assigned_hotels or _hotels(all_lines)),
         "inclusions": ", ".join(_extras(all_lines)),
     }
     missing = [k for k in ("name", "quote_no", "cost", "travel_date") if not fields[k]]
