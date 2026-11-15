@@ -13,6 +13,23 @@ const MORE = [
 ];
 let seq = 0;
 
+/* Reads the text of a PDF inside the browser, so the PDF itself (often several MB with photos) is never uploaded. */
+async function readPdfText(file) {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const worker = (await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url')).default;
+  pdfjs.GlobalWorkerOptions.workerSrc = worker;
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+  const pages = [];
+  for (let i = 1; i <= Math.min(doc.numPages, 40); i++) {
+    const tc = await (await doc.getPage(i)).getTextContent();
+    pages.push(tc.items.map((it) => it.str).filter((t) => t && t.trim()).join('\n'));
+  }
+  let created = '';
+  try { created = (await doc.getMetadata()).info.CreationDate || ''; } catch (e) { /* optional */ }
+  doc.destroy();
+  return { pages, created };
+}
+
 export default function ImportPdfs({ existing, onUnauthorized, onImported }) {
   const [items, setItems] = useState([]);
   const [reading, setReading] = useState(false);
@@ -37,12 +54,16 @@ export default function ImportPdfs({ existing, onUnauthorized, onImported }) {
     e.target.value = '';
     if (!files.length) return;
     setReading(true);
-    for (const file of files) {                       // one request per file: stays under the host's size and time limits
+    for (const file of files) {                       // one request per file (only its text is sent, a few KB)
       const id = ++seq;
       setItems((prev) => [...prev, { id, file: file.name, state: 'reading', fields: {}, error: '' }]);
       try {
-        const fd = new FormData(); fd.append('file', file);
-        const data = await post('/api/admin/payments/import/parse', { method: 'POST', body: fd });
+        let text;
+        try { text = await readPdfText(file); }
+        catch (e) { throw new Error('Could not open this file as a PDF.'); }
+        const data = await post('/api/admin/payments/import/parse', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(text),
+        });
         patch(id, { state: 'ready', fields: data.fields, missing: data.missing });
       } catch (err) { patch(id, { state: 'failed', error: err.message }); }
     }
