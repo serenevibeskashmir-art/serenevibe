@@ -202,8 +202,8 @@ def inclusions_block() -> str:
         return "(Not available right now. If asked what is included or excluded, say our team will confirm.)"
     lines = ["INCLUDED in the standard tour price:"]
     lines += [f"- {item}" for item in content["inclusions"]]
-    lines += ["NOT INCLUDED (paid separately by the traveller):"]
-    lines += [f"- {item}" for item in content["exclusions"]]
+    lines += ["NOT INCLUDED - THE TRAVELLER PAYS FOR THESE THEMSELVES, LOCALLY (not part of the tour price):"]
+    lines += [f"- {item}  [PAY LOCALLY]" for item in content["exclusions"]]
     return "\n".join(lines)
 
 
