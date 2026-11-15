@@ -2,6 +2,7 @@
 
     GET  /api/admin/payments               -> {"rows": [...]}  (newest quote first)
     POST /api/admin/payments               -> body {name, quote_no, amount}; writes Booking Amount + Payment Status into the sheet
+    POST /api/admin/payments/confirm       -> body {name, quote_no, confirmed}; paints that quote's row green (or clears it) in the sheet
     POST /api/admin/payments/import/parse  -> JSON {pages: [text of each PDF page], created}  (the browser reads the PDF, so size does not matter)
                                               or multipart "file" (a small PDF); returns the fields read from it
     POST /api/admin/payments/import        -> body {name, quote_no, cost, travel_date, ...}; adds / updates that quote's row in the sheet
@@ -46,6 +47,20 @@ def save_payment():
     if error:
         return jsonify({"error": error}), 502
     return jsonify({"ok": True, "row": data.get("row")})
+
+
+@payments_bp.post("/admin/payments/confirm")
+@admin_required
+def confirm_quote():
+    body = request.get_json(silent=True) or {}
+    name = str(body.get("name") or "").strip()
+    quote_no = str(body.get("quote_no") or "").strip()
+    if not name or not quote_no:
+        return jsonify({"error": "Quote not specified."}), 400
+    data, error = call_script("confirm", {"name": name, "quote_no": quote_no, "confirmed": bool(body.get("confirmed"))})
+    if error:
+        return jsonify({"error": error}), 502
+    return jsonify({"ok": True, "confirmed": bool(data.get("confirmed"))})
 
 
 @payments_bp.post("/admin/payments/import/parse")
