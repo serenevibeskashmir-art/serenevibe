@@ -32,7 +32,11 @@ STOPS = {   # keep in sync with KashmirRouteMap.STOPS (lat, lon)
     "gulmarg":     (34.0484, 74.3805),
     "pahalgam":    (34.0161, 75.3147),
     "sonamarg":    (34.3088, 75.2969),
-    "doodhpathri": (33.8700, 74.3700),
+    "doodhpathri": (33.8500, 74.5600),
+    "yusmarg":     (33.8400, 74.6500),
+    "gurez":       (34.6270, 74.8420),
+    "katra":       (32.9916, 74.9455),
+    "jammu":       (32.7266, 74.8570),
 }
 OSRM = "https://router.project-osrm.org/route/v1/driving/{a};{b}?overview=full&geometries=geojson"
 
@@ -67,6 +71,15 @@ def build_routes(out_dir):
         pts[0], pts[-1] = hub, (lat, lon)                                 # pins stay exactly on the road ends
         routes[key] = [[round(a, 5), round(b, 5)] for a, b in pts]
         print(f"  route {key}: {len(coords)} -> {len(pts)} points, {data['routes'][0]['distance']/1000:.0f} km")
+    # Katra <-> Jammu is its own road (not routed through Srinagar)
+    (ka, ko), (ja, jo) = STOPS["katra"][:2], STOPS["jammu"][:2]
+    url = OSRM.format(a=f"{ko},{ka}", b=f"{jo},{ja}")
+    data = requests.get(url, timeout=30, headers={"User-Agent": sm.USER_AGENT}).json()
+    coords = data["routes"][0]["geometry"]["coordinates"]
+    pts = rdp([(la, lo) for lo, la in coords], 0.0004)
+    pts[0], pts[-1] = STOPS["katra"], STOPS["jammu"]
+    routes["katra-jammu"] = [[round(a, 5), round(b, 5)] for a, b in pts]
+    print(f"  route katra-jammu: {len(coords)} -> {len(pts)} points")
     (out_dir / "routes.json").write_text(json.dumps(routes))
 
 
