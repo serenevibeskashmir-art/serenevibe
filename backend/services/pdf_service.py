@@ -4345,7 +4345,46 @@ def _apply_points(timeline, start, end):
             if end != DEFAULT_POINT:
                 v = re.sub(r"^Airport Drop-Departure", f"{end} Drop-Departure", v)
             day[k] = v
+        _ensure_local_sightseeing(day)
     return tl
+
+
+_TRANSFER_WORDS = re.compile(
+    r"\b(pick-?up|airport|railway|station|meet|greet|welcome|transfer|drive|journey|check-?in|check-?out|"
+    r"settle|arriv\w*|hotel|overnight|accommodation|return|depart\w*|luggage|relax|dinner|breakfast)\b", re.I)
+
+
+def _ensure_local_sightseeing(day):
+    """A day named "... and Local Sightseeing" must list some sightseeing.  If its steps are only pickup,
+    road transfer and hotel check-in, one sightseeing step is added before the check-in so the title is
+    true.  Days that already list sightseeing are left exactly as written."""
+    sig = f"{day.get('title', '')} {day.get('transit_route', '')}"
+    if not re.search(r"\s+and\s+local\s+sightseeing", sig, re.I):
+        return
+    sched = day.get("schedule")
+    if not isinstance(sched, list):
+        return
+    for slot in sched:
+        head = str(slot.get("activity_title") or "").strip()
+        desc = str(slot.get("description") or slot.get("activity") or "").strip()
+        text = head or re.split(r"(?<=[.!?])\s", desc, 1)[0]
+        if text and not _TRANSFER_WORDS.search(text):
+            return                                   # a real sightseeing step exists
+    city = str(day.get("overnight_stay") or "").split(":")[0].strip().title() or "Srinagar"
+    if city.lower() == "srinagar":
+        desc = ("Visit the Mughal gardens of Nishat Bagh and Shalimar Bagh, Chashma Shahi and Pari Mahal, "
+                "then spend the evening beside Dal Lake before heading back to your hotel.")
+        head = "Srinagar Local Sightseeing"
+    else:
+        desc = f"Enjoy local sightseeing around {city} before settling in at your hotel."
+        head = f"{city} Local Sightseeing"
+    step = {"time_slot": "Afternoon", "activity_title": head, "description": desc}
+    last = sched[-1] if sched else None
+    last_txt = f"{(last or {}).get('activity_title', '')} {(last or {}).get('description', '')}".lower()
+    if last and ("check-in" in last_txt or "check in" in last_txt or "settle" in last_txt):
+        sched.insert(len(sched) - 1, step)
+    else:
+        sched.append(step)
 
 
 def _start_dt(start_date):
@@ -7121,7 +7160,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         ("15–29 days before departure",       "25% of total tour cost",   "Amount paid minus 25% of total cost",   "7–10 working days"),
         ("7–14 days before departure",        "50% of total tour cost",   "Amount paid minus 50% of total cost",   "10–14 working days"),
         ("Less than 7 days / No Show",        "100% of total tour cost",  "Nil",                                    "Not applicable"),
-        ("Natural Calamity / Force Majeure",  "Credit note for future travel", "—",                                 "As per T&C"),
+        ("Natural Calamity / Force Majeure",  "Credit note for future travel, valid 12 months", "—",              "See Terms clause 9"),
     ]
     # the cards are built from canc_data, so editing that list above changes the PDF (and the AI assistant)
     canc_tiers = []
@@ -7129,7 +7168,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         _pct = int(re.sub(r"[^0-9]", "", _chg.split("%")[0]) or 0)     # charge % drives the card
         canc_tiers.append((_when, _pct, _ref, _proc))
     _fm = canc_data[4]
-    _canc = CancellationLadder(usable_w, canc_tiers, _fm[0], _fm[1] + ", " + _fm[3].lower() + ".")
+    _canc = CancellationLadder(usable_w, canc_tiers, _fm[0], _fm[1] + " (" + _fm[3] + ").")
     travel_notes = [
         ("ID & Documentation",
          "Every guest must carry a valid government-issued photo ID (Aadhaar / Passport / Voter ID) "
@@ -7160,8 +7199,14 @@ def generate_pdf(itinerary_data: dict) -> str:
     _contact = ContactCard(usable_w, ["+91-9419766510", "+91-9858355260"], "serenevibeskashmir@gmail.com",
                            "www.serenevibeskashmir.com", "Mon–Sat, 9:00 AM – 7:00 PM IST",
                            "NH-44, Lethpora, Jammu & Kashmir – 192122", BUSINESS_GST_NO or "")
+    _canc_note = Paragraph(
+        "<b>How refunds work.</b> The charge is a percentage of the total tour cost; your refund is the amount "
+        "you have paid minus that charge. If the charge is more than you have paid, the balance is payable. "
+        "If Serene Vibes cancels for any reason other than force majeure, you receive a full refund.",
+        ParagraphStyle("canc_note", fontName="Lato", fontSize=7, leading=9.2, textColor=GRAY_600))
     _p2_parts = lambda: [
-        SectionTitle(usable_w, "CANCELLATION POLICY", icon=""), Spacer(1, 3*mm), _canc, Spacer(1, 5*mm),
+        SectionTitle(usable_w, "CANCELLATION POLICY", icon=""), Spacer(1, 3*mm), _canc, Spacer(1, 2*mm),
+        _canc_note, Spacer(1, 4*mm),
         SectionTitle(usable_w, "IMPORTANT TRAVEL NOTES", icon=""), Spacer(1, 3*mm), _notes, Spacer(1, 5*mm),
         SectionTitle(usable_w, "GET IN TOUCH WITH US", icon=""), Spacer(1, 3*mm), _contact,
     ]
@@ -7209,14 +7254,18 @@ def generate_pdf(itinerary_data: dict) -> str:
          "attract a penalty of INR 500 per instance; the agency reserves the right to take legal action."),
 
         ("Cancellations & Refunds",
-         "Cancellation charges and refunds follow the Cancellation Policy in this document. Any alteration or "
-         "cancellation after the tour begins may incur penalties, and refunds are not applicable for unused "
-         "services. Send refund requests to serenevibeskashmir@gmail.com before the trip starts. Amounts held by "
-         "hotels are refunded only upon recovery from the respective vendor."),
+         "Cancellation charges and refunds follow the Cancellation Policy in this document: the charge is a "
+         "percentage of the total tour cost and the refund is the amount paid minus that charge. If the charge "
+         "is more than the amount paid, the balance is payable by the guest. If the agency cancels for any "
+         "reason other than force majeure, the guest receives a full refund. Any alteration or cancellation "
+         "after the tour begins may incur penalties, and refunds are not applicable for unused services. Send "
+         "refund requests to serenevibeskashmir@gmail.com before the trip starts."),
 
-        ("Pandemic Limitation",
-         "If the tour cannot be availed due to a pandemic, the agency will provide either a refund or "
-         "a credit note for future travel, subject to third-party vendor (hotel / transport) conditions."),
+        ("Force Majeure & Pandemic",
+         "If the tour cannot be availed due to a natural calamity, pandemic, road closure by the authorities or "
+         "another force majeure event, the agency will issue a credit note for future travel, valid for 12 months "
+         "from the date of issue, or a refund where the hotel or transport vendors refund the agency. Amounts "
+         "held by vendors are credited or refunded once recovered from them."),
 
         ("Extra Costs",
          "If the Government of India revises taxes or fuel costs after tour finalisation, the incremental "
