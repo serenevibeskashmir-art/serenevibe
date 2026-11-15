@@ -55,7 +55,7 @@ def import_parse():
     body = request.get_json(silent=True)
     if isinstance(body, dict) and isinstance(body.get("pages"), list):
         try:
-            return jsonify(parse_pages(body["pages"], body.get("created")))
+            return jsonify(parse_pages(body["pages"], body.get("created"), str(body.get("filename") or "")))
         except ValueError as exc:
             return jsonify({"error": str(exc)}), 422
     f = request.files.get("file")
@@ -67,7 +67,7 @@ def import_parse():
     if not data.startswith(b"%PDF"):
         return jsonify({"error": "This is not a PDF file."}), 400
     try:
-        result = parse_quote_pdf(data)
+        result = parse_quote_pdf(data, f.filename or "")
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 422
     return jsonify(result)
