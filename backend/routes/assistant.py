@@ -568,6 +568,10 @@ def _describe_user_prompt(body: dict) -> str:
     if kind == "arrival":
         lines.append(f"THIS DAY: guests arrive and are picked up at {frm}, then travel by road to {to}. They sleep in {night or to} tonight. "
                      f"Write the pickup, the road journey (use the road distance from FACTS only if it is between Srinagar and a listed destination; otherwise do not state a distance) and hotel check-in. Do not add sightseeing outside {night or to}.")
+        if "local sightseeing" in g("route").lower():
+            lines.append(f"The route is \"Airport Pickup and Local Sightseeing\", so the day MUST include one or two sightseeing activities in {night or to} "
+                         f"(only {night or to} attractions from FACTS, with \"if conditions allow\" for anything seasonal), placed between the road transfer and the hotel check-in. "
+                         "The hotel check-in is still the last activity.")
     elif kind == "departure":
         lines.append(f"THIS DAY: departure. Guests leave {frm} after breakfast and check-out and are dropped at {to}. No overnight stay. Keep it to 2-3 short activities with no new sightseeing.")
     elif kind == "transfer":
