@@ -127,7 +127,7 @@ def _point_info(raw):
 MEAL_PLANS = {
     "EP": "Room only. No meals included.",
     "CP": "Room + Breakfast",
-    "MAP": "Room + Breakfast + One major meal (Lunch or Dinner)",
+    "MAP": "Room + Breakfast + Dinner",
     "AP": "Room + Breakfast + Lunch + Dinner (All meals)",
 }
 
