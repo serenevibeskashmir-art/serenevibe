@@ -1283,7 +1283,7 @@ _PAY_AMBER_BG, _PAY_AMBER_TX = colors.HexColor("#fef3c7"), colors.HexColor("#b45
 
 def _pay_local_note(head, desc, kind, meal_code, extras):
     """A short 'pay locally' sentence for a day step whose item is NOT in the package price
-    (lunch, gondola, ...). Empty string when the step is covered or has nothing to pay for.
+    (only lunch and gondola). Empty string when the step is covered or has nothing to pay for.
     Mirrors the Inclusions & Exclusions page so the day cards never contradict it."""
     h, d = str(head or "").lower(), str(desc or "").lower()
     mp = str(meal_code or "MAP").strip().upper()
@@ -1295,14 +1295,10 @@ def _pay_local_note(head, desc, kind, meal_code, extras):
         if key not in extras:
             return f"Gondola {label} ticket (about {price} per person) is not included. Pay locally."
         return ""
-    # Meals not covered by the meal plan.
+    # Lunch is the only meal tagged (it is not in MAP / CP / EP).
     if re.search(r"lunch", h) or (kind == "Meal" and "lunch" in d):
         if mp != "AP":
             return "Lunch is not included in your meal plan. Pay locally."
-    if re.search(r"dinner", h) and mp in ("EP", "CP"):
-        return "Dinner is not included in your meal plan. Pay locally."
-    if re.search(r"breakfast", h) and mp == "EP":
-        return "Breakfast is not included in your meal plan. Pay locally."
     return ""
 
 
