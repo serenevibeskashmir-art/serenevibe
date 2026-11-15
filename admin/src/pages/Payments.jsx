@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '../api';
+import ImportPdfs from './ImportPdfs';
 
 /* Payments: the quotes logged in your Google Sheet, with the amount each client has paid.
    Enter an amount here and it is written straight into the sheet (Booking Amount + Payment Status). */
@@ -18,6 +19,7 @@ export default function Payments({ onUnauthorized }) {
   const [amount, setAmount] = useState('');
   const [busy, setBusy]     = useState(false);
   const [saved, setSaved]   = useState('');       // key of the row just saved
+  const [importing, setImporting] = useState(false);   // the "import old PDFs" panel is open
 
   const load = useCallback(async () => {
     setError('');
@@ -75,6 +77,11 @@ export default function Payments({ onUnauthorized }) {
     <section style={S.page}>
       <div style={S.wrap}>
         <p style={S.text}>Every quote you generate is logged in your Google Sheet. Enter what a client has paid and the sheet is updated for you.</p>
+
+        <button type="button" style={{ ...S.ghost, width: '100%', marginBottom: 8 }} onClick={() => setImporting((v) => !v)}>
+          {importing ? 'Close PDF import' : 'Import old itinerary PDFs'}
+        </button>
+        {importing && <ImportPdfs existing={rows} onUnauthorized={onUnauthorized} onImported={load} />}
 
         {rows && (
           <div style={S.stats}>
