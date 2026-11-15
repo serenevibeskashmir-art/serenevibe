@@ -1397,6 +1397,55 @@ class DayBookSpread(Flowable):
         return self.width, self.height
 
     # ── drawing helpers ─────────────────────────────────────────────────────
+    def _route_band_multi(self, c, lx, pw, ry, pts):
+        """Route band for a day with 3+ stops (Srinagar - Gulmarg - Srinagar): a dot and name per stop,
+        joined by dashed road with a little car on each stretch that has room."""
+        n = len(pts)
+        size, mw = 8.2, pw * 0.26
+        def fit_(t):
+            while pdfmetrics.stringWidth(t, "Lato-Bold", size) > mw and len(t) > 5:
+                t = t[:-2].rstrip() + "\u2026"
+            return t
+        pts = [fit_(t) for t in pts]
+        wid = [pdfmetrics.stringWidth(t, "Lato-Bold", size) for t in pts]
+        left, right = lx + 4.2 * mm, lx + pw - 4.2 * mm
+        cy = ry + 1.0 * mm
+        xin, xout, dots = [None] * n, [None] * n, []
+        for i, t in enumerate(pts):
+            if i == 0:
+                dots.append((left, "start")); tx = left + 3 * mm
+                c.setFillColor(NAVY); c.setFont("Lato-Bold", size); c.drawString(tx, ry - 0.2 * mm, t)
+                xout[i] = tx + wid[i] + 2.5 * mm
+            elif i == n - 1:
+                dots.append((right, "end")); tx = right - 3 * mm - wid[i]
+                c.setFillColor(NAVY); c.setFont("Lato-Bold", size); c.drawString(tx, ry - 0.2 * mm, t)
+                xin[i] = tx - 2.5 * mm
+            else:
+                cx = left + (right - left) * i / (n - 1)
+                tx = cx - wid[i] / 2 + 1.5 * mm
+                dots.append((tx - 3 * mm, "mid"))
+                c.setFillColor(NAVY); c.setFont("Lato-Bold", size); c.drawString(tx, ry - 0.2 * mm, t)
+                xin[i] = tx - 3 * mm - 1.8 * mm
+                xout[i] = tx + wid[i] + 2.5 * mm
+        for i in range(n - 1):
+            x1, x2 = xout[i], xin[i + 1]
+            if x2 - x1 > 4 * mm:
+                c.setStrokeColor(SKY); c.setLineWidth(0.9); c.setDash(1.6, 1.4)
+                if x2 - x1 > 12 * mm:
+                    mx = (x1 + x2) / 2
+                    c.line(x1, cy, mx - 3.4 * mm, cy); c.line(mx + 3.4 * mm, cy, x2, cy); c.setDash()
+                    c.setFillColor(WHITE); c.setStrokeColor(SKY); c.setLineWidth(1.0)
+                    c.circle(mx, cy, 3.0 * mm, fill=1, stroke=1)
+                    self._icon(c, "car", mx, cy, SKY)
+                else:
+                    c.line(x1, cy, x2, cy); c.setDash()
+        for x, kind in dots:
+            if kind == "end":
+                c.setFillColor(TEAL); c.circle(x, cy, 1.35 * mm, fill=1, stroke=0)
+            else:
+                c.setStrokeColor(SKY); c.setLineWidth(1.0); c.setFillColor(WHITE)
+                c.circle(x, cy, 1.35 * mm, fill=1, stroke=1)
+
     def _icon(self, c, kind, cx, cy, col):
         c.saveState()
         c.setStrokeColor(col); c.setFillColor(col); c.setLineWidth(0.75)
@@ -1550,7 +1599,10 @@ class DayBookSpread(Flowable):
                     s = s[:-2].rstrip() + "…"
                 return s
             c.setFont("Lato-Bold", 8.2); c.setFillColor(NAVY)
-            if b:
+            if b and len(names) > 2:
+                # round trip / multi-stop day: show every stop, e.g. Srinagar - Gulmarg - Srinagar
+                self._route_band_multi(c, lx, pw, ry, [_raw(n) for n in names])
+            elif b:
                 a, b = fit(a), fit(b)
                 c.setStrokeColor(SKY); c.setLineWidth(1.0); c.setFillColor(WHITE)
                 c.circle(lx + 4.2 * mm, ry + 1.0 * mm, 1.35 * mm, fill=1, stroke=1)
@@ -4006,7 +4058,7 @@ _MEAL_PLAN_LABELS = {
 _MEAL_INCLUSION = {
     "EP": "Meal Plan EP - Room only, no meals included",
     "CP": "Meal Plan CP - Breakfast",
-    "MAP": "Meal Plan MAP - Breakfast and one major meal (Lunch or Dinner)",
+    "MAP": "Meal Plan MAP - Breakfast and Dinner",
     "AP": "Meal Plan AP - Breakfast, Lunch and Dinner (all meals)",
 }
 
@@ -4733,7 +4785,7 @@ class PriceBand(Flowable):
             c.setFillColor(WHITE); c.setFont("Lato-Bold", sz); c.drawString(tx0, yy, a)
             c.setFillColor(colors.HexColor("#b4c3dc")); c.setFont("Lato", sz); c.drawString(tx0 + c.stringWidth(a, "Lato-Bold", sz), yy, d)
 
-            # ── payment timeline on a frosted strip: 25% now / 25% a week before / 50% on arrival ──
+            # ── payment timeline on a frosted strip: 25% now / 25% 30 days before / 50% 7 days before departure ──
             sy0, sh = 3.3 * mm, 14.4 * mm
             c.setFillColor(colors.Color(1, 1, 1, alpha=0.07)); c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.16)); c.setLineWidth(0.5)
             c.roundRect(x - 2.4 * mm, sy0, left_r - x + 4.8 * mm, sh, 2.6 * mm, fill=1, stroke=1)
@@ -4741,8 +4793,8 @@ class PriceBand(Flowable):
             i3 = int(self.total) - 2 * i1
             steps = [
                 (colors.HexColor("#38bdf8"), "25%", f"INR {i1:,}", "on confirmation"),
-                (colors.HexColor("#a78bfa"), "25%", f"INR {i1:,}", "7 days before arrival"),
-                (colors.HexColor("#34d399"), "50%", f"INR {i3:,}", "on arrival"),
+                (colors.HexColor("#a78bfa"), "25%", f"INR {i1:,}", "30 days before departure"),
+                (colors.HexColor("#34d399"), "50%", f"INR {i3:,}", "7 days before departure"),
             ]
             colw = (left_r - x) / 3.0
             r_c = 1.9 * mm
@@ -6001,8 +6053,9 @@ def _fit_font(c, text, font, size, max_w, min_size=6.2):
 
 
 class CancellationLadder(Flowable):
-    """Refund schedule as four step cards (green to red) plus a force-majeure strip.
-    tiers: [(when, charge, refund_pct_int, refund_text, processing)]"""
+    """Cancellation schedule as four step cards (green to red) plus a force-majeure strip.
+    One rule for every card: charge = % of total tour cost; refund = amount paid minus the charge.
+    tiers: [(when, charge_pct_int, refund_text, processing)]"""
     GAP = 3 * mm
     TONES = [(EMERALD, EMERALD_LITE), (colors.HexColor("#65a30d"), colors.HexColor("#ecfccb")),
              (GOLD_MID, GOLD_LITE), (ROSE, colors.HexColor("#ffe4e6"))]
@@ -6016,7 +6069,7 @@ class CancellationLadder(Flowable):
 
     def _recalc(self):
         self.cw = (self.width - 3 * self.GAP) / 4
-        self.card_h = 38 * mm if self.compact else 42 * mm
+        self.card_h = 45 * mm if self.compact else 48 * mm
         self.strip_h = 10 * mm
         self.height = self.card_h + 3 * mm + self.strip_h
 
@@ -6027,7 +6080,7 @@ class CancellationLadder(Flowable):
         c, ch, cw = self.canv, self.card_h, self.cw
         y0 = self.strip_h + 3 * mm
         c.saveState(); c.translate(0, y0)
-        for i, (when, charge, pct, rtxt, proc) in enumerate(self.tiers[:4]):
+        for i, (when, pct, refund, proc) in enumerate(self.tiers[:4]):
             x = i * (cw + self.GAP)
             ring, tint = self.TONES[i]
             c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
@@ -6041,18 +6094,20 @@ class CancellationLadder(Flowable):
                 c.drawString(x + 4 * mm, y, ln); y -= 3.5 * mm
             c.setStrokeColor(GRAY_200); c.setLineWidth(0.4)
             c.line(x + 4 * mm, ch - 17.2 * mm, x + cw - 4 * mm, ch - 17.2 * mm)
-            c.setFillColor(ring); c.setFont("Lato-Bold", 17); c.drawString(x + 4 * mm, ch - 24.6 * mm, rtxt)
-            rw = c.stringWidth(rtxt, "Lato-Bold", 17)
-            c.setFillColor(GRAY_400); c.setFont("Lato-Bold", 6.2); c.drawString(x + 4 * mm + rw + 1.6 * mm, ch - 24.6 * mm, "REFUND")
+            ptxt = f"{pct}%"
+            c.setFillColor(ring); c.setFont("Lato-Bold", 17); c.drawString(x + 4 * mm, ch - 24.6 * mm, ptxt)
+            pw_ = c.stringWidth(ptxt, "Lato-Bold", 17)
+            c.setFillColor(GRAY_400); c.setFont("Lato-Bold", 6.2); c.drawString(x + 4 * mm + pw_ + 1.6 * mm, ch - 24.6 * mm, "CHARGE")
             c.setFillColor(tint); c.roundRect(x + 4 * mm, ch - 28.6 * mm, tw, 1.8 * mm, 0.9 * mm, fill=1, stroke=0)
             if pct > 0:
                 c.setFillColor(ring); c.roundRect(x + 4 * mm, ch - 28.6 * mm, max(tw * pct / 100.0, 1.8 * mm), 1.8 * mm, 0.9 * mm, fill=1, stroke=0)
+            c.setFillColor(GRAY_400); c.setFont("Lato-Bold", 6.2); c.drawString(x + 4 * mm, ch - 32.2 * mm, "REFUND")
             c.setFillColor(GRAY_600); c.setFont("Lato", 7)
-            y = ch - 32.4 * mm
-            for ln in simpleSplit(_raw(charge), "Lato", 7, tw)[:2]:
+            y = ch - 35.6 * mm
+            for ln in simpleSplit(_raw(refund), "Lato", 7, tw)[:2]:
                 c.drawString(x + 4 * mm, y, ln); y -= 3.1 * mm
             c.setFillColor(GRAY_400); c.setFont("Lato-Italic", 6.4)
-            c.drawString(x + 4 * mm, 3 * mm, _raw(proc))
+            c.drawString(x + 4 * mm, 3 * mm, _raw(("Refund in " + proc) if refund.strip().lower() != "nil" else "No refund applicable"))
         c.restoreState()
         sh = self.strip_h
         c.setFillColor(GRAY_50); c.setStrokeColor(GRAY_200); c.setLineWidth(0.5)
@@ -7012,18 +7067,24 @@ def generate_pdf(itinerary_data: dict) -> str:
 
     _sd = _start_dt(start_date)
     _d1 = (datetime.datetime.now(IST) + datetime.timedelta(days=7)).strftime("%d %b %Y")
-    _d2_dt = (_sd - datetime.timedelta(days=7)) if _sd else None
+    _today = datetime.datetime.now(IST).date()
+    # 2nd: 30 days before departure (or with the 1st instalment when booked later than that)
+    _d2_dt = (_sd - datetime.timedelta(days=30)) if _sd else None
     _d2 = _d2_dt.strftime("%d %b %Y") if _d2_dt else ""
-    _d2_passed = bool(_d2_dt and _d2_dt.date() <= datetime.datetime.now(IST).date())
-    _d3 = _sd.strftime("%d %b %Y") if _sd else ""
+    _d2_passed = bool(_d2_dt and _d2_dt.date() <= _today)
+    # 3rd: 7 days before departure (or on arrival when booked later than that)
+    _d3_dt = (_sd - datetime.timedelta(days=7)) if _sd else None
+    _d3_passed = bool(_d3_dt and _d3_dt.date() <= _today)
+    _d3 = (_d3_dt.strftime("%d %b %Y") if _d3_dt else "") if not _d3_passed else (_sd.strftime("%d %b %Y") if _sd else "")
     pay_rows = [
         ("1st Instalment", 25, f"INR {inst1_amt:,}" if total_amt else "TBD",
          "On confirmation", f"Hold quote by {_d1}", "NEFT / UPI / Cheque", "Pending"),
         ("2nd Instalment", 25, f"INR {inst2_amt:,}" if total_amt else "TBD",
-         ("With the 1st instalment" if _d2_passed else "7 days before arrival"),
+         ("With the 1st instalment" if _d2_passed else "30 days before departure"),
          ("" if _d2_passed or not _d2 else f"By {_d2}"), "NEFT / UPI / Cheque", "Pending"),
         ("3rd Instalment", 50, f"INR {inst3_amt:,}" if total_amt else "TBD",
-         "On arrival", (_d3 or ""), "NEFT / UPI / Cheque", "Pending"),
+         ("On arrival" if _d3_passed else "7 days before departure"),
+         (f"By {_d3}" if (_d3 and not _d3_passed) else (_d3 or "")), "NEFT / UPI / Cheque", "Pending"),
     ]
     _bank = ["Account Name: Serene Vibes Kashmir", "Bank: J&amp;K Bank"]
     if BANK_ACCOUNT_NO:
@@ -7056,18 +7117,17 @@ def generate_pdf(itinerary_data: dict) -> str:
     # ── 7–9. Cancellation Policy + Travel Notes + Contact Card ────────────────
     # Rule 2: these three sections ALWAYS share one page, in the same card look as the pages before.
     canc_data = [
-        ("30 days or more before departure",  "Nil (Token forfeited)",          "70%",  "7–10 working days"),
-        ("15–29 days before departure",       "25% of total tour cost",          "45%",  "7–10 working days"),
-        ("7–14 days before departure",        "50% of total tour cost",          "20%",  "10–14 working days"),
-        ("Less than 7 days / No Show",        "100% of total tour cost",         "Nil",  "Not applicable"),
-        ("Natural Calamity / Force Majeure",  "Credit note for future travel",   "—",    "As per T&C"),
+        ("30 days or more before departure",  "10% of total tour cost",   "Amount paid minus 10% of total cost",   "7–10 working days"),
+        ("15–29 days before departure",       "25% of total tour cost",   "Amount paid minus 25% of total cost",   "7–10 working days"),
+        ("7–14 days before departure",        "50% of total tour cost",   "Amount paid minus 50% of total cost",   "10–14 working days"),
+        ("Less than 7 days / No Show",        "100% of total tour cost",  "Nil",                                    "Not applicable"),
+        ("Natural Calamity / Force Majeure",  "Credit note for future travel", "—",                                 "As per T&C"),
     ]
     # the cards are built from canc_data, so editing that list above changes the PDF (and the AI assistant)
     canc_tiers = []
     for _when, _chg, _ref, _proc in canc_data[:4]:
-        _pct = int(re.sub(r"[^0-9]", "", _ref) or 0)
-        canc_tiers.append((_when, "Charge: " + _chg, _pct, _ref,
-                           ("Refund in " + _proc) if _pct else "No refund applicable"))
+        _pct = int(re.sub(r"[^0-9]", "", _chg.split("%")[0]) or 0)     # charge % drives the card
+        canc_tiers.append((_when, _pct, _ref, _proc))
     _fm = canc_data[4]
     _canc = CancellationLadder(usable_w, canc_tiers, _fm[0], _fm[1] + ", " + _fm[3].lower() + ".")
     travel_notes = [
@@ -7116,7 +7176,8 @@ def generate_pdf(itinerary_data: dict) -> str:
     tc_sections = [
         ("Bookings & Payments",
          "Your booking is confirmed once the 1st instalment (25%) is received. The 2nd instalment (25%) is due "
-         "7 days before arrival and the balance (50%) on arrival, as shown in the Payment Schedule. If we cannot "
+         "30 days before departure (or at confirmation, if booked later) and the balance (50%) 7 days before "
+         "departure, or on arrival if booked later, as shown in the Payment Schedule. If we cannot "
          "confirm your booking on the requested dates, the amount paid is refunded in full."),
 
         ("Travel Plan / Itinerary",
