@@ -11,3 +11,4 @@ SQLAlchemy>=2.0.33
 Pillow
 
 openpyxl
+pypdf
