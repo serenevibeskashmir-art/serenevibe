@@ -1459,10 +1459,8 @@ class DayBookSpread(Flowable):
             r["pay_w"] = pdfmetrics.stringWidth("PAY LOCALLY", "Lato-Bold", 6.3 * f) + 4.6 * mm * f
             r["pay_said"] = bool(re.search(r"pay (?:for (?:it|them|this) )?(?:locally|yourself|directly)|paid locally", r["desc"], re.I))
             if r["pay_said"] and r["pay_flag"]:
-                r["pay_note"] = ""                               # the text already says it: keep the tag, skip the repeat line
-            if r["pay_flag"] and r["pill_inline"] and last_w + 2 * mm + r["pill_w"] + 1.5 * mm + r["pay_w"] > self.tw:
-                r["pill_inline"] = False                         # both tags together do not fit beside the title: give them their own line
-            r["pay_pill"] = bool(r["pay_flag"])
+                r["pay_note"] = ""                               # the text already says it: skip the repeat line
+            r["pay_pill"] = False                                # no amber "PAY LOCALLY" tag: the details text says it
             r["p_lines"] = simpleSplit(r["pay_note"], "Lato-Bold", self.ds, self.tw) if r["pay_note"] else []
             head_h = len(r["h_lines"]) * self.hl + (0 if r["pill_inline"] else self.pill_h + 0.6 * mm)
             body_h = (head_h + 0.8 * mm + len(r["d_lines"]) * self.dl
