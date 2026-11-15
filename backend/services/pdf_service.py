@@ -2496,7 +2496,15 @@ ROAD_FROM_SRINAGAR = {
     "pahalgam":    (95, 3.0),
     "sonamarg":    (80, 2.5),
     "doodhpathri": (45, 2.0),
+    "yusmarg":     (47, 2.0),
+    "gurez":       (123, 4.5),
+    "katra":       (250, 7.5),      # Srinagar -> Udhampur -> Katra (Vaishno Devi base camp)
+    "jammu":       (270, 8.0),      # Srinagar -> Udhampur -> Jammu
 }
+# Places south of the Pir Panjal (Jammu region). They are drawn in their own corridor panel next
+# to the valley map, and a leg between two of them is a direct road, NOT routed through Srinagar.
+SOUTH_STOPS = ("katra", "jammu")
+ROAD_DIRECT = {frozenset(("katra", "jammu")): (50, 1.5)}
 SRINAGAR_POINT_ROAD = (15, 0.5)      # Srinagar airport / station <-> the city and Dal Lake area
 
 
@@ -2531,21 +2539,35 @@ class KashmirRouteMap(Flowable):
         "gulmarg":     (34.0484, 74.3805),
         "pahalgam":    (34.0161, 75.3147),
         "sonamarg":    (34.3088, 75.2969),
-        "doodhpathri": (33.8700, 74.3700),
+        "doodhpathri": (33.8500, 74.5600),
+        "yusmarg":     (33.8400, 74.6500),
+        "gurez":       (34.6270, 74.8420),
+        "katra":       (32.9916, 74.9455),
+        "jammu":       (32.7266, 74.8570),
     }
+    SOUTH = SOUTH_STOPS
     DISPLAY = {"srinagar": "Srinagar", "gulmarg": "Gulmarg", "pahalgam": "Pahalgam",
-               "sonamarg": "Sonamarg", "doodhpathri": "Doodhpathri"}
+               "sonamarg": "Sonamarg", "doodhpathri": "Doodhpathri", "yusmarg": "Yusmarg",
+               "gurez": "Gurez Valley", "katra": "Katra", "jammu": "Jammu"}
     GPS_LABEL = {
-        "srinagar":    "34.08°N  74.80°E",
-        "gulmarg":     "34.05°N  74.38°E",
-        "pahalgam":    "34.02°N  75.31°E",
-        "sonamarg":    "34.31°N  75.30°E",
-        "doodhpathri": "33.87°N  74.37°E",
+        "srinagar":    "34.08\u00b0N  74.80\u00b0E",
+        "gulmarg":     "34.05\u00b0N  74.38\u00b0E",
+        "pahalgam":    "34.02\u00b0N  75.31\u00b0E",
+        "sonamarg":    "34.31\u00b0N  75.30\u00b0E",
+        "doodhpathri": "33.85\u00b0N  74.56\u00b0E",
+        "yusmarg":     "33.84\u00b0N  74.65\u00b0E",
+        "gurez":       "34.63\u00b0N  74.84\u00b0E",
+        "katra":       "32.99\u00b0N  74.95\u00b0E",
+        "jammu":       "32.73\u00b0N  74.86\u00b0E",
     }
     # Road geometry, hub (Srinagar) -> destination.  These waypoints follow the real
-    # highways (via Magam/Tangmarg, Ganderbal/Kangan/Gund, Awantipora/Anantnag,
-    # Budgam).  `python scripts/build_map_assets.py` can replace them with exact
-    # road geometry in backend/assets/maps/routes.json.
+    # highways (via Magam/Tangmarg, Ganderbal/Kangan/Gund, Awantipora/Anantnag, Budgam,
+    # Bandipora/Razdan Pass, and NH44 over Banihal to Udhampur).  `python scripts/build_map_assets.py`
+    # can replace them with exact road geometry in backend/assets/maps/routes.json.
+    _NH44 = [(34.0837, 74.7973), (34.020, 74.880), (33.980, 74.930), (33.920, 75.020), (33.820, 75.080),
+             (33.730, 75.150), (33.620, 75.170), (33.490, 75.200), (33.400, 75.200), (33.310, 75.220),
+             (33.240, 75.240), (33.170, 75.280), (33.120, 75.320), (33.040, 75.280), (32.970, 75.200),
+             (32.920, 75.140)]
     ROADS = {
         "gulmarg":     [(34.0837, 74.7973), (34.060, 74.700), (34.030, 74.610), (34.022, 74.500),
                         (34.030, 74.430), (34.0484, 74.3805)],
@@ -2553,9 +2575,25 @@ class KashmirRouteMap(Flowable):
                         (33.775, 75.165), (33.820, 75.235), (33.900, 75.260), (34.0161, 75.3147)],
         "sonamarg":    [(34.0837, 74.7973), (34.140, 74.790), (34.226, 74.775), (34.262, 74.955),
                         (34.275, 75.110), (34.3088, 75.2969)],
-        "doodhpathri": [(34.0837, 74.7973), (34.010, 74.720), (33.940, 74.660), (33.900, 74.560),
-                        (33.8700, 74.3700)],
+        "doodhpathri": [(34.0837, 74.7973), (34.020, 74.770), (33.970, 74.700), (33.930, 74.630),
+                        (33.890, 74.590), (33.8500, 74.5600)],
+        "yusmarg":     [(34.0837, 74.7973), (34.020, 74.770), (34.000, 74.700), (33.990, 74.660),
+                        (33.930, 74.650), (33.8400, 74.6500)],
+        "gurez":       [(34.0837, 74.7973), (34.140, 74.800), (34.210, 74.740), (34.300, 74.670),
+                        (34.420, 74.650), (34.480, 74.720), (34.540, 74.780), (34.580, 74.820),
+                        (34.6270, 74.8420)],
+        "katra":       _NH44 + [(32.930, 75.080), (32.960, 75.010), (32.9916, 74.9455)],
+        "jammu":       _NH44 + [(32.870, 75.060), (32.800, 74.960), (32.760, 74.900), (32.7266, 74.8570)],
     }
+    ROAD_KATRA_JAMMU = [(32.9916, 74.9455), (32.950, 74.920), (32.900, 74.910), (32.840, 74.930),
+                        (32.780, 74.900), (32.7266, 74.8570)]
+    # Smaller places along the roads: a dot and a name, only drawn where there is room
+    LANDMARKS = [
+        ("Hazratbal", 34.1283, 74.8419), ("Mughal Gardens", 34.1083, 74.8760), ("Tangmarg", 34.0667, 74.4167),
+        ("Pampore", 33.9770, 74.9330), ("Awantipora", 33.9200, 75.0170), ("Anantnag", 33.7300, 75.1500),
+        ("Kokernag", 33.5833, 75.3167), ("Bandipora", 34.4167, 74.6500), ("Kangan", 34.2667, 75.0000),
+        ("Aru Valley", 34.0900, 75.2500), ("Betaab Valley", 34.0450, 75.3300), ("Tulail Valley", 34.5800, 74.9600),
+    ]
     # Known tour start / end points (lat, lon). Matched by keywords in the admin's text.
     # Anything not listed here is still shown on the map, as a tag without a position.
     POINT_COORDS = [
@@ -2597,7 +2635,8 @@ class KashmirRouteMap(Flowable):
     _baked_routes = None
     # Where each pin label sits relative to its pin
     LABEL_SIDE = {"srinagar": "above-left", "gulmarg": "above", "pahalgam": "right",
-                  "sonamarg": "right", "doodhpathri": "right"}
+                  "sonamarg": "right", "doodhpathri": "left", "yusmarg": "below-right",
+                  "gurez": "right", "katra": "left", "jammu": "right"}
 
     # Map viewport (cos-corrected to the panel aspect ratio in __init__)
     LAT_MIN, LAT_MAX = 33.76, 34.46
@@ -2619,6 +2658,10 @@ class KashmirRouteMap(Flowable):
         "pahalgam":    (colors.HexColor("#78350f"), colors.HexColor("#f59e0b")),
         "sonamarg":    (colors.HexColor("#3b0764"), colors.HexColor("#8b5cf6")),
         "doodhpathri": (colors.HexColor("#374151"), colors.HexColor("#9ca3af")),
+        "yusmarg":     (colors.HexColor("#14532d"), colors.HexColor("#22c55e")),
+        "gurez":       (colors.HexColor("#0c4a6e"), colors.HexColor("#38bdf8")),
+        "katra":       (colors.HexColor("#7f1d1d"), colors.HexColor("#ef4444")),
+        "jammu":       (colors.HexColor("#831843"), colors.HexColor("#ec4899")),
     }
     ROW_TINT = {
         "srinagar":    colors.HexColor("#eff6ff"),
@@ -2626,13 +2669,17 @@ class KashmirRouteMap(Flowable):
         "pahalgam":    colors.HexColor("#fffbeb"),
         "sonamarg":    colors.HexColor("#f5f3ff"),
         "doodhpathri": colors.HexColor("#f9fafb"),
+        "yusmarg":     colors.HexColor("#f0fdf4"),
+        "gurez":       colors.HexColor("#f0f9ff"),
+        "katra":       colors.HexColor("#fef2f2"),
+        "jammu":       colors.HexColor("#fdf2f8"),
     }
 
     MAP_H   = 88 * mm
     TABLE_H = 8.5 * mm
     HDR_H   = 7 * mm
 
-    MIN_ROW_H, MIN_MAP_H, MAX_MAP_H = 4.2 * mm, 58 * mm, 100 * mm
+    MIN_ROW_H, MIN_MAP_H, MAX_MAP_H = 4.2 * mm, 58 * mm, 104 * mm
 
     def __init__(self, width, timeline, max_height=None,
                  start_point=DEFAULT_POINT, end_point=DEFAULT_POINT,
@@ -2647,22 +2694,70 @@ class KashmirRouteMap(Flowable):
         self.start_info = start_info or {}
         self.end_info = end_info or {}
         self._build_rows()
+        # A trip that touches Katra / Jammu gets a second panel (the Srinagar - Katra - Jammu corridor)
+        # next to the valley map; the valley map then uses the remaining width.
+        self._south = self._uses_south()
+        self._gap_w = 3 * mm
+        self._inset_w = 56 * mm if self._south else 0.0
+        self._mw = width - ((self._inset_w + self._gap_w) if self._south else 0.0)
         n = max(len(self._rows), 1)
+        min_h = self._min_map_h()
         if max_height:
             fixed = self.HDR_H + 2 * mm
-            self.TABLE_H = max(self.MIN_ROW_H, min(self.TABLE_H, (max_height - fixed - self.MIN_MAP_H) / n))
-            self.MAP_H = max(self.MIN_MAP_H, min(self.MAX_MAP_H, max_height - fixed - n * self.TABLE_H))
+            self.TABLE_H = max(self.MIN_ROW_H, min(self.TABLE_H, (max_height - fixed - min_h) / n))
+            self.MAP_H = max(min_h, min(self.MAX_MAP_H, max_height - fixed - n * self.TABLE_H))
+        else:
+            self.MAP_H = max(self.MAP_H, min_h)
         self.height = self.MAP_H + self.HDR_H + self.TABLE_H * len(self._rows) + 2 * mm
         self._sat = None            # JPEG bytes once loaded
         self._sat_tried = False
         self._fit_viewport()
+
+    @classmethod
+    def _south_key(cls, text):
+        """'katra' / 'jammu' when a tour start/end point (or any text) is in the Jammu region."""
+        t = (text or "").lower()
+        if "srinagar" in t:
+            return None
+        return next((k for k in cls.SOUTH if k in t), None)
+
+    def _uses_south(self):
+        for r in self._rows:
+            night = "" if r["night"] == "-" else _place_key(r["night"])
+            if r["key"] in self.SOUTH or r.get("origin") in self.SOUTH or night in self.SOUTH:
+                return True
+        return bool(self._south_key(self.start_point) or self._south_key(self.end_point))
+
+    def _min_map_h(self):
+        """Shortest map that still shows every visited valley place at once. A wide, short panel cannot hold
+        places that are far apart north-south (Gurez ... Yusmarg), so the map grows taller instead."""
+        import math
+        bounds = satellite_map.master_bounds() if satellite_map else (33.50, 73.55, 34.70, 76.15)
+        S, W, N, E = bounds
+        keys = {r["key"] for r in self._rows if r["key"] in self.STOPS and r["key"] not in self.SOUTH} | {"srinagar"}
+        keys |= {r.get("origin") for r in self._rows if r.get("origin") in self.STOPS and r.get("origin") not in self.SOUTH}
+        lats = [self.STOPS[k][0] for k in keys]
+        ext = self._merc_y(max(lats)) - self._merc_y(min(lats))
+        need = ext * 1.45 + math.radians(0.14)
+        h = self._mw * need / math.radians(max(E - W - 0.05, 0.5))
+        if self._south:
+            h = max(h, 86 * mm)               # the Katra - Jammu panel is a tall, narrow strip
+        return min(self.MAX_MAP_H, max(self.MIN_MAP_H, h))
+
+    CHIP_FRAC = {"yusmarg": 0.72, "doodhpathri": 0.52}
+
+    def _in_view(self, key):
+        x, y = self._proj(*self.STOPS[key])
+        return (2 * mm < x < self._mw - 2 * mm
+                and self._map_y0 + getattr(self, "_foot", 0) + 2 * mm < y < self._map_y0 + self.MAP_H - 2 * mm)
 
     def _fit_viewport(self):
         """Zoom the satellite view to the places this itinerary actually visits
         (more places / farther apart -> wider view), Web-Mercator, true scale."""
         import math
         S, W, N, E = (satellite_map.master_bounds() if satellite_map else (33.62, 73.80, 34.56, 75.90))
-        keys = {r["key"] for r in self._rows if r["key"] in self.STOPS} | {"srinagar"}
+        keys = {r["key"] for r in self._rows if r["key"] in self.STOPS and r["key"] not in self.SOUTH} | {"srinagar"}
+        keys |= {r.get("origin") for r in self._rows if r.get("origin") in self.STOPS and r.get("origin") not in self.SOUTH}
         pts = [self.STOPS[k] for k in keys]
         for k in keys:
             if k in self.ROADS:
@@ -2676,7 +2771,7 @@ class KashmirRouteMap(Flowable):
         lon_lo, lon_hi = min(p[1] for p in pts), max(p[1] for p in pts)
         my_lo, my_hi = self._merc_y(lat_lo), self._merc_y(lat_hi)
         my_ext, lon_ext = my_hi - my_lo, lon_hi - lon_lo
-        aspect = self.width / self.MAP_H
+        aspect = self._mw / self.MAP_H
 
         # room for pin labels (they sit right / above) and the footer + scale bar (below)
         lon_a = lon_lo - max(0.12, 0.16 * lon_ext)
@@ -2833,6 +2928,9 @@ class KashmirRouteMap(Flowable):
 
     def _leg(self, a, b):
         """(km, hours) for one leg, routed through Srinagar; None when it can't be stated honestly."""
+        direct = ROAD_DIRECT.get(frozenset((a, b)))
+        if direct:                                       # Katra <-> Jammu: one road, not via Srinagar
+            return direct
         ha, hb = self._hub_road(a), self._hub_road(b)
         if ha is None or hb is None:
             return None
@@ -2847,9 +2945,14 @@ class KashmirRouteMap(Flowable):
         for i, r in enumerate(self._rows):
             day = self.timeline[i] if i < len(self.timeline) else {}
             nm = lambda k: self.DISPLAY.get(k, str(k).title())
-            origin = ("start", self.start_point) if i == 0 else (r["origin"], nm(r["origin"]))
+            origin = ((self._south_key(self.start_point) or "start", self.start_point) if i == 0
+                      else (r["origin"], nm(r["origin"])))
             if r["is_dep"]:
-                seq = [origin, ("srinagar", "Srinagar"), ("end", self.end_point)]
+                ek = self._south_key(self.end_point)
+                if ek and r.get("origin") in self.SOUTH:      # e.g. sleeping in Jammu, flying out of Jammu
+                    seq = [origin, (ek, self.end_point)]
+                else:
+                    seq = [origin, ("srinagar", "Srinagar"), (ek or "end", self.end_point)]
             else:
                 night = _place_key(r["night"]) if r["night"] != "-" else ""
                 seq = [origin] + [(k.strip(), nm(k.strip())) for k in re.split(r"\s+to\s+", str(r["key"]))] \
@@ -2881,7 +2984,7 @@ class KashmirRouteMap(Flowable):
 
     # ── projection / primitives ─────────────────────────────────────────────
     def _proj(self, lat, lon):
-        x = (lon - self.LON_MIN) / (self.LON_MAX - self.LON_MIN) * self.width
+        x = (lon - self.LON_MIN) / (self.LON_MAX - self.LON_MIN) * self._mw
         y = self._map_y0 + (self._merc_y(lat) - self._my_min) / self._my_span * self.MAP_H
         return x, y
 
@@ -2979,7 +3082,7 @@ class KashmirRouteMap(Flowable):
             elif side == "below-right": bx, by = px + gap, py - gap * 0.6 - bh
             else:                      bx, by = px - bw + 2 * mm, py - gap - bh   # below-left
             # keep inside the panel
-            bx = max(1.5 * mm, min(bx, self.width - bw - 1.5 * mm))
+            bx = max(1.5 * mm, min(bx, self._mw - bw - 1.5 * mm))
             by = max(self._map_y0 + 1.5 * mm + getattr(self, "_foot", 0),
                      min(by, self._map_y0 + self.MAP_H - bh - 1.5 * mm))
             return bx, by
@@ -2989,6 +3092,9 @@ class KashmirRouteMap(Flowable):
             box = (bx - 1, by - 1, bx + bw + 1, by + bh + 1)
             total = 0.0
             for (qx, qy, qw, qh) in getattr(self, "_placed", []):          # labels + day chips
+                if box[0] < qx + qw and box[2] > qx and box[1] < qy + qh and box[3] > qy:
+                    total += 1000
+            for (qx, qy, qw, qh) in getattr(self, "_static", []):          # key, scale bar, compass
                 if box[0] < qx + qw and box[2] > qx and box[1] < qy + qh and box[3] > qy:
                     total += 1000
             for (ox, oy, orad) in getattr(self, "_pin_pts", []):           # every pin (incl. own)
@@ -3024,7 +3130,7 @@ class KashmirRouteMap(Flowable):
         """START / END tags. A point near Srinagar is pinned at its real position;
         one far away (Jammu, Delhi...) is a tag on the map edge pointing its way."""
         import math
-        w, mh, y0 = self.width, self.MAP_H, self._map_y0
+        w, mh, y0 = self._mw, self.MAP_H, self._map_y0
         hub_x, hub_y = self._proj(*self.STOPS["srinagar"])
         same = (self.start_point or "").strip().lower() == (self.end_point or "").strip().lower()
         items = [("START / END", self.start_point, self.BOTH_COL, self.start_info)] if same else \
@@ -3055,10 +3161,13 @@ class KashmirRouteMap(Flowable):
             if sub:
                 c.setFillColor(GRAY_600); c.setFont("Lato", 5.8); c.drawString(bx + 2.9 * mm, by + 1.5 * mm, sub)
             avoid.append((bx, by, bw, bh))
+            self._placed.append((bx, by, bw, bh))
 
         edge_i = 0
         for head, name, col, info in items:
             name_txt = _raw(name)
+            if self._south_key(name):            # Katra / Jammu start-end points are tagged in the corridor panel
+                continue
             sub = None
             if info and info.get("km"):
                 sub = f"approx. {int(round(info['km']))} km by road to Srinagar"
@@ -3122,14 +3231,14 @@ class KashmirRouteMap(Flowable):
 
     def _draw_stylised_terrain(self, c):
         """Fallback basemap (used only when satellite imagery is unavailable)."""
-        w, mh, y0 = self.width, self.MAP_H, self._map_y0
+        w, mh, y0 = self._mw, self.MAP_H, self._map_y0
         c.setFillColor(self.HILL_BG); c.rect(0, y0, w, mh, fill=1, stroke=0)
 
         # Graticule + degree labels
         c.setStrokeColor(self.GRID); c.setLineWidth(0.5); c.setDash(1.5, 2.5)
-        for lat in (34.0, 34.25):
+        for lat in self._grid_lats():
             _, y = self._proj(lat, self.LON_MIN); c.line(0, y, w, y)
-        for lon in (74.5, 75.0, 75.5):
+        for lon in self._grid_lons():
             x, _ = self._proj(34.0, lon); c.line(x, y0, x, y0 + mh)
         c.setDash()
 
@@ -3151,6 +3260,15 @@ class KashmirRouteMap(Flowable):
             c.restoreState()
             yy += rnd.uniform(7, 10) * mm
 
+        # Gurez valley (Kishanganga / Neelum) in the far north
+        gurez = self._smooth([(34.575, 74.70), (34.640, 74.76), (34.665, 74.92), (34.615, 75.04),
+                              (34.560, 74.92)], 2)
+        c.setFillColor(self.VALLEY); c.setStrokeColor(self.VALLEY_EDG); c.setLineWidth(0.8)
+        c.drawPath(self._path(c, gurez, close=True), fill=1, stroke=1)
+        c.setStrokeColor(self.WATER_EDG); c.setLineWidth(1.0)
+        c.drawPath(self._path(c, self._smooth([(34.60, 75.10), (34.625, 74.95), (34.63, 74.80), (34.66, 74.66)], 2)),
+                   fill=0, stroke=1)
+
         # Valley floor
         valley = self._smooth([
             (34.30, 74.30), (34.36, 74.60), (34.30, 74.95), (34.22, 75.18), (34.00, 75.24),
@@ -3161,10 +3279,14 @@ class KashmirRouteMap(Flowable):
 
         # Degree labels (drawn after terrain so peaks never sit on top of them)
         c.setFillColor(GRAY_400); c.setFont("Lato", 5.2)
-        for lat in (34.0, 34.25):
-            _, y = self._proj(lat, self.LON_MIN); c.drawString(9 * mm, y + 0.8, f"{lat:g}°N")
-        for lon in (74.5, 75.0, 75.5):
-            x, _ = self._proj(34.0, lon); c.drawString(x + 1.0, y0 + 11 * mm, f"{lon:g}°E")
+        for lat in self._grid_lats():
+            _, y = self._proj(lat, self.LON_MIN)
+            if y0 + 7 * mm < y < y0 + mh - 12 * mm:
+                c.drawString(2.5 * mm, y + 0.8, f"{lat:g}°N")
+        for lon in self._grid_lons():
+            x, _ = self._proj(34.0, lon)
+            if 41 * mm < x < w - 12 * mm:
+                c.drawString(x + 1.0, y0 + mh - 3.4 * mm, f"{lon:g}°E")
 
         # Jhelum river + lakes
         river = self._smooth([(33.70, 75.18), (33.85, 75.00), (34.00, 74.86), (34.09, 74.77),
@@ -3190,7 +3312,7 @@ class KashmirRouteMap(Flowable):
         draw(x, y, text)
 
     def _draw_satellite(self, c, jpeg):
-        w, mh, y0 = self.width, self.MAP_H, self._map_y0
+        w, mh, y0 = self._mw, self.MAP_H, self._map_y0
         c.drawImage(ImageReader(io.BytesIO(jpeg)), 0, y0, w, mh)
         # whisper-thin navy wash: lifts white labels/lines without hiding the terrain
         c.setFillColor(colors.Color(0.03, 0.08, 0.16, alpha=0.10)); c.rect(0, y0, w, mh, fill=1, stroke=0)
@@ -3222,7 +3344,7 @@ class KashmirRouteMap(Flowable):
             tw = c.stringWidth(text, "Lato-Italic", 6.2)
             box = (x - 1, y - 2, x + tw + 1, y + 7)
             if not (self._map_y0 + self._foot + 2 * mm < y < self._map_y0 + self.MAP_H - 11 * mm
-                    and 2 * mm < x < self.width - tw - 2 * mm):
+                    and 2 * mm < x < self._mw - tw - 2 * mm):
                 continue
             hit = any(box[0] < qx + qw and box[2] > qx and box[1] < qy + qh and box[3] > qy
                       for qx, qy, qw, qh in self._placed)
@@ -3231,9 +3353,361 @@ class KashmirRouteMap(Flowable):
             if not hit:
                 self._halo_text(c, x, y, text, "Lato-Italic", 6.2)
 
+    # ── extra map layers ────────────────────────────────────────────────────
+    def _grid_lats(self):
+        import math
+        return [round(v * 0.25, 2) for v in range(math.ceil(self.LAT_MIN / 0.25), int(self.LAT_MAX / 0.25) + 1)]
+
+    def _grid_lons(self):
+        import math
+        step = 0.5 if (self.LON_MAX - self.LON_MIN) > 1.3 else 0.25
+        return [round(v * step, 2) for v in range(math.ceil(self.LON_MIN / step), int(self.LON_MAX / step) + 1)]
+
+    def _static_avoid(self, foot):
+        """Boxes that map labels must keep clear of: key (top-left), scale bar, compass."""
+        w, mh, y0 = self._mw, self.MAP_H, self._map_y0
+        base = y0 + foot
+        bar_w = (50.0 / (111.32 * self._coslat)) / (self.LON_MAX - self.LON_MIN) * w
+        return [(3 * mm, y0 + mh - 3 * mm - 6.6 * mm, 36 * mm, 6.6 * mm),
+                (1.6 * mm, base + 1.5 * mm, bar_w + 12 * mm, 7.2 * mm),
+                (w - 16 * mm, base + 2 * mm, 14 * mm, 14 * mm)]
+
+    def _label_text(self, c, x, y, text, font, size, col=None):
+        if getattr(self, "_is_sat", False):
+            self._halo_text(c, x, y, text, font, size)
+            return
+        c.setFont(font, size)
+        c.setFillColor(colors.Color(1, 1, 1, alpha=0.9))
+        for dx, dy in ((-.5, 0), (.5, 0), (0, -.5), (0, .5)):
+            c.drawString(x + dx, y + dy, text)
+        c.setFillColor(col or SLATE)
+        c.drawString(x, y, text)
+
+    def _place_label(self, text, font, size, px, py, r):
+        """Best free spot (right / left / above / below) for a map label; (cost, x, baseline) or None."""
+        c = self.canv
+        tw = c.stringWidth(text, font, size)
+        w, mh, y0 = self._mw, self.MAP_H, self._map_y0
+        base = y0 + getattr(self, "_foot", 0)
+        gap = r + 1.6
+        cands = ((px + gap, py - size * 0.35), (px - gap - tw, py - size * 0.35),
+                 (px - tw / 2, py + gap + 0.5), (px - tw / 2, py - gap - size * 0.8))
+        best = None
+        for i, (x, yb) in enumerate(cands):
+            box = (x - 0.8, yb - 1.2, x + tw + 0.8, yb + size * 0.95)
+            if box[0] < 1.5 * mm or box[2] > w - 1.5 * mm or box[1] < base + 1.5 * mm or box[3] > y0 + mh - 1.5 * mm:
+                continue
+            cost = i * 0.3
+            for (qx, qy, qw, qh) in list(self._placed) + list(self._static):
+                if box[0] < qx + qw and box[2] > qx and box[1] < qy + qh and box[3] > qy:
+                    cost += 1000
+            for (ox, oy, orad) in self._pin_pts:
+                if box[0] < ox + orad and box[2] > ox - orad and box[1] < oy + orad and box[3] > oy - orad:
+                    cost += 1000
+            cost += sum(1 for (rx, ry) in self._road_dots if box[0] < rx < box[2] and box[1] < ry < box[3])
+            if best is None or cost < best[0]:
+                best = (cost, x, yb, box)
+        return best
+
+    def _draw_other_places(self, c):
+        """Destinations that are not on this itinerary: muted marker + name."""
+        for k in self._others:
+            px, py = self._proj(*self.STOPS[k])
+            dark, bright = self.PIN_COLORS[k]
+            R = 1.9 * mm
+            c.setFillColor(colors.Color(0, 0, 0, alpha=0.18)); c.circle(px + 0.4, py - 0.6, R + 0.8, fill=1, stroke=0)
+            c.setFillColor(WHITE); c.circle(px, py, R + 0.8, fill=1, stroke=0)
+            c.setFillColor(bright); c.circle(px, py, R, fill=1, stroke=0)
+            c.setFillColor(WHITE); c.circle(px, py, R * 0.42, fill=1, stroke=0)
+            got = self._place_label(self.DISPLAY.get(k, k.title()), "Lato-Bold", 6.6, px, py, R)
+            if got and got[0] < 1000:
+                _, x, yb, box = got
+                self._label_text(c, x, yb, self.DISPLAY.get(k, k.title()), "Lato-Bold", 6.6, dark)
+                self._placed.append((box[0], box[1], box[2] - box[0], box[3] - box[1]))
+
+    def _draw_landmarks(self, c):
+        """Small towns and sights along the roads - only where there is room."""
+        for name, lat, lon in self.LANDMARKS:
+            px, py = self._proj(lat, lon)
+            if not (4 * mm < px < self._mw - 4 * mm and self._map_y0 + self._foot + 4 * mm < py < self._map_y0 + self.MAP_H - 4 * mm):
+                continue
+            got = self._place_label(name, "Lato-Italic", 5.4, px, py, 0.9 * mm)
+            if not got or got[0] >= 4:
+                continue
+            _, x, yb, box = got
+            c.setFillColor(WHITE); c.circle(px, py, 1.0 * mm, fill=1, stroke=0)
+            c.setFillColor(NAVY); c.circle(px, py, 0.5 * mm, fill=1, stroke=0)
+            self._label_text(c, x, yb, name, "Lato-Italic", 5.4)
+            self._placed.append((box[0], box[1], box[2] - box[0], box[3] - box[1]))
+
+    def _draw_south_exit(self, c):
+        """Where the road to Katra / Jammu leaves the valley map: a small tag pointing to the corridor panel."""
+        if not self._south:
+            return
+        xy = [self._proj(*q) for q in self._road_pts("katra")]
+        lo_y, hi_y = self._map_y0 + self._foot + 2 * mm, self._map_y0 + self.MAP_H - 2 * mm
+        last = None
+        for pt in xy:
+            if 2 * mm < pt[0] < self._mw - 2 * mm and lo_y < pt[1] < hi_y:
+                last = pt
+            elif last:
+                break
+        if not last:
+            return
+        txt = "To Katra \u00b7 Jammu"
+        c.setFont("Lato-Bold", 6.0)
+        bw, bh = c.stringWidth(txt, "Lato-Bold", 6.0) + 5 * mm, 5.2 * mm
+        bx = max(1.5 * mm, min(last[0] + 3.0 * mm, self._mw - bw - 1.5 * mm))
+        by = max(lo_y + 0.5 * mm, last[1] - bh / 2)
+        for (qx, qy, qw, qh) in self._static:                  # keep clear of scale bar / compass
+            if bx < qx + qw and bx + bw > qx and by < qy + qh and by + bh > qy:
+                by = qy + qh + 1.0 * mm
+        c.setFillColor(colors.Color(0, 0, 0, alpha=0.2)); c.roundRect(bx + 0.4, by - 0.6, bw, bh, bh / 2, fill=1, stroke=0)
+        c.setFillColor(WHITE); c.setStrokeColor(self.PIN_COLORS["katra"][1]); c.setLineWidth(0.9)
+        c.roundRect(bx, by, bw, bh, bh / 2, fill=1, stroke=1)
+        c.setFillColor(self.PIN_COLORS["katra"][0]); c.drawCentredString(bx + bw / 2, by + bh / 2 - 2.1, txt)
+        self._placed.append((bx, by, bw, bh))
+
+    # ── Katra / Jammu corridor panel ────────────────────────────────────────
+    def _pair_pts(self):
+        """Katra -> Jammu road: baked real geometry if present, else smoothed waypoints."""
+        self._road_pts("katra")                      # makes sure routes.json has been read
+        baked = (self._baked_routes or {}).get("katra-jammu")
+        return [tuple(q) for q in baked] if baked and len(baked) > 1 else self._smooth_pts(self.ROAD_KATRA_JAMMU, 2)
+
+    def _south_days(self):
+        """Day numbers per south road: katra / jammu (Srinagar -> place) and pair (Katra <-> Jammu)."""
+        days = {"katra": set(), "jammu": set(), "pair": set()}
+        seen = {}
+        for i, r in enumerate(self._rows):
+            k, o, d = r["key"], r.get("origin", "srinagar"), r["day"]
+            if i == 0 and self._south_key(self.start_point):
+                o = self._south_key(self.start_point)
+            if r["is_dep"]:
+                ek = self._south_key(self.end_point)
+                if ek:
+                    if o in self.SOUTH:
+                        if o != ek:
+                            days["pair"].add(d)
+                    else:
+                        days[ek].add(d)
+                    seen.setdefault(ek, set()).add(d)
+                continue
+            if k in self.SOUTH and o in self.SOUTH and k != o:
+                days["pair"].add(d)
+            else:
+                if k in self.SOUTH and k != o:
+                    days[k].add(d)
+                if o in self.SOUTH and o != k:
+                    days[o].add(d)
+            for kk in (k, o):
+                if kk in self.SOUTH:
+                    seen.setdefault(kk, set()).add(d)
+        return {k: sorted(v) for k, v in days.items()}, {k: sorted(v) for k, v in seen.items()}
+
+    def _draw_corridor(self, c):
+        if not self._south:
+            return
+        import math
+        x0, w, mh, y0 = self._mw + self._gap_w, self._inset_w, self.MAP_H, self._map_y0
+        S, N, lon_c = 32.42, 34.34, 74.90
+        my_s, my_n = self._merc_y(S), self._merc_y(N)
+        my_span = my_n - my_s
+        lon_span = math.degrees(my_span * (w / mh))
+        W, E = lon_c - lon_span / 2, lon_c + lon_span / 2
+
+        def P(lat, lon):
+            return x0 + (lon - W) / (E - W) * w, y0 + (self._merc_y(lat) - my_s) / my_span * mh
+
+        def path(pts, close=False):
+            pp = c.beginPath()
+            for i, (la, lo) in enumerate(pts):
+                x, y = P(la, lo)
+                (pp.moveTo if i == 0 else pp.lineTo)(x, y)
+            if close:
+                pp.close()
+            return pp
+
+        sat = None
+        if satellite_map is not None:
+            try:
+                sat = satellite_map.get_viewport_jpeg(S, W, N, E, max_px=1400)
+            except Exception as exc:
+                print(f"WARNING: corridor satellite unavailable ({exc}); using stylised map")
+        foot = 3.8 * mm if sat else 0.0
+
+        c.saveState()
+        clip = c.beginPath(); clip.roundRect(x0, y0, w, mh, 3 * mm)
+        c.clipPath(clip, stroke=0, fill=0)
+        if sat:
+            c.drawImage(ImageReader(io.BytesIO(sat)), x0, y0, w, mh)
+            c.setFillColor(colors.Color(0.03, 0.08, 0.16, alpha=0.10)); c.rect(x0, y0, w, mh, fill=1, stroke=0)
+        else:
+            c.setFillColor(self.HILL_BG); c.rect(x0, y0, w, mh, fill=1, stroke=0)
+            import random
+            rnd = random.Random(11)
+            # Jammu plains (south-west) and the Kashmir valley floor (north)
+            plains = self._smooth_pts([(32.40, 74.30), (32.88, 74.50), (32.84, 74.84), (32.76, 75.12), (32.62, 75.45),
+                                       (32.40, 75.80)], 2)
+            c.setFillColor(self.VALLEY); c.setStrokeColor(self.VALLEY_EDG); c.setLineWidth(0.7)
+            c.drawPath(path(plains, close=True), fill=1, stroke=1)
+            valley = self._smooth_pts([(34.30, 74.40), (34.30, 75.00), (34.22, 75.40), (33.95, 75.45), (33.62, 75.30),
+                                       (33.72, 74.90), (33.95, 74.45)], 2)
+            c.drawPath(path(valley, close=True), fill=1, stroke=1)
+            # ridges between them (Pir Panjal / Banihal hills)
+            for _ in range(46):
+                la, lo = rnd.uniform(32.9, 33.62), rnd.uniform(W + 0.05, E - 0.05)
+                x, y = P(la, lo)
+                c.saveState(); c.setFillAlpha(0.78)
+                self._peak(c, x, y, rnd.uniform(3.5, 6) * mm, rnd.uniform(2.4, 4.2) * mm)
+                c.restoreState()
+            c.setStrokeColor(self.WATER_EDG); c.setLineWidth(1.0)
+            c.drawPath(path(self._smooth_pts([(33.20, 75.70), (33.10, 75.25), (33.08, 74.85), (32.90, 74.72),
+                                              (32.60, 74.55)], 2)), fill=0, stroke=1)          # Chenab
+            c.drawPath(path(self._smooth_pts([(32.96, 75.16), (32.85, 74.99), (32.74, 74.89), (32.62, 74.78)], 2)),
+                       fill=0, stroke=1)                                                          # Tawi
+            c.drawPath(path(self._smooth_pts([(33.70, 75.18), (33.90, 75.00), (34.09, 74.77), (34.25, 74.60)], 2)),
+                       fill=0, stroke=1)                                                          # Jhelum
+            c.setFillColor(colors.HexColor("#4a90c9")); c.setFont("Lato-Italic", 5.0)
+            cx_, cy_ = P(33.12, 74.62); c.drawString(cx_, cy_, "Chenab")
+        # graticule
+        c.setStrokeColor(colors.Color(1, 1, 1, alpha=0.45 if sat else 0.75)); c.setLineWidth(0.4); c.setDash(1.5, 2.5)
+        for lat in (33.0, 33.5, 34.0):
+            _, y = P(lat, W); c.line(x0, y, x0 + w, y)
+        c.setDash()
+
+        # roads
+        days, seen = self._south_days()
+        roads = (("katra", self._road_pts("katra"), days["katra"]),
+                 ("jammu", self._road_pts("jammu"), days["jammu"]),
+                 ("pair", self._pair_pts(), days["pair"]))
+        for key, pts, dd in sorted(roads, key=lambda t: bool(t[2])):          # used roads on top
+            col = (self.PIN_COLORS["katra" if key == "pair" else key][1]) if dd else colors.Color(1, 1, 1, alpha=0.85)
+            c.setLineCap(1); c.setLineJoin(1)
+            if sat:
+                c.setStrokeColor(colors.Color(0, 0, 0, alpha=0.35)); c.setLineWidth(4.6); c.drawPath(path(pts), fill=0, stroke=1)
+            c.setStrokeColor(WHITE); c.setLineWidth(4.0 if dd else 2.2); c.drawPath(path(pts), fill=0, stroke=1)
+            c.setStrokeColor(col); c.setLineWidth(2.4 if dd else 1.0)
+            if not dd:
+                c.setDash(2.2, 2.0)
+            c.drawPath(path(pts), fill=0, stroke=1)
+            c.setDash(); c.setLineCap(0); c.setLineJoin(0)
+
+        def label(txt, x, y, font="Lato-Italic", size=5.2, align="left"):
+            (self._halo_text if sat else self._plain_text)(c, x, y, txt, font, size, align)
+
+        # towns on the way (dot + name)
+        for name, la, lo, side in (("Anantnag", 33.73, 75.15, "r"), ("Banihal", 33.45, 75.20, "r"),
+                                   ("Ramban", 33.24, 75.24, "r"), ("Patnitop", 33.10, 75.33, "r"),
+                                   ("Udhampur", 32.92, 75.14, "r")):
+            x, y = P(la, lo)
+            c.setFillColor(WHITE); c.circle(x, y, 1.0 * mm, fill=1, stroke=0)
+            c.setFillColor(NAVY); c.circle(x, y, 0.5 * mm, fill=1, stroke=0)
+            label(name, x + 1.9 * mm, y - 1.7)
+
+        # distance on the Katra - Jammu road
+        km, hr = ROAD_DIRECT[frozenset(("katra", "jammu"))]
+        mx, my = P(32.815, 74.905)
+        label(f"{_round_km(km)} km \u00b7 {_fmt_drive_time(hr)}", mx - 2.4 * mm, my - 1.6, "Lato-Bold", 5.4, "right")
+
+        # pins
+        def pin(key, side):
+            la, lo = self.STOPS[key]
+            x, y = P(la, lo)
+            dark, bright = self.PIN_COLORS[key]
+            hub = key == "srinagar"
+            visited = hub or key in seen
+            R = (3.2 if hub else 2.7) * mm
+            c.setFillColor(colors.Color(0, 0, 0, alpha=0.18)); c.circle(x + 0.5, y - 0.8, R, fill=1, stroke=0)
+            c.setFillColor(WHITE); c.circle(x, y, R + 0.9, fill=1, stroke=0)
+            c.setFillColor(bright if visited else colors.HexColor("#9ca3af")); c.circle(x, y, R, fill=1, stroke=0)
+            c.setFillColor(dark if visited else colors.HexColor("#4b5563")); c.circle(x, y, R * 0.78, fill=1, stroke=0)
+            dd = seen.get(key, [])
+            if dd and len(dd) <= 2:
+                lab = "\u00b7".join(str(n) for n in dd)
+                fs = 7.2 if len(lab) == 1 else 5.8
+                c.setFillColor(WHITE); c.setFont("Lato-Bold", fs); c.drawCentredString(x, y - fs * 0.35, lab)
+            lines = [(self.DISPLAY[key], "Lato-Bold", 7.2, dark)]
+            if dd:
+                lines.append((("Day " if len(dd) == 1 else "Days ") + " \u00b7 ".join(str(n) for n in dd), "Lato", 5.8, GRAY_600))
+            if not hub:
+                km_, hr_ = ROAD_FROM_SRINAGAR[key]
+                lines.append((f"{_round_km(km_)} km \u00b7 {_fmt_drive_time(hr_)}", "Lato", 5.4, GRAY_600))
+                lines.append(("from Srinagar", "Lato-Italic", 5.2, GRAY_400))
+            tags = []
+            if self._south_key(self.start_point) == key:
+                tags.append("START")
+            if self._south_key(self.end_point) == key:
+                tags.append("END")
+            if tags:
+                lines.append((" / ".join(tags) + " POINT", "Lato-Bold", 5.4, self.START_COL if tags[0] == "START" else self.END_COL))
+            bw = max(c.stringWidth(t, f, sz) for t, f, sz, _ in lines) + 4.4 * mm
+            bh = 3.0 * mm * len(lines) + 1.8 * mm
+            bx = {"right": x + R + 1.6 * mm, "left": x - R - 1.6 * mm - bw, "below": x - bw / 2,
+                  "below-right": x + R + 1.2 * mm}[side]
+            by = {"right": y - bh / 2, "left": y - bh / 2, "below": y - R - 1.4 * mm - bh,
+                  "below-right": y - bh + R * 0.8}[side]
+            bx = max(x0 + 1.2 * mm, min(bx, x0 + w - bw - 1.2 * mm))
+            by = max(y0 + foot + 1.2 * mm, min(by, y0 + mh - bh - 1.2 * mm))
+            c.setFillColor(colors.Color(0, 0, 0, alpha=0.10)); c.roundRect(bx + 0.5, by - 0.7, bw, bh, 1.4 * mm, fill=1, stroke=0)
+            c.setFillColor(WHITE); c.setStrokeColor(GRAY_200); c.setLineWidth(0.4)
+            c.roundRect(bx, by, bw, bh, 1.4 * mm, fill=1, stroke=1)
+            c.setFillColor(bright if visited else colors.HexColor("#9ca3af")); c.roundRect(bx, by, 1.3 * mm, bh, 0.6 * mm, fill=1, stroke=0)
+            ty = by + bh - 3.2 * mm
+            for t, f, sz, col in lines:
+                c.setFillColor(col); c.setFont(f, sz); c.drawString(bx + 2.9 * mm, ty, t); ty -= 3.0 * mm
+
+        pin("srinagar", "right")
+        pin("katra", "left")
+        pin("jammu", "right")
+
+        # day chips on used roads
+        for key, pts, dd in roads:
+            if dd and key != "pair":
+                pt = None
+                if key == "katra":
+                    pt = P(33.40, 75.20)
+                elif key == "jammu":
+                    pt = P(33.62, 75.17)
+                txt = ("Day " if len(dd) == 1 else "Days ") + " \u00b7 ".join(str(n) for n in dd)
+                self._chip(c, pt[0] + (7.5 * mm if key != "pair" else 8.5 * mm), pt[1] + (0 if key != "pair" else 4.5 * mm), txt,
+                           self.PIN_COLORS["katra" if key == "pair" else key][0])
+
+        # header ribbon, scale bar, imagery credit
+        c.setFillColor(colors.Color(0.12, 0.16, 0.23, alpha=0.88)); c.rect(x0, y0 + mh - 6.2 * mm, w, 6.2 * mm, fill=1, stroke=0)
+        c.setFillColor(WHITE); c.setFont("Lato-Bold", 6.1)
+        c.drawCentredString(x0 + w / 2, y0 + mh - 4.1 * mm, "SRINAGAR  \u00b7  KATRA  \u00b7  JAMMU")
+        km_per_deg = 111.32 * math.cos(math.radians(33.4))
+        bar = 25.0 / km_per_deg / (E - W) * w
+        sx, sy = x0 + 3 * mm, y0 + foot + 2.6 * mm
+        c.setFillColor(colors.Color(1, 1, 1, alpha=0.9)); c.roundRect(sx - 1.2 * mm, sy - 1.3 * mm, bar + 10 * mm, 6.2 * mm, 1.1 * mm, fill=1, stroke=0)
+        c.setFillColor(NAVY); c.rect(sx, sy + 1.6 * mm, bar, 1.3 * mm, fill=1, stroke=0)
+        c.setFillColor(WHITE); c.rect(sx, sy + 1.6 * mm, bar / 2, 1.3 * mm, fill=1, stroke=0)
+        c.setStrokeColor(NAVY); c.setLineWidth(0.3); c.rect(sx, sy + 1.6 * mm, bar, 1.3 * mm, fill=0, stroke=1)
+        c.setFillColor(GRAY_600); c.setFont("Lato", 5.2)
+        c.drawString(sx - 0.5, sy - 0.2 * mm, "0"); c.drawString(sx + bar + 1.4 * mm, sy + 1.5 * mm, "25 km")
+        if sat:
+            c.setFillColor(colors.Color(0.04, 0.09, 0.16, alpha=0.62)); c.rect(x0, y0, w, foot, fill=1, stroke=0)
+            c.setFillColor(colors.Color(1, 1, 1, alpha=0.92)); c.setFont("Lato", 4.4)
+            attrib = (satellite_map.attribution() if satellite_map else "").split(",")[0]
+            c.drawString(x0 + 2 * mm, y0 + 1.2 * mm, attrib)
+            c.drawRightString(x0 + w - 2 * mm, y0 + 1.2 * mm, "Routes are indicative")
+        c.restoreState()
+        c.setStrokeColor(NAVY); c.setLineWidth(1.0)
+        c.roundRect(x0, y0, w, mh, 3 * mm, fill=0, stroke=1)
+
+    def _plain_text(self, c, x, y, text, font, size, align="left"):
+        draw = {"left": c.drawString, "center": c.drawCentredString, "right": c.drawRightString}[align]
+        c.setFont(font, size)
+        c.setFillColor(colors.Color(1, 1, 1, alpha=0.9))
+        for dx, dy in ((-.5, 0), (.5, 0), (0, -.5), (0, .5)):
+            draw(x + dx, y + dy, text)
+        c.setFillColor(SLATE)
+        draw(x, y, text)
+
     # ── main draw ───────────────────────────────────────────────────────────
     def draw(self):
-        c, w, mh = self.canv, self.width, self.MAP_H
+        c, w, mh = self.canv, self._mw, self.MAP_H
         self._map_y0 = self.height - mh
         y0 = self._map_y0
         sat = self._satellite()
@@ -3254,6 +3728,8 @@ class KashmirRouteMap(Flowable):
         through = []                                # (day, from, to) legs that pass via the hub
         for r in self._rows:
             k, o = r["key"], r.get("origin", "srinagar")
+            if k in self.SOUTH and o in self.SOUTH:
+                continue                                  # Katra <-> Jammu: drawn in the corridor panel
             if (k != "srinagar" and k in self.ROADS and o != "srinagar"
                     and o != k and o in self.ROADS):
                 # place -> Srinagar -> place: drawn as its own line below
@@ -3316,6 +3792,8 @@ class KashmirRouteMap(Flowable):
         # Pins first, chips after so chips are never covered
         seen = {}
         for r in self._rows:
+            if r["is_dep"] and self._south_key(self.end_point) and r.get("origin") in self.SOUTH:
+                continue                           # flying out of Jammu / Katra: not a Srinagar day
             seen.setdefault(r["key"], []).append(r["day"])
         for r in self._rows:
             o = r.get("origin", "srinagar")
@@ -3327,11 +3805,19 @@ class KashmirRouteMap(Flowable):
             return ("Day " if len(days) == 1 else "Days ") + " · ".join(str(d) for d in days)
 
         self._foot, self._placed = foot, list(self._pre_placed)
+        self._is_sat = bool(sat)
+        self._static = self._static_avoid(foot)
         self._pin_pts = []
         for k in seen:
-            if k in self.STOPS:
+            if k in self.STOPS and self._in_view(k):
                 px_, py_ = self._proj(*self.STOPS[k])
                 self._pin_pts.append((px_, py_, (3.6 if k == "srinagar" else 2.9) * mm + 1.5))
+        # other destinations: small muted markers (named below), so the map shows every place we cover
+        self._others = [k for k in self.STOPS if k not in seen and k not in self.SOUTH and k != "srinagar"
+                        and k not in _CUSTOM_MAP_KEYS and self._in_view(k)]
+        for k in self._others:
+            px_, py_ = self._proj(*self.STOPS[k])
+            self._pin_pts.append((px_, py_, 1.9 * mm + 0.5))
         self._road_dots = []                       # sampled route points (labels avoid them)
         import math
         for k, days in used.items():
@@ -3344,12 +3830,12 @@ class KashmirRouteMap(Flowable):
                         self._road_dots.append((dx_, dy_))
             if not days:
                 continue
-            fx, fy = self._point_along(self._road_pts(k), 0.5)           # reserve the day chip
+            fx, fy = self._point_along(self._road_pts(k), self.CHIP_FRAC.get(k, 0.5))           # reserve the day chip
             c.setFont("Lato-Bold", 6.3)
             cw = c.stringWidth(_fmt(sorted(set(days))), "Lato-Bold", 6.3) + 3.4 * mm
             self._placed.append((fx - cw / 2, fy - 2.1 * mm, cw, 4.2 * mm))
         for k, days in seen.items():
-            if k not in self.STOPS:
+            if k not in self.STOPS or not self._in_view(k):
                 continue
             sub = None
             if k == "srinagar":
@@ -3364,12 +3850,16 @@ class KashmirRouteMap(Flowable):
         for k, days in used.items():
             if not days:
                 continue
-            fx, fy = self._point_along(self._road_pts(k), 0.5)
+            fx, fy = self._point_along(self._road_pts(k), self.CHIP_FRAC.get(k, 0.5))
+            if not (6 * mm < fx < self._mw - 6 * mm and y0 + foot + 4 * mm < fy < y0 + mh - 4 * mm):
+                continue                          # that part of the road is off this map (see the corridor panel)
             self._chip(c, fx, fy, _fmt(sorted(set(days))), self.PIN_COLORS[k][0])
         for (fx, fy), txt, col in self._through_chips:
             self._chip(c, fx, fy, txt, col)
 
+        self._draw_other_places(c)
         self._draw_endpoints(c, foot)
+        self._draw_landmarks(c)
 
         if sat:
             self._draw_sat_captions(c)
@@ -3406,6 +3896,7 @@ class KashmirRouteMap(Flowable):
             c.setFillColor(colors.HexColor("#dc2626") if lab == "N" else GRAY_600)
             c.setFont("Lato-Bold" if lab == "N" else "Lato", 5.4)
             c.drawCentredString(cx_c + dx_ * 3.9 * mm, cy_c + dy_ * 3.9 * mm - 1.6, lab)
+        self._draw_south_exit(c)
         c.setFillColor(colors.HexColor("#dc2626"))
         p2 = c.beginPath(); p2.moveTo(cx_c, cy_c + 2.3 * mm); p2.lineTo(cx_c + 1.0 * mm, cy_c); p2.lineTo(cx_c - 1.0 * mm, cy_c); p2.close()
         c.drawPath(p2, fill=1, stroke=0)
@@ -3428,6 +3919,9 @@ class KashmirRouteMap(Flowable):
         # Panel border (outside the clip so it is crisp)
         c.setStrokeColor(NAVY); c.setLineWidth(1.0)
         c.roundRect(0, y0, w, mh, 3 * mm, fill=0, stroke=1)
+
+        w = self.width                       # the legend table below spans the full width
+        self._draw_corridor(c)
 
         # ── Legend table ────────────────────────────────────────────────────
         col_w = [w * 0.07, w * 0.18, w * 0.22, w * 0.35, w * 0.18]
