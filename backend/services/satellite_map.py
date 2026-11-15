@@ -50,7 +50,7 @@ ATTRIBUTION = os.environ.get(
 USER_AGENT = "SereneVibesKashmir-ItineraryPDF/1.0"
 
 # (south, west, north, east) - generous, so any PDF layout/margin fits inside it
-MASTER_BBOX = (33.50, 73.55, 34.70, 76.15)
+MASTER_BBOX = (32.50, 73.30, 34.85, 76.40)
 
 ASSET_DIR = Path(__file__).resolve().parent.parent / "assets" / "maps"
 CACHE_DIR = Path(tempfile.gettempdir()) / "serenevibe_maps"
