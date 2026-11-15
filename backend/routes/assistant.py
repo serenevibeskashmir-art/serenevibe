@@ -545,14 +545,20 @@ ORDER AND WORDING RULES (the printed card is checked against these)
 - Each place or activity appears ONCE. Never repeat a title (for example "Mughal Gardens" twice). Put all about that place into one activity.
 - ARRIVAL DAY: the airport pickup is ALWAYS the first activity, then sightseeing, then hotel check-in last. Never open with sightseeing before the pickup.
 - DEPARTURE DAY, in exactly this order: 1) breakfast at the hotel, 2) hotel check-out, 3) the road journey to the end point, 4) arrival and drop at the end point (this is last). Never open the day with "departure" or "your tour concludes", and never put check-out after the drive.
-- PAY LOCALLY applies to ONLY TWO things: lunch and gondola rides. If the user message says lunch or a gondola phase is NOT included and the activity involves it, say so in the same description in plain words, e.g. "Lunch is not included, you pay for it locally." or "Gondola tickets are not included, you pay for them locally." Never call an excluded lunch or gondola included, free, complimentary or "on us". Only the 1-hour Shikara ride is complimentary.
-- Do NOT write "pay locally", "paid separately" or "not included" about anything else: not entrance fees, snacks, beverages, activities, breakfast or dinner. Leave those out of the text.
+- PAY LOCALLY applies to lunch, gondola rides and every item the user message marks as NOT included under PACKAGE COVERS (union cab, snow chain vehicle, extras added by staff). If the activity involves such an item, say so in the same description in plain words, e.g. "Lunch is not included, you pay for it locally." or "Gondola tickets are not included, you pay for them locally." Never call an excluded item included, free, complimentary or "on us". Items marked included may be described as included. Only the 1-hour Shikara ride is complimentary.
+- Do NOT write "pay locally", "paid separately" or "not included" about anything else: not entrance fees, snacks, beverages, other activities, breakfast or dinner. Leave those out of the text.
 Always answer by calling {DESCRIBE_TOOL_NAME}."""
 
 
 def _describe_meal(body: dict) -> str:
     m = _clean_text(body.get("meal_plan"), 4).upper()
     return m if m in ("EP", "CP", "MAP", "AP") else "MAP"
+
+
+def _describe_list(body: dict, key: str, count: int = 8, size: int = 80) -> list:
+    raw = body.get(key)
+    out = [_clean_text(x, size) for x in raw[:count]] if isinstance(raw, list) else []
+    return [x for x in out if x]
 
 
 def _describe_extras(body: dict) -> set:
@@ -588,7 +594,15 @@ def _describe_order(items: list, body: dict) -> list:
         return items
 
 
-def _describe_clean(title: str, desc: str, meal: str, extras: set) -> str:
+_ITEM_STOP = {"with", "and", "the", "for", "from", "into", "ride", "visit", "tour", "trip",
+              "srinagar", "pahalgam", "gulmarg", "sonamarg", "kashmir", "yusmarg", "doodhpathri", "betaab", "dal", "lake"}
+
+
+def _item_words(text: str) -> set:
+    return {w for w in re.findall(r"[a-z]{4,}", (text or "").lower()) if w not in _ITEM_STOP}
+
+
+def _describe_clean(title: str, desc: str, meal: str, extras: set, excluded: list = None) -> str:
     """Server-side safety net for the AI day text: no invented drive times, and lunch / gondola that the
     package does not cover always say they are paid locally, even if the model forgot."""
     if "shikara" not in desc.lower():
@@ -603,6 +617,12 @@ def _describe_clean(title: str, desc: str, meal: str, extras: set) -> str:
     if note and not _PAID_SAID.search(desc):
         short = re.sub(r"\s*\(about[^)]*\)", "", note)    # no prices in the printed description
         desc = (desc.rstrip() + " " + short).strip()
+    # staff extras switched off on the Inc/Exc step: a matching activity must say it is paid locally
+    for item in (excluded or []):
+        words = _item_words(item)
+        if words and words <= _item_words(title + " " + desc) and not _PAID_SAID.search(desc):
+            desc = (desc.rstrip() + " This is not included, you pay for it locally.").strip()
+            break
     return desc
 
 
@@ -660,6 +680,19 @@ def _describe_user_prompt(body: dict) -> str:
     lines.append("- Lunch: " + ("included (meal plan AP)." if meal == "AP" else f"NOT included on meal plan {meal} (paid locally)."))
     lines.append("- Gondola Phase I: " + ("included in the package." if "gondola_p1" in extras else "NOT included (paid locally)."))
     lines.append("- Gondola Phase II: " + ("included in the package." if "gondola_p2" in extras else "NOT included (paid locally)."))
+    # Union cab and snow chain vehicle per place, plus the staff's own extras (all set on the Inc/Exc step)
+    for label, prefix, places, other_key in (("Union cab", "union_cab_", ("Pahalgam", "Gulmarg", "Sonamarg"), "cab_other_places"),
+                                             ("Snow chain vehicle", "snow_chain_", ("Gulmarg", "Sonamarg"), "snow_chain_other_places")):
+        inc = [p for p in places if prefix + p.lower() in extras]
+        if prefix + "other" in extras:
+            inc += _describe_list(body, other_key, 6, 40)
+        out = [p for p in places if prefix + p.lower() not in extras]
+        lines.append(f"- {label}: " + ("included for " + ", ".join(inc) if inc else "not included anywhere")
+                     + ("; NOT included for " + ", ".join(out) + " (paid locally)." if out else "."))
+    for t in _describe_list(body, "custom_included"):
+        lines.append(f"- {t}: included in the package.")
+    for t in _describe_list(body, "custom_excluded"):
+        lines.append(f"- {t}: NOT included (paid locally).")
     hints = _clean_text(body.get("hints"), DESCRIBE_MAX_HINT)
     if hints:
         lines.append(f"Staff hints: {hints}")
@@ -738,7 +771,7 @@ def admin_describe_itinerary():
                         continue
                     desc = _PHONE.sub("", _clean_text(it.get("description"), DESCRIBE_MAX_CHARS)).strip()
                     desc = _describe_clean(_clean_text(it.get("activity_title"), 80) or _clean_text(body.get("activity_title"), 80),
-                                           desc, _describe_meal(body), _describe_extras(body))
+                                           desc, _describe_meal(body), _describe_extras(body), _describe_list(body, "custom_excluded"))
                     if desc:
                         items.append({
                             "activity_title": _clean_text(it.get("activity_title"), 80),
