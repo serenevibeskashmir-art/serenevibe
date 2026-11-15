@@ -62,9 +62,9 @@ export default function ImportPdfs({ existing, onUnauthorized, onImported }) {
         try { text = await readPdfText(file); }
         catch (e) { throw new Error('Could not open this file as a PDF.'); }
         const data = await post('/api/admin/payments/import/parse', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(text),
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...text, filename: file.name }),
         });
-        patch(id, { state: 'ready', fields: data.fields, missing: data.missing });
+        patch(id, { state: 'ready', fields: data.fields, missing: data.missing, notes: data.notes || [] });
       } catch (err) { patch(id, { state: 'failed', error: err.message }); }
     }
     setReading(false);
@@ -126,6 +126,7 @@ export default function ImportPdfs({ existing, onUnauthorized, onImported }) {
                   <Field label="Cost (₹)" value={f.cost} inputMode="numeric" onChange={(v) => setField(it.id, 'cost', v)} bad={!(Number(String(f.cost).replace(/,/g, '')) > 0)} />
                   <Field label="Travel date" value={f.travel_date} onChange={(v) => setField(it.id, 'travel_date', v)} />
                 </div>
+                {(it.notes || []).map((n) => <small key={n} style={{ ...S.small, color: '#8a5a00' }}>⚠ {n}</small>)}
                 <small style={S.small}>{f.days ? `${f.days} days` : ''}{f.adults ? ` · ${f.adults} adults` : ''}{Number(f.kids) ? `, ${f.kids} kids` : ''}{f.cost ? ` · ${inr(String(f.cost).replace(/,/g, ''))}` : ''}</small>
                 <details style={S.more}>
                   <summary style={S.sum}>All details read from the PDF</summary>
