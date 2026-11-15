@@ -2,7 +2,8 @@
 
     GET  /api/admin/payments               -> {"rows": [...]}  (newest quote first)
     POST /api/admin/payments               -> body {name, quote_no, amount}; writes Booking Amount + Payment Status into the sheet
-    POST /api/admin/payments/import/parse  -> multipart "file" (one quote PDF); returns the fields read from it + whether it is already in the sheet
+    POST /api/admin/payments/import/parse  -> JSON {pages: [text of each PDF page], created}  (the browser reads the PDF, so size does not matter)
+                                              or multipart "file" (a small PDF); returns the fields read from it
     POST /api/admin/payments/import        -> body {name, quote_no, cost, travel_date, ...}; adds / updates that quote's row in the sheet
 
 The sheet stays the single source of truth: nothing is stored in the database.
@@ -10,7 +11,7 @@ The sheet stays the single source of truth: nothing is stored in the database.
 from flask import Blueprint, jsonify, request
 
 from backend.auth import admin_required
-from backend.services.pdf_import import parse_quote_pdf
+from backend.services.pdf_import import parse_pages, parse_quote_pdf
 from backend.services.sheet_log import call_script, send_row
 
 payments_bp = Blueprint("payments", __name__)
@@ -51,6 +52,12 @@ def save_payment():
 @admin_required
 def import_parse():
     """Read ONE old quote PDF. Nothing is written to the sheet here."""
+    body = request.get_json(silent=True)
+    if isinstance(body, dict) and isinstance(body.get("pages"), list):
+        try:
+            return jsonify(parse_pages(body["pages"], body.get("created")))
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 422
     f = request.files.get("file")
     if not f:
         return jsonify({"error": "Choose a PDF file."}), 400
