@@ -442,3 +442,87 @@ textarea.sv-inp { min-height: 96px; resize: vertical; line-height: 1.45; font-si
 .sv-mixeb i { font-style: normal; font-size: .55rem; font-weight: 800; letter-spacing: .06em; color: var(--sv-mute); line-height: 1.1; }
 .sv-mixeb .sv-mixq { margin-top: 0; }
 .sv-mixeb .sv-mixq button { width: 26px; height: 28px; }
+
+
+/* ── Compact builder v2: Trip, Days and Review take far less scrolling ─────────
+   Counters sit three to a row, labels sit beside their controls, From/To and
+   Pick-up/Drop sit side by side, and the Review summary is a single facts strip. */
+.sv-tight { gap: 8px; }
+.sv-tight .sv-lbl { margin-bottom: 3px; }
+
+/* Trip: Days | Adults | Kids in one row */
+.sv-trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.sv-trio .sv-stp { flex-direction: column; align-items: stretch; gap: 0; min-height: 0; padding: 6px 3px 3px; border-radius: 10px; }
+.sv-trio .sv-stp > span { padding-left: 8px; font-size: .6rem; white-space: nowrap; }
+.sv-trio .sv-stp-c { justify-content: space-between; gap: 0; }
+.sv-trio .sv-stp-c button { width: 36px; height: 36px; min-height: 36px; font-size: 1.15rem; }
+.sv-trio .sv-stp-c b { font-size: 1rem; min-width: 18px; }
+
+/* Couple: one switch, add-ons become small chips */
+.sv-couple { display: flex; flex-direction: column; gap: 6px; }
+.sv-couple .sv-sw { min-height: 36px; }
+.sv-couple .sv-pillb { min-height: 34px; padding: 0 11px; font-size: .76rem; }
+
+/* Label beside its control (Budget / Meals) */
+.sv-lrow { display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: center; gap: 8px; }
+.sv-lrow .sv-lbl { margin: 0; }
+.sv-lrow .sv-seg button { min-height: 36px; }
+.sv-mealnote { margin: -2px 0 0 60px; font-size: .7rem; }
+.sv-trip .sv-pillb { min-height: 34px; padding: 0 11px; font-size: .78rem; }
+.sv-trip .sv-pills { gap: 5px; }
+
+/* Build button stays in reach above the bottom bar */
+.sv-buildbtn { position: sticky; bottom: calc(var(--sv-nav-h) + var(--sv-safe-b) + 8px); z-index: 30; box-shadow: 0 8px 20px -8px rgba(16,39,46,.55); }
+
+/* Days: route rows two-up (From | To), Stay full width; Hotel and Room stay full width */
+.sv-rail:not(.sv-rail1) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.sv-rail:not(.sv-rail1) > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+.sv-rail:not(.sv-rail1) .sv-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "k ic" "v ic"; column-gap: 6px; row-gap: 0; align-items: center; min-height: 46px; }
+.sv-rail:not(.sv-rail1) .sv-row .k { grid-area: k; width: auto; }
+.sv-rail:not(.sv-rail1) .sv-row .v { grid-area: v; font-size: .86rem; }
+.sv-rail:not(.sv-rail1) .sv-row .sv-ic { grid-area: ic; }
+.sv-rail:not(.sv-rail1) > :last-child:nth-child(odd) { grid-template-areas: "k ic" "v ic"; }
+.sv-rail1 { gap: 5px; }
+
+.sv-dayhead { align-items: center; gap: 6px; }
+.sv-dayhead > div:first-child { flex: 1; }
+.sv-dayhead .sv-h2 { margin-top: 0; font-size: 1.05rem; line-height: 1.15; }
+.sv-dayhead .sv-eyebrow { font-size: .62rem; letter-spacing: .04em; text-transform: none; font-weight: 700; }
+.sv-dayhead .sv-ib { width: 38px; height: 38px; min-height: 38px; flex: none; }
+.sv-dstat { flex: none; align-self: center; }
+
+/* Rooms & sharing: tight 4-up grid, summary and extra bed on one line */
+.sv-mixlbl { margin: 4px 2px 3px; }
+.sv-mix { gap: 4px; }
+.sv-mixc { padding: 5px 2px 4px; border-radius: 10px; gap: 0; }
+.sv-mixc small { display: none; }
+.sv-mixc strong { font-size: .72rem; }
+.sv-mixq { margin-top: 2px; gap: 2px; }
+.sv-mixq button { width: 26px; height: 28px; }
+.sv-mixbar { margin-top: 5px; gap: 6px; }
+.sv-mixsum { padding: 6px 9px; border-radius: 10px; }
+.sv-mixsum b { font-size: .82rem; }
+.sv-mixsum span { font-size: .7rem; }
+.sv-mixsum em { font-size: .64rem; }
+.sv-mixeb { padding: 4px 6px; border-radius: 10px; }
+
+/* Day navigation buttons and activity header */
+.sv-qp .sv-pair > .sv-btn { min-height: 44px; }
+.sv-sechead .sv-h3 { font-size: .95rem; }
+
+/* Review: one facts strip instead of four rows */
+.sv-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; margin: 6px 0 6px; }
+.sv-facts > span { background: var(--sv-lake-soft); border-radius: 10px; padding: 5px 10px; min-width: 0; display: flex; flex-direction: column; }
+.sv-facts small { font-size: .58rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--sv-mute); }
+.sv-facts b { font-size: .86rem; overflow-wrap: anywhere; line-height: 1.25; }
+.sv-rail2 { margin-top: 0; }
+.sv-card > .sv-rail2 > .sv-row { margin-top: 0; }
+.sv-card > .sv-sum.link, .sv-card > .sv-sum { padding: 6px 0; }
+.sv-card .sv-sum.link { min-height: 40px; }
+.sv-card .sv-sum.link b small { font-size: .66rem; }
+.sv-issue { padding: 5px 6px 5px 11px; font-size: .78rem; }
+.sv-issue .sv-btn { min-height: 34px; }
+
+@media (min-width: 560px) {
+  .sv-facts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
