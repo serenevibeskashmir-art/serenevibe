@@ -62,49 +62,50 @@ export default function LeadForm({ onGenerated, trip = { vehicle: "", meal: "MAP
   const isCouple = Number(adults) === 2;   // couple options are offered only for exactly 2 adults
 
   return (
-    <form onSubmit={handleSubmit} className="sv-stack sv-form">
-      <section className="sv-card sv-stack">
-        <label className="sv-field"><span className="sv-lbl">Client name</span>
-          <input className="sv-inp" type="text" placeholder="e.g. John Doe" autoComplete="off" value={clientName} onChange={(e) => setClientName(e.target.value)} required /></label>
-        <label className="sv-field"><span className="sv-lbl">Email (optional)</span>
-          <input className="sv-inp" type="email" inputMode="email" placeholder="Leave blank if not given" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} /></label>
+    <form onSubmit={handleSubmit} className="sv-stack sv-form sv-trip">
+      <section className="sv-card sv-stack sv-tight">
+        <div className="sv-pair">
+          <label className="sv-field"><span className="sv-lbl">Client name</span>
+            <input className="sv-inp" type="text" placeholder="e.g. John Doe" autoComplete="off" value={clientName} onChange={(e) => setClientName(e.target.value)} required /></label>
+          <label className="sv-field"><span className="sv-lbl">Email (optional)</span>
+            <input className="sv-inp" type="email" inputMode="email" placeholder="Optional" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} /></label>
+        </div>
         <div className="sv-pair sv-pair-fields">
           <label className="sv-field"><span className="sv-lbl">Start date</span>
             <input className="sv-inp" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required /></label>
           <label className="sv-field"><span className="sv-lbl">Destination</span>
             <input className="sv-inp" type="text" value={destination} onChange={(e) => setDestination(e.target.value)} required /></label>
         </div>
-      </section>
-
-      <section className="sv-card sv-stack">
-        <Stepper label="Days" value={Number(days) || 1} min={1} max={30} onChange={setDays} />
-        <div className="sv-pair">
+        <div className="sv-trio">
+          <Stepper label="Days" value={Number(days) || 1} min={1} max={30} onChange={setDays} />
           <Stepper label="Adults" value={Number(adults) || 1} min={1} max={30} onChange={setAdults} />
           <Stepper label="Kids <12" value={Number(kids) || 0} min={0} max={15} onChange={setKids} />
         </div>
         {isCouple && (
-          <div className="sv-stack">
+          <div className="sv-couple">
             <button type="button" className={"sv-sw" + (trip.couple ? " on" : "")} role="switch" aria-checked={!!trip.couple}
               onClick={() => onTripChange({ ...trip, couple: !trip.couple })}>
               <span>Couple</span><i className="box" /></button>
-            {trip.couple && [["couple_cake", "Cake Cutting Celebration"], ["couple_bed", "Bed decoration"], ["couple_candle", "Candle light dinner"]].map(([k, lab]) => (
-              <button key={k} type="button" className={"sv-sw" + (coupleItems.includes(k) ? " on" : "")} role="switch" aria-checked={coupleItems.includes(k)}
-                onClick={() => toggleCoupleItem(k)}>
-                <span>{lab}</span><i className="box" /></button>
-            ))}
-            {trip.couple && <div className="sv-sub">Ticked items are added to the PDF.</div>}
+            {trip.couple && (
+              <div className="sv-pills">
+                {[["couple_cake", "Cake cutting"], ["couple_bed", "Bed decoration"], ["couple_candle", "Candle light dinner"]].map(([k, lab]) => (
+                  <button key={k} type="button" className={"sv-pillb" + (coupleItems.includes(k) ? " on" : "")} aria-pressed={coupleItems.includes(k)}
+                    onClick={() => toggleCoupleItem(k)}>{lab}</button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </section>
 
-      <section className="sv-card sv-stack">
-        <div><span className="sv-lbl">Budget</span>
+      <section className="sv-card sv-stack sv-tight">
+        <div className="sv-lrow"><span className="sv-lbl">Budget</span>
           <div className="sv-seg">{["Budget", "Mid-Range", "Luxury"].map((b) => (
             <button key={b} type="button" className={budgetTier === b ? "on" : ""} onClick={() => setBudgetTier(b)}>{b}</button>))}</div></div>
-        <div><span className="sv-lbl">Meal plan</span>
+        <div className="sv-lrow"><span className="sv-lbl">Meals</span>
           <div className="sv-seg">{MEAL_PLANS.map((m) => (
-            <button key={m.code} type="button" className={(trip.meal || "MAP") === m.code ? "on" : ""} onClick={() => onTripChange({ ...trip, meal: m.code })}>{m.code}</button>))}</div>
-          <div className="sv-sub sv-mt">{meal?.name}: {meal?.desc}</div></div>
+            <button key={m.code} type="button" title={`${m.name}: ${m.desc}`} className={(trip.meal || "MAP") === m.code ? "on" : ""} onClick={() => onTripChange({ ...trip, meal: m.code })}>{m.code}</button>))}</div></div>
+        <div className="sv-sub sv-mealnote">{meal?.name}: {meal?.desc}</div>
         <div><span className="sv-lbl">Vehicle</span>
           <div className="sv-pills">
             <button type="button" className={"sv-pillb" + (vehicleValue === "" ? " on" : "")} onClick={() => pickVehicle("")}>Auto (by group)</button>
@@ -120,7 +121,7 @@ export default function LeadForm({ onGenerated, trip = { vehicle: "", meal: "MAP
 
       {error && <div className="sv-note bad" role="alert">{error}</div>}
 
-      <button type="submit" className="sv-btn sv-primary sv-full" disabled={loading}>
+      <button type="submit" className="sv-btn sv-primary sv-full sv-buildbtn" disabled={loading}>
         {loading ? <><span className="sv-spin" />Building the itinerary…</> : <>{hasQuote ? "Rebuild itinerary" : "Build itinerary"}<Icon name="chev" /></>}
       </button>
       {hasQuote && <div className="sv-sub sv-center">Rebuilding replaces the changes you made in Days.</div>}
