@@ -23,6 +23,19 @@ const UI_THEME = {
 const ROOM_TYPES = ["Deluxe Room", "Super Deluxe Room", "Premium Room", "Executive Room", "Family Room", "Suite", "Cottage", "Houseboat Cabin"];
 const DEFAULT_ROOM_TYPE = "Deluxe Room";
 
+// Rooms are entered as a mix of sharing types; the room count is calculated from it.
+// DBL = double, TPL = triple sharing, QUAD = quad sharing, FAM = family room (counted as sleeping 4).
+const SHARING_TYPES = [
+  { key: "dbl",  abbr: "DBL",  sub: "2 guests",    cap: 2 },
+  { key: "tpl",  abbr: "TPL",  sub: "3 guests",    cap: 3 },
+  { key: "quad", abbr: "QUAD", sub: "4 guests",    cap: 4 },
+  { key: "fam",  abbr: "FAM",  sub: "family room", cap: 4 },
+];
+const emptyMix = () => ({ dbl: 0, tpl: 0, quad: 0, fam: 0 });
+const mixTotal = (m) => SHARING_TYPES.reduce((n, t) => n + (Number(m?.[t.key]) || 0), 0);
+const mixSleeps = (m) => SHARING_TYPES.reduce((n, t) => n + (Number(m?.[t.key]) || 0) * t.cap, 0);
+const mixText = (m) => SHARING_TYPES.filter((t) => Number(m?.[t.key]) > 0).map((t) => `${m[t.key]} ${t.abbr}`).join(" + ");
+
 const TRANSIT_OPTIONS = [
   "Airport Pickup and Local Sightseeing: Overnight Srinagar",
   "Airport Pickup: Overnight Pahalgam",
@@ -1065,7 +1078,7 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
     const last = timeline[timeline.length - 1];
     const n = timeline.length + 1;
     const night = last && !isDepDay(last) && last.overnight_stay ? last.overnight_stay : "Srinagar";
-    setTimeline((prev) => [...prev, { day: n, title: "", date: `Day ${n} Plan`, transit_route: "", overnight_stay: night, schedule: [], ...(last && last.rooms != null ? { rooms: last.rooms } : {}), ...(last && last.eb != null ? { eb: last.eb } : {}) }]);
+    setTimeline((prev) => [...prev, { day: n, title: "", date: `Day ${n} Plan`, transit_route: "", overnight_stay: night, schedule: [], ...(last && last.rooms != null ? { rooms: last.rooms } : {}), ...(last && last.sharing ? { sharing: last.sharing } : {}), ...(last && last.eb != null ? { eb: last.eb } : {}) }]);
     setActiveDay(n - 1);
     setPickDraft({});
   };
@@ -1372,6 +1385,18 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
   const dayIssues  = issues.filter((q) => q.day === activeDay);
   const rooms      = Math.max(1, Math.min(20, Number(day.rooms ?? 1) || 1));
   const ebs        = Math.max(0, Math.min(20, Number(day.eb ?? 0) || 0));
+  const guestCount = (Number(quote?.meta_summary?.adults ?? quote?.adults ?? 2) || 0) + (Number(quote?.meta_summary?.kids ?? quote?.kids ?? 0) || 0);
+  const savedMix   = day.sharing && mixTotal(day.sharing) > 0 ? { ...emptyMix(), ...day.sharing } : null;
+  const mix        = savedMix || { ...emptyMix(), dbl: rooms };          // until you tap a counter this is only a suggestion
+  const mixRooms   = mixTotal(mix);
+  const mixFits    = mixSleeps(mix) + ebs >= guestCount;
+  // Changing the mix sets the room count too (rooms = sum of the mix) and carries to the days after this one.
+  const setMix = (key, delta) => {
+    const next = { ...mix, [key]: Math.max(0, Math.min(20, (Number(mix[key]) || 0) + delta)) };
+    const total = mixTotal(next);
+    if (total < 1) return;
+    setTimeline((prev) => prev.map((d, k) => (k >= activeDay ? { ...d, sharing: next, rooms: total } : d)));
+  };
 
   // Activities (immutable updates)
   const setAct = (idx, patch) => setTimeline((prev) => prev.map((d, i) => i !== activeDay ? d : {
@@ -1588,11 +1613,39 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
                     value={hotelName || `Choose a hotel${day.overnight_stay ? " in " + day.overnight_stay : ""}`}
                     hint={hotelName ? day.overnight_stay : ""} onClick={() => setSheet({ type: "hotel" })} />
                   <PickRow label="Room" value={day.room_type || DEFAULT_ROOM_TYPE} onClick={() => setSheet({ type: "room" })} />
-                  <div className="sv-pair">
-                    <Stepper label="Rooms" value={rooms} min={1} max={20} onChange={(v) => setRoomField(activeDay, "rooms", v)} />
-                    <Stepper label="Extra bed" value={ebs} min={0} max={20} onChange={(v) => setRoomField(activeDay, "eb", v)} />
+                  <span className="sv-lbl sv-mixlbl">Rooms &amp; sharing</span>
+                  <div className="sv-mix" role="group" aria-label="Rooms and sharing">
+                    {SHARING_TYPES.map((t) => {
+                      const n = Number(mix[t.key]) || 0;
+                      return (
+                        <div key={t.key} className={"sv-mixc" + (n > 0 ? " on" : "")}>
+                          <strong>{t.abbr}</strong>
+                          <small>{t.sub}</small>
+                          <div className="sv-mixq">
+                            <button type="button" aria-label={`Fewer ${t.abbr}`} disabled={n <= 0 || mixRooms <= 1} onClick={() => setMix(t.key, -1)}>−</button>
+                            <b>{n}</b>
+                            <button type="button" aria-label={`More ${t.abbr}`} disabled={n >= 20} onClick={() => setMix(t.key, 1)}>+</button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div className="sv-sub">Rooms, extra beds and room type also apply to the days after this one.</div>
+                  <div className="sv-mixbar">
+                    <div className={"sv-mixsum" + (mixFits ? "" : " warn")}>
+                      <b>Rooms: {mixRooms} <i>AUTO</i></b>
+                      <span>{mixText(mix)}</span>
+                      <em>{mixFits ? `✓ Fits ${guestCount} guests` : `Sleeps ${mixSleeps(mix) + ebs}, party is ${guestCount}`}</em>
+                    </div>
+                    <div className="sv-mixeb">
+                      <i>EXTRA<br />BED</i>
+                      <div className="sv-mixq">
+                        <button type="button" aria-label="Fewer extra beds" disabled={ebs <= 0} onClick={() => setRoomField(activeDay, "eb", ebs - 1)}>−</button>
+                        <b>{ebs}</b>
+                        <button type="button" aria-label="More extra beds" disabled={ebs >= 20} onClick={() => setRoomField(activeDay, "eb", ebs + 1)}>+</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="sv-sub">Rooms = DBL + TPL + QUAD + FAM, no typing needed. {!savedMix ? "Tap a counter to set it. " : ""}Also applies to the days after this one.</div>
                 </>
               )}
             </section>
@@ -1706,7 +1759,7 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
                 <span>Day {i + 1} · {d.overnight_stay || "?"}</span>
                 <b className={hotelSelections[i] ? "" : "bad"}>
                   {hotelSelections[i] ? ALL_HOTELS_FLAT[hotelSelections[i]]?.name : "Not chosen"}
-                  <small>{d.room_type || DEFAULT_ROOM_TYPE} · {d.rooms ?? 1} room{(d.rooms ?? 1) > 1 ? "s" : ""}{d.eb ? `, ${d.eb} extra bed` : ""}</small>
+                  <small>{d.room_type || DEFAULT_ROOM_TYPE} · {d.sharing && mixTotal(d.sharing) > 0 ? `${mixText(d.sharing)} (${mixTotal(d.sharing)} room${mixTotal(d.sharing) > 1 ? "s" : ""})` : `${d.rooms ?? 1} room${(d.rooms ?? 1) > 1 ? "s" : ""}`}{d.eb ? `, ${d.eb} extra bed` : ""}</small>
                 </b>
               </button>
             ))}
