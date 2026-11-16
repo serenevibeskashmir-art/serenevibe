@@ -924,7 +924,7 @@ class SharingLegend(Flowable):
         c = self.canv
         c.setFont("Lato", 6.4); c.setFillColor(GRAY_600)
         c.drawCentredString(self.width / 2, 1.2 * mm,
-                            "DBL Double  ·  TPL Triple  ·  QUAD Quad  ·  FAM Family room  ·  EB Extra bed  ·  Sleeps = room capacity")
+                            "DBL Double  ·  TPL Triple  ·  QUAD Quad  ·  FAM Family room  ·  EB Extra bed")
 
 
 class HotelStayCard(Flowable):
@@ -998,11 +998,10 @@ class HotelStayCard(Flowable):
             c.drawString(tx, y + 1.9 * mm, s)
 
     def _sharing_badge(self, c, x, y, avail_w, mix, eb):
-        """Gold-and-glass label on the hero photo: bed icon | 1 DBL .. | 1 TPL .. | +1 EB | N SLEEPS."""
+        """Gold-and-glass label on the hero photo: bed icon | 1 DBL .. | 1 TPL .. | +1 EB."""
         segs = [(n, ab, g) for n, (ab, g) in zip(mix, _SHARE_TYPES) if n]
         if not segs:
             return
-        sleeps = sum(n * g for n, (ab, g) in zip(mix, _SHARE_TYPES))
         f, fs = "Lato-Bold", 7.2
         H = 7.2 * mm
         G_LITE, G_DARK, G_TEXT = colors.HexColor("#f3d98b"), colors.HexColor("#c8962b"), colors.HexColor("#e9c46a")
@@ -1012,8 +1011,7 @@ class HotelStayCard(Flowable):
                  for n, ab, g in segs]
         eb_txt = f"+{eb} EB"
         eb_w = (2.4 * mm + max(sw(eb_txt, f, fs), sw("EXTRA BED", f, 3.8)) + 2.4 * mm) if eb else 0
-        tot_w = max(sw(str(sleeps), f, 9.5), sw("SLEEPS", f, 3.8)) + 4.6 * mm
-        total_w = cap0 + sum(seg_w) + eb_w + tot_w
+        total_w = cap0 + sum(seg_w) + eb_w
         sc = min(1.0, avail_w / total_w)
 
         def gold(x0, w):
@@ -1030,7 +1028,7 @@ class HotelStayCard(Flowable):
         c.setFillColor(colors.Color(0.035, 0.075, 0.133, alpha=0.9)); c.roundRect(0, 0, total_w, H, 2.4 * mm, fill=1, stroke=0)
         c.saveState()
         cp = c.beginPath(); cp.roundRect(0, 0, total_w, H, 2.4 * mm); c.clipPath(cp, stroke=0, fill=0)
-        gold(0, cap0); gold(total_w - tot_w, tot_w)
+        gold(0, cap0)
         c.restoreState()
         c.setStrokeColor(G_TEXT); c.setLineWidth(0.6); c.roundRect(0, 0, total_w, H, 2.4 * mm, fill=0, stroke=1)
 
@@ -1061,9 +1059,6 @@ class HotelStayCard(Flowable):
             c.setFillColor(G_TEXT); c.setFont(f, fs); c.drawString(xx + 2.4 * mm, H * 0.56, eb_txt)
             c.setFillColor(colors.HexColor("#cfd8e3")); c.setFont(f, 3.8); c.drawString(xx + 2.4 * mm, H * 0.25, "EXTRA BED")
             xx += eb_w
-        c.setFillColor(NAVY_DEEP)
-        c.setFont(f, 9.5); c.drawCentredString(xx + tot_w / 2, H * 0.50, str(sleeps))
-        c.setFont(f, 3.8); c.drawCentredString(xx + tot_w / 2, H * 0.20, "SLEEPS")
         c.restoreState()
 
     # ── draw ────────────────────────────────────────────────────────────────
@@ -7258,6 +7253,8 @@ def generate_pdf(itinerary_data: dict) -> str:
         mix = _mix_of(day_info)
         if sum(mix):
             rooms = sum(mix)                                  # rooms are calculated from the sharing mix
+        else:
+            mix = (min(rooms, 20), 0, 0, 0)                   # no sharing entered: shown as doubles
         room_type = str(day_info.get("room_type") or (_hd.get(hid) or {}).get("room_type") or "").strip()
         if not room_type and stays and hid and stays[-1]["hid"] == hid and stays[-1]["last"] == idx - 1:
             room_type = stays[-1]["room_type"]            # same hotel, next night: same room type
