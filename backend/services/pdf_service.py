@@ -892,6 +892,41 @@ _MEAL_SHORT = {"EP": ("EP", "Room only"), "CP": ("CP", "Breakfast"),
                "MAP": ("MAP", "Breakfast + dinner"), "AP": ("AP", "All meals")}
 
 
+# Rooms are entered in the admin as a mix of sharing types (rooms = their sum).
+# (abbreviation, guests per room); a family room is counted as sleeping 4.
+_SHARE_TYPES = (("DBL", 2), ("TPL", 3), ("QUAD", 4), ("FAM", 4))
+
+
+def _mix_of(day):
+    """(dbl, tpl, quad, fam) counts from a timeline day's `sharing` dict; (0, 0, 0, 0) when not set."""
+    sh = day.get("sharing") if isinstance(day, dict) else None
+    if not isinstance(sh, dict):
+        return (0, 0, 0, 0)
+    out = []
+    for k in ("dbl", "tpl", "quad", "fam"):
+        try:
+            out.append(max(0, min(20, int(float(sh.get(k) or 0)))))
+        except (TypeError, ValueError):
+            out.append(0)
+    return tuple(out)
+
+
+class SharingLegend(Flowable):
+    """One small line explaining the abbreviations on the hotel photos."""
+    def __init__(self, width):
+        super().__init__()
+        self.width, self.height = width, 4.2 * mm
+
+    def wrap(self, aw, ah):
+        return self.width, self.height
+
+    def draw(self):
+        c = self.canv
+        c.setFont("Lato", 6.4); c.setFillColor(GRAY_600)
+        c.drawCentredString(self.width / 2, 1.2 * mm,
+                            "DBL Double  ·  TPL Triple  ·  QUAD Quad  ·  FAM Family room  ·  EB Extra bed  ·  Sleeps = room capacity")
+
+
 class HotelStayCard(Flowable):
     """One stay as a hotel 'page': big hero photo with a bookmark ribbon for the nights, a second photo
     (or a check-in / check-out strip), and four icon cells: stay, room type, rooms, meal plan.
@@ -962,6 +997,75 @@ class HotelStayCard(Flowable):
             c.setFillColor(GRAY_600); c.setFont("Lato", 6.6)
             c.drawString(tx, y + 1.9 * mm, s)
 
+    def _sharing_badge(self, c, x, y, avail_w, mix, eb):
+        """Gold-and-glass label on the hero photo: bed icon | 1 DBL .. | 1 TPL .. | +1 EB | N SLEEPS."""
+        segs = [(n, ab, g) for n, (ab, g) in zip(mix, _SHARE_TYPES) if n]
+        if not segs:
+            return
+        sleeps = sum(n * g for n, (ab, g) in zip(mix, _SHARE_TYPES))
+        f, fs = "Lato-Bold", 7.2
+        H = 7.2 * mm
+        G_LITE, G_DARK, G_TEXT = colors.HexColor("#f3d98b"), colors.HexColor("#c8962b"), colors.HexColor("#e9c46a")
+        cap0 = 6.8 * mm
+        sw = pdfmetrics.stringWidth
+        seg_w = [2.4 * mm + 4.0 * mm + 1.6 * mm + max(sw(ab, f, fs), g * 1.0 * mm + (g - 1) * 0.7 * mm) + 2.4 * mm
+                 for n, ab, g in segs]
+        eb_txt = f"+{eb} EB"
+        eb_w = (2.4 * mm + max(sw(eb_txt, f, fs), sw("EXTRA BED", f, 3.8)) + 2.4 * mm) if eb else 0
+        tot_w = max(sw(str(sleeps), f, 9.5), sw("SLEEPS", f, 3.8)) + 4.6 * mm
+        total_w = cap0 + sum(seg_w) + eb_w + tot_w
+        sc = min(1.0, avail_w / total_w)
+
+        def gold(x0, w):
+            for k in range(6):                                   # simple top-to-bottom gold gradient
+                t = k / 5.0
+                c.setFillColor(colors.Color(G_LITE.red + (G_DARK.red - G_LITE.red) * t,
+                                            G_LITE.green + (G_DARK.green - G_LITE.green) * t,
+                                            G_LITE.blue + (G_DARK.blue - G_LITE.blue) * t))
+                c.rect(x0, H - (k + 1) * H / 6.0, w, H / 6.0 + 0.2, fill=1, stroke=0)
+
+        c.saveState()
+        c.translate(x, y); c.scale(sc, sc)
+        c.setFillColor(colors.Color(0, 0, 0, alpha=0.35)); c.roundRect(0.4 * mm, -0.5 * mm, total_w, H, 2.4 * mm, fill=1, stroke=0)
+        c.setFillColor(colors.Color(0.035, 0.075, 0.133, alpha=0.9)); c.roundRect(0, 0, total_w, H, 2.4 * mm, fill=1, stroke=0)
+        c.saveState()
+        cp = c.beginPath(); cp.roundRect(0, 0, total_w, H, 2.4 * mm); c.clipPath(cp, stroke=0, fill=0)
+        gold(0, cap0); gold(total_w - tot_w, tot_w)
+        c.restoreState()
+        c.setStrokeColor(G_TEXT); c.setLineWidth(0.6); c.roundRect(0, 0, total_w, H, 2.4 * mm, fill=0, stroke=1)
+
+        # bed icon
+        cx, cy = cap0 / 2, H / 2
+        c.setFillColor(NAVY_DEEP)
+        c.roundRect(cx - 2.2 * mm, cy - 1.5 * mm, 4.4 * mm, 1.3 * mm, 0.3 * mm, fill=1, stroke=0)
+        c.rect(cx - 2.2 * mm, cy - 1.5 * mm, 0.55 * mm, 3.3 * mm, fill=1, stroke=0)
+        c.circle(cx - 1.0 * mm, cy + 0.55 * mm, 0.7 * mm, fill=1, stroke=0)
+        c.roundRect(cx + 0.1 * mm, cy - 0.2 * mm, 2.1 * mm, 0.8 * mm, 0.3 * mm, fill=1, stroke=0)
+
+        xx = cap0
+        for (n, ab, g), w in zip(segs, seg_w):
+            c.setStrokeColor(colors.Color(G_TEXT.red, G_TEXT.green, G_TEXT.blue, alpha=0.3)); c.setLineWidth(0.4)
+            c.line(xx, 0.8 * mm, xx, H - 0.8 * mm)
+            ccx = xx + 2.4 * mm + 2.0 * mm
+            c.setFillColor(G_TEXT); c.circle(ccx, H / 2, 2.0 * mm, fill=1, stroke=0)
+            c.setFillColor(NAVY_DEEP); c.setFont(f, 7.2); c.drawCentredString(ccx, H / 2 - 0.95 * mm, str(n))
+            tx = xx + 2.4 * mm + 4.0 * mm + 1.6 * mm
+            c.setFillColor(WHITE); c.setFont(f, fs); c.drawString(tx, H * 0.56, ab)
+            c.setFillColor(G_TEXT)
+            for d in range(g):                                   # one dot per guest in this room type
+                c.circle(tx + 0.5 * mm + d * 1.7 * mm, H * 0.28, 0.5 * mm, fill=1, stroke=0)
+            xx += w
+        if eb:
+            c.setStrokeColor(colors.Color(G_TEXT.red, G_TEXT.green, G_TEXT.blue, alpha=0.3)); c.setLineWidth(0.4)
+            c.line(xx, 0.8 * mm, xx, H - 0.8 * mm)
+            c.setFillColor(G_TEXT); c.setFont(f, fs); c.drawString(xx + 2.4 * mm, H * 0.56, eb_txt)
+            c.setFillColor(colors.HexColor("#cfd8e3")); c.setFont(f, 3.8); c.drawString(xx + 2.4 * mm, H * 0.25, "EXTRA BED")
+            xx += eb_w
+        c.setFillColor(NAVY_DEEP)
+        c.setFont(f, 9.5); c.drawCentredString(xx + tot_w / 2, H * 0.50, str(sleeps))
+        c.setFont(f, 3.8); c.drawCentredString(xx + tot_w / 2, H * 0.20, "SLEEPS")
+        c.restoreState()
+
     # ── draw ────────────────────────────────────────────────────────────────
     def draw(self):
         c, W, H, st = self.canv, self.width, self.height, self.stay
@@ -1007,6 +1111,10 @@ class HotelStayCard(Flowable):
         c.setFillColor(WHITE); c.setFont("Lato-Bold", size)
         for ln in reversed(lines):
             c.drawString(4 * mm, y, ln); y += size * 0.43 * mm * 1.02
+        _mix = st.get("mix")
+        if _mix and any(_mix):                               # sharing label sits just above the hotel name
+            _step = size * 0.43 * mm * 1.02
+            self._sharing_badge(c, 4 * mm, (y - _step) + size * 0.72 + 2.4 * mm, hw - 8 * mm, _mix, st.get("eb", 0))
         # place pill (top right of hero)
         place = _raw(st["place"]).upper()
         tw = pdfmetrics.stringWidth(place, "Lato-Bold", 7.2)
@@ -7147,10 +7255,13 @@ def generate_pdf(itinerary_data: dict) -> str:
         hid = str(hotel_id) if known else ""
         rooms = _count(day_info, hid, "rooms", 1) or 1
         eb = _count(day_info, hid, "eb", 0)
+        mix = _mix_of(day_info)
+        if sum(mix):
+            rooms = sum(mix)                                  # rooms are calculated from the sharing mix
         room_type = str(day_info.get("room_type") or (_hd.get(hid) or {}).get("room_type") or "").strip()
         if not room_type and stays and hid and stays[-1]["hid"] == hid and stays[-1]["last"] == idx - 1:
             room_type = stays[-1]["room_type"]            # same hotel, next night: same room type
-        key = (hid or "tbc:" + overnight_raw.lower(), rooms, eb, room_type)
+        key = (hid or "tbc:" + overnight_raw.lower(), rooms, eb, room_type, mix)
         if stays and stays[-1]["key"] == key and stays[-1]["last"] == idx - 1:
             stays[-1]["last"] = idx
             continue
@@ -7159,7 +7270,7 @@ def generate_pdf(itinerary_data: dict) -> str:
             "key": key, "hid": hid, "known": known, "first": idx, "last": idx,
             "name": info.get("name") or "Hotel to be confirmed",
             "place": info.get("place") or clean(overnight_raw.split(":")[0].strip().title()) or "-",
-            "rooms": rooms, "eb": eb, "room_type": room_type,
+            "rooms": rooms, "eb": eb, "room_type": room_type, "mix": mix,
         })
 
     for st in stays:
@@ -7173,7 +7284,7 @@ def generate_pdf(itinerary_data: dict) -> str:
         st["stay_txt"] = stay_txt
         st["room_type"] = st["room_type"] or "On confirmation"
         st["rooms_txt"] = f"{st['rooms']} room" + ("s" if st["rooms"] != 1 else "") \
-            + (f" + {st['eb']} extra bed" + ("s" if st["eb"] != 1 else "") if st["eb"] else "")
+            + (f" + {st['eb']} extra bed" + ("s" if st["eb"] != 1 else "") if (st["eb"] and not any(st["mix"])) else "")
         st["meal_txt"] = f"{_mp_code}  ·  {_mp_desc}"
 
     _photo_cache = {}
@@ -7188,9 +7299,10 @@ def generate_pdf(itinerary_data: dict) -> str:
     if stays:
         _title = [SectionTitle(usable_w, "WHERE YOU'LL STAY", icon=""), Spacer(1, 4*mm)]
         _cards = [HotelStayCard(usable_w, st, _stay_photos(st)) for st in stays]
-        story.append(KeepTogether(_title + [_cards[0], Spacer(1, 3.5*mm)]))
-        for _card in _cards[1:]:
-            story.append(KeepTogether([_card, Spacer(1, 3.5*mm)]))
+        _legend = [SharingLegend(usable_w), Spacer(1, 2*mm)] if any(any(st["mix"]) for st in stays) else []
+        story.append(KeepTogether(_title + [_cards[0], Spacer(1, 3.5*mm)] + (_legend if len(_cards) == 1 else [])))
+        for _i, _card in enumerate(_cards[1:], start=1):
+            story.append(KeepTogether([_card, Spacer(1, 3.5*mm)] + (_legend if _i == len(_cards) - 1 else [])))
 
         _segs = _stay_segments(timeline, hotel_selections, HOTEL_LOOKUP)
         if _segs:
