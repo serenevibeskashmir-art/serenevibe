@@ -1576,15 +1576,14 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
             <section className="sv-card sv-stack">
               <div className="sv-dayhead">
                 <div>
-                  <div className="sv-eyebrow">Day {activeDay + 1} of {timeline.length}</div>
+                  <div className="sv-eyebrow">Day {activeDay + 1} of {timeline.length} · {dep ? "Departure day" : (stayValue ? `Night in ${stayValue}` : "No stay chosen")}</div>
                   <h2 className="sv-h2">{heading}</h2>
-                  <div className="sv-sub">{dep ? "Departure day" : (stayValue ? `Night in ${stayValue}` : "No overnight stay chosen")}</div>
                 </div>
+                {dayIssues.length
+                  ? <span className="sv-pill warn sv-dstat">{dayIssues.length} to finish</span>
+                  : <span className="sv-pill ok sv-dstat"><Icon name="check" size={14} />Ready</span>}
                 <button type="button" className="sv-ib sv-ib-soft" onClick={() => setSheet({ type: "dayMenu" })} aria-label="Day options"><Icon name="more" /></button>
               </div>
-              {dayIssues.length
-                ? <span className="sv-pill warn">{dayIssues.length} to finish on this day</span>
-                : <span className="sv-pill ok"><Icon name="check" size={14} />Day is ready</span>}
 
               <div className="sv-rail">
                 <PickRow label="From" value={rFrom || "Choose"} hint={activeDay > 0 && prevNight && rFrom !== prevNight ? `Day ${activeDay} ended in ${prevNight}` : ""} warn={!rFrom}
@@ -1598,9 +1597,9 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
               {addNote && <div className="sv-note">{addNote}</div>}
               <div className="sv-act-tools">
                 <button type="button" className="sv-btn sv-sm sv-accent" disabled={!!aiBusy} onClick={() => setSheet({ type: "ai" })}>
-                  {aiBusy === "day" ? <><span className="sv-spin" />Writing</> : <><Icon name="spark" size={18} />Rewrite day with AI</>}
+                  {aiBusy === "day" ? <><span className="sv-spin" />Writing</> : <><Icon name="spark" size={18} />Rewrite with AI</>}
                 </button>
-                <button type="button" className="sv-btn sv-sm sv-soft" onClick={() => setSheet({ type: "presets" })}>Ready-made days</button>
+                <button type="button" className="sv-btn sv-sm sv-soft" onClick={() => setSheet({ type: "presets" })}>Ready-made</button>
               </div>
             </section>
 
@@ -1609,10 +1608,12 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
                 <div className="sv-row static"><span className="k">Hotel</span><span className="v"><small>Departure day, no hotel needed</small></span></div>
               ) : (
                 <>
-                  <PickRow label="Hotel" warn={!hotelSelections[activeDay]}
-                    value={hotelName || `Choose a hotel${day.overnight_stay ? " in " + day.overnight_stay : ""}`}
-                    hint={hotelName ? day.overnight_stay : ""} onClick={() => setSheet({ type: "hotel" })} />
-                  <PickRow label="Room" value={day.room_type || DEFAULT_ROOM_TYPE} onClick={() => setSheet({ type: "room" })} />
+                  <div className="sv-rail sv-rail1">
+                    <PickRow label="Hotel" warn={!hotelSelections[activeDay]}
+                      value={hotelName || `Choose a hotel${day.overnight_stay ? " in " + day.overnight_stay : ""}`}
+                      hint={hotelName ? day.overnight_stay : ""} onClick={() => setSheet({ type: "hotel" })} />
+                    <PickRow label="Room" value={day.room_type || DEFAULT_ROOM_TYPE} onClick={() => setSheet({ type: "room" })} />
+                  </div>
                   <span className="sv-lbl sv-mixlbl">Rooms &amp; sharing</span>
                   <div className="sv-mix" role="group" aria-label="Rooms and sharing">
                     {SHARING_TYPES.map((t) => {
@@ -1645,16 +1646,14 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
                       </div>
                     </div>
                   </div>
-                  <div className="sv-sub">Rooms = DBL + TPL + QUAD + FAM, no typing needed. {!savedMix ? "Prints as DBL until you change it. " : ""}Also applies to the days after this one.</div>
+                  <div className="sv-sub">Rooms = DBL + TPL + QUAD + FAM. {!savedMix ? "Prints as DBL until changed. " : ""}Applies to later days too.</div>
                 </>
               )}
             </section>
 
             <div className="sv-sechead">
               <h3 className="sv-h3">Activities <span className="sv-sub">{day.schedule.length}</span></h3>
-              <button type="button" className="sv-btn sv-sm sv-accent" disabled={!!aiBusy} onClick={() => setSheet({ type: "ai" })}>
-                {aiBusy === "day" ? <><span className="sv-spin" />Writing</> : <><Icon name="spark" size={18} />Rewrite day</>}
-              </button>
+              <button type="button" className="sv-btn sv-sm sv-soft" onClick={addAct}><Icon name="plus" size={16} />Add</button>
             </div>
             {aiError && <div className="sv-note bad">{aiError}</div>}
 
@@ -1695,7 +1694,7 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
                 </div>
               );
             })}
-            <button type="button" className="sv-btn sv-line sv-full" onClick={addAct}><Icon name="plus" />Add activity</button>
+            {day.schedule.length > 3 && <button type="button" className="sv-btn sv-line sv-full" onClick={addAct}><Icon name="plus" />Add activity</button>}
 
             <div className="sv-pair">
               <button type="button" className="sv-btn sv-soft" disabled={activeDay === 0} onClick={() => goDay(activeDay - 1)}><Icon name="back" />Day {activeDay}</button>
@@ -1703,7 +1702,6 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
                 ? <button type="button" className="sv-btn sv-primary" onClick={() => goStep("review")}>Review<Icon name="chev" /></button>
                 : <button type="button" className="sv-btn sv-primary" onClick={() => goDay(activeDay + 1)}>Day {activeDay + 2}<Icon name="chev" /></button>}
             </div>
-            <div className="sv-sub sv-center">Tip: swipe left or right to change day.</div>
           </div>
         </div>
       ) : (
@@ -1711,11 +1709,16 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
         <div className="sv-stack">
           <section className="sv-card">
             <h2 className="sv-h2">{quote?.meta_summary?.client_name || "Client"}</h2>
-            <div className="sv-sum"><span>Days</span><b>{timeline.length}</b></div>
-            <div className="sv-sum"><span>Guests</span><b>{quote?.meta_summary?.adults ?? quote?.adults ?? 2} adults{(quote?.meta_summary?.kids ?? quote?.kids ?? 0) ? `, ${quote?.meta_summary?.kids ?? quote?.kids} kids` : ""}</b></div>
-            <div className="sv-sum"><span>Plan</span><b>{quote?.meta_summary?.budget_tier || "N/A"} · {mealPlan} · {vehicleType || "N/A"}</b></div>
-            <PickRow label="Pick-up" value={startPoint || DEFAULT_POINT} onClick={() => setSheet({ type: "start" })} />
-            <PickRow label="Drop" value={endPoint || DEFAULT_POINT} onClick={() => setSheet({ type: "end" })} />
+            <div className="sv-facts">
+              <span><small>Days</small><b>{timeline.length}</b></span>
+              <span><small>Guests</small><b>{quote?.meta_summary?.adults ?? quote?.adults ?? 2}A{(quote?.meta_summary?.kids ?? quote?.kids ?? 0) ? ` + ${quote?.meta_summary?.kids ?? quote?.kids}K` : ""}</b></span>
+              <span><small>Plan</small><b>{quote?.meta_summary?.budget_tier || "N/A"} · {mealPlan}</b></span>
+              <span><small>Vehicle</small><b>{vehicleType || "N/A"}</b></span>
+            </div>
+            <div className="sv-rail sv-rail2">
+              <PickRow label="Pick-up" value={startPoint || DEFAULT_POINT} onClick={() => setSheet({ type: "start" })} />
+              <PickRow label="Drop" value={endPoint || DEFAULT_POINT} onClick={() => setSheet({ type: "end" })} />
+            </div>
             {[["start", "Start", startPoint], ["end", "End", endPoint]].map(([key, label, val]) => {
               if (isSrinagarPoint(val) || (val || "").trim().length < 3) return null;
               const info = key === "start" ? startInfo : endInfo;
