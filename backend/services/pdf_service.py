@@ -997,22 +997,34 @@ class HotelStayCard(Flowable):
             c.setFillColor(GRAY_600); c.setFont("Lato", 6.6)
             c.drawString(tx, y + 1.9 * mm, s)
 
-    def _sharing_badge(self, c, x, y, avail_w, mix, eb):
-        """Gold-and-glass label on the hero photo: bed icon | 1 DBL .. | 1 TPL .. | +1 EB."""
+    @staticmethod
+    def _badge_metrics(mix, eb):
+        """(segs, seg_w, eb_w, total_w, cap0) of the sharing label at scale 1, or None when there is nothing to show."""
         segs = [(n, ab, g) for n, (ab, g) in zip(mix, _SHARE_TYPES) if n]
         if not segs:
-            return
+            return None
         f, fs = "Lato-Bold", 7.2
-        H = 7.2 * mm
-        G_LITE, G_DARK, G_TEXT = colors.HexColor("#f3d98b"), colors.HexColor("#c8962b"), colors.HexColor("#e9c46a")
         cap0 = 6.8 * mm
         sw = pdfmetrics.stringWidth
         seg_w = [2.4 * mm + 4.0 * mm + 1.6 * mm + max(sw(ab, f, fs), g * 1.0 * mm + (g - 1) * 0.7 * mm) + 2.4 * mm
                  for n, ab, g in segs]
         eb_txt = f"+{eb} EB"
         eb_w = (2.4 * mm + max(sw(eb_txt, f, fs), sw("EXTRA BED", f, 3.8)) + 2.4 * mm) if eb else 0
-        total_w = cap0 + sum(seg_w) + eb_w
+        return segs, seg_w, eb_w, cap0 + sum(seg_w) + eb_w, cap0
+
+    def _sharing_badge(self, c, x, y, avail_w, mix, eb):
+        """Gold-and-glass label on the hero photo: bed icon | 1 DBL .. | 1 TPL .. | +1 EB.
+        (x, y) is the bottom-RIGHT corner of the label; it is shrunk to fit `avail_w`."""
+        m = self._badge_metrics(mix, eb)
+        if not m:
+            return
+        segs, seg_w, eb_w, total_w, cap0 = m
+        f, fs = "Lato-Bold", 7.2
+        H = 7.2 * mm
+        G_LITE, G_DARK, G_TEXT = colors.HexColor("#f3d98b"), colors.HexColor("#c8962b"), colors.HexColor("#e9c46a")
+        eb_txt = f"+{eb} EB"
         sc = min(1.0, avail_w / total_w)
+        x = x - total_w * sc
 
         def gold(x0, w):
             for k in range(6):                                   # simple top-to-bottom gold gradient
@@ -1095,9 +1107,13 @@ class HotelStayCard(Flowable):
         # hotel name, bottom left
         name = _raw(st["name"])
         size = 13.2
-        lines = simpleSplit(name, "Lato-Bold", size, hw - 8 * mm)
+        _mix = st.get("mix")
+        _bm = self._badge_metrics(_mix, st.get("eb", 0)) if _mix and any(_mix) else None
+        # the sharing label sits bottom-right, so the name gets the room left of it
+        name_w = hw - 8 * mm - ((min(_bm[3], hw * 0.5) + 3 * mm) if _bm else 0)
+        lines = simpleSplit(name, "Lato-Bold", size, name_w)
         while len(lines) > 2 and size > 9:
-            size -= 0.6; lines = simpleSplit(name, "Lato-Bold", size, hw - 8 * mm)
+            size -= 0.6; lines = simpleSplit(name, "Lato-Bold", size, name_w)
         lines = lines[:2]
         y = 3.6 * mm + (len(lines) - 1) * (size * 0.43 * mm)
         if not self.readers and st.get("known"):
@@ -1106,10 +1122,8 @@ class HotelStayCard(Flowable):
         c.setFillColor(WHITE); c.setFont("Lato-Bold", size)
         for ln in reversed(lines):
             c.drawString(4 * mm, y, ln); y += size * 0.43 * mm * 1.02
-        _mix = st.get("mix")
-        if _mix and any(_mix):                               # sharing label sits just above the hotel name
-            _step = size * 0.43 * mm * 1.02
-            self._sharing_badge(c, 4 * mm, (y - _step) + size * 0.72 + 2.4 * mm, hw - 8 * mm, _mix, st.get("eb", 0))
+        if _bm:                                              # sharing label: bottom-right corner of the photo
+            self._sharing_badge(c, hw - 4 * mm, 3.2 * mm, hw * 0.5, _mix, st.get("eb", 0))
         # place pill (top right of hero)
         place = _raw(st["place"]).upper()
         tw = pdfmetrics.stringWidth(place, "Lato-Bold", 7.2)
