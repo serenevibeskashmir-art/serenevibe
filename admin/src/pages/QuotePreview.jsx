@@ -851,6 +851,36 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
       .filter(([k]) => !includedExtras.includes(k)).map(([, p]) => "Snow chain vehicle, " + p),
     ...customIncl.filter((c) => !c.on).map((c) => c.t),
   ];
+  // At-a-glance lists for the Inc/Exc step: what the PDF will print under Included / Not included.
+  const includedGlance = (() => {
+    const mp = MEAL_PLANS.find((m) => m.code === mealPlan);
+    const places = (keys, labels) => keys.filter((k) => includedExtras.includes(k)).map((k) => labels[k]);
+    const union = places(["union_cab_pahalgam", "union_cab_gulmarg", "union_cab_sonamarg"], { union_cab_pahalgam: "Pahalgam", union_cab_gulmarg: "Gulmarg", union_cab_sonamarg: "Sonamarg" })
+      .concat(includedExtras.includes("union_cab_other") ? cabOtherPlaces : []);
+    const snow = places(["snow_chain_gulmarg", "snow_chain_sonamarg"], { snow_chain_gulmarg: "Gulmarg", snow_chain_sonamarg: "Sonamarg" })
+      .concat(includedExtras.includes("snow_chain_other") ? snowOtherPlaces : []);
+    const couple = (trip?.coupleExtras || []).map((k) => ({ couple_cake: "Cake Cutting Celebration", couple_bed: "Bed decoration", couple_candle: "Candle light dinner" })[k]).filter(Boolean);
+    return [
+      `${vehicleType || "Private cab"} for all transfers and sightseeing`,
+      "Hotel / houseboat stays as per itinerary, or similar",
+      mp ? `${mp.name}: ${mp.desc}` : "",
+      "1 hour complimentary shikara ride",
+      "Toll, fuel, parking and driver allowance",
+      ...(union.length ? ["Union cab: " + union.join(", ")] : []),
+      ...(snow.length ? ["Snow chain vehicle: " + snow.join(", ")] : []),
+      ...(includedExtras.includes("gondola_p1") ? ["Gondola Phase 1"] : []),
+      ...(includedExtras.includes("gondola_p2") ? ["Gondola Phase 2"] : []),
+      ...(trip?.couple && Number(quote?.meta_summary?.adults || quote?.adults || 2) === 2 ? couple : []),
+      ...customIncl.filter((c) => c.on).map((c) => c.t),
+    ].filter(Boolean);
+  })();
+  const excludedGlance = [
+    ...excludedList,
+    "Airfare or train fare",
+    "Entrance fees and snacks",
+    "Personal expenses (tips, laundry, calls, camera)",
+    "Claims due to road blocks, curfews, accidents",
+  ];
   // Vehicle and meal plan are set in the trip form at the top; changing them there updates this quote.
   useEffect(() => { if (trip?.vehicle) setVehicleType(trip.vehicle); }, [trip?.vehicle]);
   useEffect(() => { if (trip?.meal) setMealPlan(trip.meal); }, [trip?.meal]);
@@ -1406,8 +1436,16 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
       {step === "incexc" ? (
         /* ───────────── INC / EXC STEP ───────────── */
         <div className="sv-stack">
+          <section className="sv-card sv-stack sv-glance">
+            <div className="sv-sechead"><h3 className="sv-h3">Included</h3><span className="sv-pill ok">{includedGlance.length}</span></div>
+            <ul className="sv-ielist sv-ielist--in">{includedGlance.map((x, i) => <li key={x + i}><i aria-hidden="true">✓</i><span>{x}</span></li>)}</ul>
+            <div className="sv-sechead"><h3 className="sv-h3">Not included</h3><span className={"sv-pill " + (excludedGlance.length ? "warn" : "ok")}>{excludedGlance.length}</span></div>
+            <ul className="sv-ielist sv-ielist--out">{excludedGlance.map((x, i) => <li key={x + i}><i aria-hidden="true">×</i><span>{x}</span></li>)}</ul>
+            <div className="sv-sub">This is what the PDF prints. Change it with the switches below.</div>
+          </section>
+
           <section className="sv-card sv-stack">
-            <span className="sv-lbl">Included in the package</span>
+            <span className="sv-lbl">Change what is included</span>
             <div className="sv-stack" style={{ border: "1.5px solid var(--sv-line)", borderRadius: 14, padding: 12, gap: 10 }}>
               <span className="sv-lbl" style={{ color: "var(--sv-ink)", margin: 0 }}>Union cab included for</span>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
@@ -1487,16 +1525,7 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
             <div className="sv-sub">Anything switched off is listed under exclusions on the PDF.</div>
           </section>
 
-          <section className="sv-card sv-stack">
-            <div className="sv-sechead">
-              <h3 className="sv-h3">Not included (paid locally)</h3>
-              <span className={"sv-pill " + (excludedList.length ? "warn" : "ok")}>{excludedList.length || "None"}</span>
-            </div>
-            {excludedList.length === 0
-              ? <div className="sv-sub">Everything is in the package price.</div>
-              : <ul style={{ margin: 0, paddingLeft: 18 }}>{excludedList.map((x) => <li key={x} className="sv-sub" style={{ overflowWrap: "anywhere" }}>{x}</li>)}</ul>}
-            <div className="sv-sub">The Days step reads this list: when you write a day with AI, anything here is described as not included and paid locally.{mealPlan !== "AP" ? ` Lunch comes from the meal plan (${mealPlan}) set in Trip.` : ""}</div>
-          </section>
+          <p className="sv-sub" style={{ margin: "0 4px" }}>The Days step reads the exclusions: when you write a day with AI, anything not included is described as paid locally.{mealPlan !== "AP" ? ` Lunch comes from the meal plan (${mealPlan}) set in Trip.` : ""}</p>
 
           <div className="sv-pair">
             <button type="button" className="sv-btn sv-soft" onClick={() => goStep("trip")}><Icon name="back" />Trip</button>
@@ -1663,9 +1692,10 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
               {issues.length ? <span className="sv-pill warn">{issues.length} to finish</span> : <span className="sv-pill ok">All set</span>}
             </div>
             {issues.length === 0 && <div className="sv-sub">Every day has a route, a hotel and descriptions. Ready for the PDF.</div>}
-            {issues.map((q, k) => (
+            {(showChecks ? issues : issues.slice(0, 3)).map((q, k) => (
               <div key={k} className="sv-issue"><span>{q.text}</span><button type="button" className="sv-btn sv-sm" onClick={() => runFix(q)}>{q.btn === "Open day" ? "Open" : q.btn === "Pick suggested hotel" ? "Pick one" : q.btn}</button></div>
             ))}
+            {issues.length > 3 && <button type="button" className="sv-btn sv-sm sv-soft sv-self" onClick={() => setShowChecks((v) => !v)}>{showChecks ? "Show fewer" : `Show ${issues.length - 3} more`}</button>}
             {missingHotelDays.length > 1 && <button type="button" className="sv-btn sv-sm sv-soft sv-self" onClick={fixAllHotels}>Pick suggested hotels for all ({missingHotelDays.length})</button>}
           </section>
 
