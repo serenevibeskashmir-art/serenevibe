@@ -1645,7 +1645,7 @@ export default function QuotePreview({ quote, trip, step = "days", onStep = () =
                       </div>
                     </div>
                   </div>
-                  <div className="sv-sub">Rooms = DBL + TPL + QUAD + FAM, no typing needed. {!savedMix ? "Tap a counter to set it. " : ""}Also applies to the days after this one.</div>
+                  <div className="sv-sub">Rooms = DBL + TPL + QUAD + FAM, no typing needed. {!savedMix ? "Prints as DBL until you change it. " : ""}Also applies to the days after this one.</div>
                 </>
               )}
             </section>
