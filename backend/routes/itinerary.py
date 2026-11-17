@@ -215,11 +215,11 @@ def sheet_test():
 
 
 def _hotel_labels(payload, selections):
-    """['Hotel Name (2)', ...] for the Google Sheet. The number is the rooms, taken the same way as the
-    PDF 'Where you'll stay' cards: sharing mix first, then the day's rooms, then the hotel's rooms, then 1.
-    Different room counts on different nights show as a range, e.g. (2-3)."""
+    """['Hotel Name (1R-2N)', ...] for the Google Sheet: rooms (R) and nights (N). Rooms are taken the same way as
+    the PDF 'Where you'll stay' cards: sharing mix first, then the day's rooms, then the hotel's rooms, then 1.
+    Different room counts on different nights show as a range, e.g. (2-3R-4N). Departure days are not counted."""
     hd = payload.get("hotel_details") or {}
-    seen = {}                                   # hotel name -> set of room counts, in first-seen order
+    seen = {}                                   # hotel name -> [set of room counts, nights], in first-seen order
     for idx, day in enumerate(payload.get("timeline") or []):
         if not isinstance(day, dict):
             continue
@@ -229,6 +229,10 @@ def _hotel_labels(payload, selections):
         name = info.get("name") if isinstance(info, dict) else None
         if not name:
             continue
+        overnight = str(day.get("overnight_stay") or "").strip().lower()
+        signal = f"{day.get('title', '')} {day.get('transit_route', '')}".lower()
+        if "departure" in signal or "airport drop" in signal or overnight == "departure":
+            continue                            # no hotel night on a departure day
         sh = day.get("sharing") if isinstance(day.get("sharing"), dict) else {}
         n = 0
         for k in ("dbl", "tpl", "quad", "fam"):
@@ -244,11 +248,13 @@ def _hotel_labels(payload, selections):
                         break
                 except (TypeError, ValueError):
                     pass
-        seen.setdefault(name, set()).add(n or 1)
+        rec = seen.setdefault(name, [set(), 0])
+        rec[0].add(n or 1)
+        rec[1] += 1
     out = []
-    for name, counts in seen.items():
+    for name, (counts, nights) in seen.items():
         lo, hi = min(counts), max(counts)
-        out.append(f"{name} ({lo if lo == hi else f'{lo}-{hi}'})")
+        out.append(f"{name} ({lo if lo == hi else f'{lo}-{hi}'}R-{nights}N)")
     return out
 
 
