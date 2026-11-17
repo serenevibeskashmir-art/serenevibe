@@ -214,6 +214,44 @@ def sheet_test():
     return jsonify({"ok": ok, "detail": detail}), (200 if ok else 502)
 
 
+def _hotel_labels(payload, selections):
+    """['Hotel Name (2)', ...] for the Google Sheet. The number is the rooms, taken the same way as the
+    PDF 'Where you'll stay' cards: sharing mix first, then the day's rooms, then the hotel's rooms, then 1.
+    Different room counts on different nights show as a range, e.g. (2-3)."""
+    hd = payload.get("hotel_details") or {}
+    seen = {}                                   # hotel name -> set of room counts, in first-seen order
+    for idx, day in enumerate(payload.get("timeline") or []):
+        if not isinstance(day, dict):
+            continue
+        hid = selections.get(str(idx))
+        hid = hid.get("id") if isinstance(hid, dict) else hid
+        info = hd.get(str(hid)) if hid is not None else None
+        name = info.get("name") if isinstance(info, dict) else None
+        if not name:
+            continue
+        sh = day.get("sharing") if isinstance(day.get("sharing"), dict) else {}
+        n = 0
+        for k in ("dbl", "tpl", "quad", "fam"):
+            try:
+                n += max(0, int(float(sh.get(k) or 0)))
+            except (TypeError, ValueError):
+                pass
+        if not n:
+            for v in (day.get("rooms"), info.get("rooms")):
+                try:
+                    if v not in (None, ""):
+                        n = max(0, int(float(v)))
+                        break
+                except (TypeError, ValueError):
+                    pass
+        seen.setdefault(name, set()).add(n or 1)
+    out = []
+    for name, counts in seen.items():
+        lo, hi = min(counts), max(counts)
+        out.append(f"{name} ({lo if lo == hi else f'{lo}-{hi}'})")
+    return out
+
+
 @itinerary_bp.route("/generate", methods=["POST"])
 @admin_required
 def generate_custom_itinerary():
@@ -297,11 +335,7 @@ def generate_custom_itinerary():
                 client_name, _quote_ref(client_name), days, calculated_cost)
 
     # Record the quote in the Google Sheet (no-op unless GOOGLE_SHEET_WEBHOOK_URL is set; never blocks the PDF).
-    _hotel_names = []
-    for _h in (response_payload.get("hotel_details") or {}).values():
-        _n = (_h or {}).get("name") if isinstance(_h, dict) else None
-        if _n and _n not in _hotel_names:
-            _hotel_names.append(_n)
+    _hotel_names = _hotel_labels(response_payload, selected_hotels if isinstance(selected_hotels, dict) else {})
     log_quote(client_name, _quote_ref(client_name), calculated_cost, data.get("start_date", "Flexible"), {
         "email": client_email, "days": days, "adults": adults, "kids": data.get("kids", 0),
         "budget_tier": budget_tier, "vehicle": vehicle, "meal_plan": meal_plan,
