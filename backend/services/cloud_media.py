@@ -138,6 +138,70 @@ def fetch_bytes(kind: str, ref):
         return None
 
 
+# ---------------------------------------------------------------------------
+# Database-independent catalogue (the safety net)
+# ---------------------------------------------------------------------------
+# Every image is uploaded under a predictable name (serenevibe/<kind>/<ref>[/<hash>]), so
+# Cloudinary itself can tell us which photo belongs where. When the database is exhausted,
+# unreachable, or the app has failed over to an EMPTY second database, the site and the
+# itinerary use this instead and photos keep showing.
+CATALOG_TTL = 600        # seconds a successful listing is reused (keeps Admin API calls low)
+CATALOG_RETRY = 60       # seconds before retrying after a failed listing
+_catalog = {"at": 0.0, "data": None}
+
+
+def _empty_catalog() -> dict:
+    return {"site_photo": {}, "package": {}, "hotels": {}}
+
+
+def _fetch_catalog() -> dict:
+    url = f"https://api.cloudinary.com/v1_1/{Config.CLOUDINARY_CLOUD_NAME}/resources/image/upload"
+    params = {"prefix": ROOT_FOLDER + "/", "max_results": 500}
+    auth = (Config.CLOUDINARY_API_KEY, Config.CLOUDINARY_API_SECRET)
+    resources = []
+    while True:
+        resp = requests.get(url, params=params, auth=auth, timeout=8)
+        resp.raise_for_status()
+        body = resp.json()
+        resources += body.get("resources", [])
+        if not body.get("next_cursor"):
+            break
+        params["next_cursor"] = body["next_cursor"]
+
+    out = _empty_catalog()
+    for res in sorted(resources, key=lambda r: r.get("created_at", "")):
+        parts = res["public_id"].split("/")          # serenevibe / kind / ref [/ hash]
+        if len(parts) == 3 and parts[1] in ("site_photo", "package"):
+            out[parts[1]][parts[2]] = res["secure_url"]
+        elif len(parts) == 4 and parts[1] == "hotels":
+            out["hotels"].setdefault(parts[2], []).append(res["secure_url"])
+    return out
+
+
+def catalog() -> dict:
+    """{"site_photo": {slot: url}, "package": {id: url}, "hotels": {hotel_id: [urls]}} straight from
+    Cloudinary. Cached in memory; if Cloudinary can't be reached the last good copy is returned.
+    Never raises."""
+    if not configured():
+        return _empty_catalog()
+    now = time.time()
+    if _catalog["data"] is not None and now - _catalog["at"] < CATALOG_TTL:
+        return _catalog["data"]
+    try:
+        _catalog["data"], _catalog["at"] = _fetch_catalog(), now
+    except Exception as exc:
+        log.warning("Could not list Cloudinary images: %s", exc)
+        _catalog["at"] = now - CATALOG_TTL + CATALOG_RETRY   # try again soon, serve stale meanwhile
+        if _catalog["data"] is None:
+            return _empty_catalog()
+    return _catalog["data"]
+
+
+def hotel_photos_fallback() -> dict:
+    """{hotel_id: [https urls]} for the itinerary / website hotel photos, without the database."""
+    return dict(catalog()["hotels"])
+
+
 def hotel_data_url_to_cloud(src: str, hotel_id: str) -> str:
     """Turn a base64 data URL into a Cloudinary https URL. Anything else is returned unchanged.
     The file name is a hash of the picture, so saving the same photo twice never duplicates it."""
