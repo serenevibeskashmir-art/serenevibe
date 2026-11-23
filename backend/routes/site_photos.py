@@ -19,6 +19,7 @@ Admin endpoints (Bearer token required)
                                               (link only for slots marked "has_link")
     DELETE /api/admin/site-photos/<slot>   -> remove the photo
 """
+import logging
 import re
 from urllib.parse import urlparse
 
@@ -28,6 +29,8 @@ from backend.auth import admin_required
 from backend.extensions import db
 from backend.models import SiteLink, SitePhoto
 from backend.services import cloud_media
+
+log = logging.getLogger(__name__)
 
 site_photos_bp = Blueprint("site_photos", __name__)
 
@@ -222,12 +225,23 @@ def _save_link(slot: str, url: str):
 
 def public_manifest() -> dict:
     """{"photos": {slot: {"url", "alt"}}, "links": {slot: url}} (uploaded photos / saved links only)."""
-    photos = {}
-    clouds = cloud_media.url_map("site_photo")
-    for row in _metadata_rows():
-        if row.slot in SLOT_INDEX:
-            photos[row.slot] = {"url": _url(row.slot, row.updated_at, clouds.get(row.slot)), "alt": row.alt or ""}
-    return {"photos": photos, "links": _link_rows()}
+    photos, links = {}, {}
+    try:
+        clouds = cloud_media.url_map("site_photo")
+        for row in _metadata_rows():
+            if row.slot in SLOT_INDEX:
+                photos[row.slot] = {"url": _url(row.slot, row.updated_at, clouds.get(row.slot)), "alt": row.alt or ""}
+        links = _link_rows()
+    except Exception as exc:   # database exhausted / unreachable
+        db.session.rollback()
+        photos, links = {}, {}
+        log.warning("site photos: database unavailable, using Cloudinary directly: %s", exc)
+    if not photos:
+        # Database failed, or it is a fresh/empty one: Cloudinary knows which photo is which slot.
+        for slot, url in cloud_media.catalog()["site_photo"].items():
+            if slot in SLOT_INDEX:
+                photos[slot] = {"url": cloud_media.optimized(url), "alt": SLOT_INDEX[slot]["label"]}
+    return {"photos": photos, "links": links}
 
 
 def _slot_payload(slot_def: dict, row, link: str = "", cloud=None) -> dict:
@@ -258,8 +272,16 @@ def get_public_photos():
 def get_photo_bytes(slot):
     if slot not in SLOT_INDEX:
         abort(404)
-    row = SitePhoto.query.filter_by(slot=slot).first()
+    try:
+        row = SitePhoto.query.filter_by(slot=slot).first()
+    except Exception as exc:   # database exhausted / unreachable -> go straight to Cloudinary
+        db.session.rollback()
+        log.warning("media %s: database unavailable: %s", slot, exc)
+        row = None
     if row is None:
+        url = cloud_media.catalog()["site_photo"].get(slot)
+        if url:
+            return redirect(cloud_media.optimized(url), code=302)
         abort(404)
 
     if not row.data:
