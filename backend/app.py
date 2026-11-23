@@ -128,6 +128,13 @@ def create_app():
         response.headers["Cache-Control"] = "no-cache"
         return response
 
+    @app.get("/premium")
+    @app.get("/premium.html")
+    def serve_premium_home():
+        response = send_from_directory(PUBLIC_DIR, "premium.html")
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
     @app.get("/privacy-policy")
     def serve_privacy_policy():
         return send_from_directory(PUBLIC_DIR, "privacy-policy.html")
