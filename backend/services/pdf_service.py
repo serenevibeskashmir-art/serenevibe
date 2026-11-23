@@ -211,18 +211,34 @@ def _hero_shade_reader():
     return _HERO_SHADE
 
 
+def _site_photo_bytes(slot):
+    """Bytes of a website photo. Database copy first; otherwise Cloudinary (pointer row, or - when the
+    database is exhausted / empty - Cloudinary's own listing). Never raises; None if not found."""
+    raw = None
+    try:
+        from backend.models import SitePhoto
+        row = SitePhoto.query.filter_by(slot=slot).first()
+        if row is not None and row.data:
+            raw = bytes(row.data)
+    except Exception as exc:
+        print(f"Warning: database unavailable for photo '{slot}': {exc}")
+        try:
+            from backend.extensions import db as _db
+            _db.session.rollback()
+        except Exception:
+            pass
+    if not raw:
+        from backend.services import cloud_media
+        raw = cloud_media.fetch_bytes("site_photo", slot)
+    return raw
+
+
 def _load_hero_photo():
     """ImageReader for the website's main banner photo (site photo slot 'hero'), or None."""
     try:
-        from backend.models import SitePhoto
-        row = SitePhoto.query.filter_by(slot="hero").first()
-        if row is not None:
-            raw = bytes(row.data) if row.data else None
-            if raw is None:   # photo lives on Cloudinary
-                from backend.services import cloud_media
-                raw = cloud_media.fetch_bytes("site_photo", "hero")
-            if raw:
-                return ImageReader(_compress_image(raw))
+        raw = _site_photo_bytes("hero")
+        if raw:
+            return ImageReader(_compress_image(raw))
     except Exception as exc:
         print(f"Warning: could not load hero photo: {exc}")
     return None
@@ -1263,15 +1279,8 @@ def _load_destination_backgrounds():
     """{destination key: faded ImageReader} for every website destination photo that exists."""
     found = {}
     try:
-        from backend.models import SitePhoto
         for key in _DEST_KEYS:
-            row = SitePhoto.query.filter_by(slot=f"dest-{key}").first()
-            raw = None
-            if row is not None:
-                raw = bytes(row.data) if row.data else None
-                if raw is None:   # photo lives on Cloudinary
-                    from backend.services import cloud_media
-                    raw = cloud_media.fetch_bytes("site_photo", f"dest-{key}")
+            raw = _site_photo_bytes(f"dest-{key}")
             if raw:
                 try:
                     found[key] = _faded_reader(raw)
