@@ -126,11 +126,19 @@ def remove(kind: str, ref) -> None:
 
 def fetch_bytes(kind: str, ref):
     """Image bytes for a pointer (used by the PDF builder), or None."""
-    row = get(kind, ref)
-    if row is None:
+    url = None
+    try:
+        row = get(kind, ref)
+        url = row.url if row is not None else None
+    except Exception as exc:          # database exhausted / unreachable
+        db.session.rollback()
+        log.warning("cloud_media pointer lookup failed for %s/%s: %s", kind, ref, exc)
+    if not url:                       # no pointer row: ask Cloudinary itself
+        url = catalog().get(kind, {}).get(str(ref))
+    if not url:
         return None
     try:
-        resp = requests.get(row.url, timeout=10)
+        resp = requests.get(url, timeout=10)
         resp.raise_for_status()
         return resp.content
     except requests.RequestException as exc:
