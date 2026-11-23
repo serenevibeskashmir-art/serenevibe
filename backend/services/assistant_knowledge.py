@@ -73,6 +73,9 @@ def hotel_photo_sources(hotel_id: str) -> list:
             saved = _usable_sources(json.loads(row.images_json))
     except Exception as exc:  # a DB hiccup must never break the chat
         current_app.logger.warning("Assistant: could not load photos for %s: %s", hotel_id, exc)
+    if not saved:
+        from backend.services import cloud_media
+        saved = _usable_sources(cloud_media.hotel_photos_fallback().get(hotel_id))
     return saved or _usable_sources(hotel.get("images"))
 
 
