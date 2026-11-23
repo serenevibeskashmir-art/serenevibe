@@ -1,0 +1,11 @@
+body{margin:0;background:#F3F6F5;color:#0B1F33;font-family:'Hanken Grotesk',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+a:hover{color:inherit}
+h1,h2,h3,p{margin:0}
+.nav-link:hover{opacity:.7}
+.btn:hover{filter:brightness(1.06)}
+
+html{scroll-behavior:smooth;scroll-padding-top:16px}
+img,svg{max-width:100%}
+:focus-visible{outline:2px solid #E3A02F;outline-offset:3px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
