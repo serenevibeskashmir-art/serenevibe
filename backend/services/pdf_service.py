@@ -7207,15 +7207,15 @@ def generate_pdf(itinerary_data: dict) -> str:
             _db.session.rollback()
         except Exception:
             pass
-    if not _loaded:
-        # Database exhausted / empty: use the photos that are on Cloudinary.
-        try:
-            from backend.services import cloud_media as _cm
-            for _hid, _urls in _cm.hotel_photos_fallback().items():
-                if _hid in HOTEL_LOOKUP and _urls:
-                    HOTEL_LOOKUP[_hid]["images"] = _urls
-        except Exception as _e:
-            print(f"Warning: Cloudinary hotel photo fallback failed: {_e}")
+    # Any hotel still without photos (database exhausted, empty, or missing that hotel):
+    # use the photos that are on Cloudinary.
+    try:
+        from backend.services import cloud_media as _cm
+        for _hid, _urls in _cm.hotel_photos_fallback().items():
+            if _hid in HOTEL_LOOKUP and _urls and not HOTEL_LOOKUP[_hid].get("images"):
+                HOTEL_LOOKUP[_hid]["images"] = _urls
+    except Exception as _e:
+        print(f"Warning: Cloudinary hotel photo fallback failed: {_e}")
 
     hotel_selections = itinerary_data.get("selected_hotels") or \
                        itinerary_data.get("hotelSelections") or {}
