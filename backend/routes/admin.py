@@ -15,8 +15,13 @@ admin_bp = Blueprint("admin", __name__)
 
 def _load_hotel_images() -> dict:
     """Return {hotel_id: [img_src, ...]} for all hotels stored in the DB."""
-    rows = HotelImages.query.all()
-    return {row.hotel_id: json.loads(row.images_json) for row in rows}
+    try:
+        rows = HotelImages.query.all()
+        data = {row.hotel_id: json.loads(row.images_json) for row in rows}
+    except Exception:
+        db.session.rollback()
+        data = {}
+    return data or cloud_media.hotel_photos_fallback()
 
 
 def _save_hotel_images(data: dict):
