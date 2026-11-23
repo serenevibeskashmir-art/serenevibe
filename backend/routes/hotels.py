@@ -48,8 +48,10 @@ def _admin_uploaded_images() -> dict:
                 clean = [i for i in imgs if isinstance(i, str) and i.strip()]
                 if clean:
                     out[row.hotel_id] = clean
-        if out:
-            return out
+        from backend.services import cloud_media
+        for hid, urls in cloud_media.hotel_photos_fallback().items():   # hotels the DB has no photos for
+            out.setdefault(hid, urls)
+        return out
     except Exception as exc:   # never let this break the public site
         log.warning("hotels: could not read hotel_images table: %s", exc)
         try:
