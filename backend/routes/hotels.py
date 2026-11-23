@@ -48,10 +48,18 @@ def _admin_uploaded_images() -> dict:
                 clean = [i for i in imgs if isinstance(i, str) and i.strip()]
                 if clean:
                     out[row.hotel_id] = clean
-        return out
+        if out:
+            return out
     except Exception as exc:   # never let this break the public site
         log.warning("hotels: could not read hotel_images table: %s", exc)
-        return {}
+        try:
+            from backend.extensions import db
+            db.session.rollback()
+        except Exception:
+            pass
+    # Database failed or is empty: take the hotel photos straight from Cloudinary.
+    from backend.services import cloud_media
+    return cloud_media.hotel_photos_fallback()
 
 
 @hotels_bp.get("/hotels")
