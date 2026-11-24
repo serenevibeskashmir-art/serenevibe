@@ -220,7 +220,9 @@ function routeTitle(from, to, night) {
   if (!to) return "";
   const n = night || defaultNightFor(to, from);
   if (from === "Airport") {
-    return n === "Srinagar" && (to === "Local sightseeing" || to === "Srinagar" || to === "Doodhpathri")
+    // Only an explicit "Local sightseeing" choice gets the sightseeing title; picking Srinagar
+    // gives plain "Airport Pickup: Overnight Srinagar" (pickup + stay only, no sightseeing added).
+    return n === "Srinagar" && (to === "Local sightseeing" || to === "Doodhpathri")
       ? PICKUP_ROUTE
       : `Airport Pickup: Overnight ${n}`;
   }
