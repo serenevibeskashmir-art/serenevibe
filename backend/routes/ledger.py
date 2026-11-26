@@ -10,7 +10,7 @@ import datetime
 
 from flask import Blueprint, jsonify, request
 
-from backend.auth import admin_required
+from backend.auth import main_admin_required
 from backend.services.sheet_log import call_script
 
 ledger_bp = Blueprint("ledger", __name__)
@@ -20,7 +20,7 @@ MAX_AMOUNT = 100_000_000
 
 
 @ledger_bp.get("/admin/ledger")
-@admin_required
+@main_admin_required
 def list_ledger():
     data, error = call_script("ledger_list")
     if error:
@@ -29,7 +29,7 @@ def list_ledger():
 
 
 @ledger_bp.post("/admin/ledger")
-@admin_required
+@main_admin_required
 def add_ledger():
     body = request.get_json(silent=True) or {}
 
@@ -66,7 +66,7 @@ def add_ledger():
 
 
 @ledger_bp.delete("/admin/ledger/<entry_id>")
-@admin_required
+@main_admin_required
 def delete_ledger(entry_id):
     entry_id = (entry_id or "").strip()
     if not entry_id or len(entry_id) > 64:
