@@ -1,4 +1,5 @@
 const TOKEN_KEY = 'adminToken';
+const ROLE_KEY = 'adminRole';
 
 export function getAdminToken() {
   return sessionStorage.getItem(TOKEN_KEY);
@@ -10,6 +11,16 @@ export function setAdminToken(token) {
 
 export function clearAdminToken() {
   sessionStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(ROLE_KEY);
+}
+
+// 'admin' = main admin, 'admin2' = second admin (no Accounts)
+export function getAdminRole() {
+  return sessionStorage.getItem(ROLE_KEY) || 'admin';
+}
+
+export function setAdminRole(role) {
+  sessionStorage.setItem(ROLE_KEY, role || 'admin');
 }
 
 export function authHeaders(extra = {}) {
@@ -40,6 +51,7 @@ export async function adminLogin(password) {
     throw new Error(result.error || 'Login failed');
   }
   setAdminToken(result.token);
+  setAdminRole(result.role);
   return result;
 }
 
@@ -47,7 +59,12 @@ export async function verifyAdminSession() {
   const token = getAdminToken();
   if (!token) return false;
   const response = await apiFetch('/api/admin/verify');
-  return response.ok;
+  if (!response.ok) return false;
+  try {
+    const body = await response.json();
+    setAdminRole(body.role);
+  } catch { /* keep stored role */ }
+  return true;
 }
 
 export async function sendItineraryEmailApi(itineraryData) {
