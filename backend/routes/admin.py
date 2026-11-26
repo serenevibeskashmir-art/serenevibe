@@ -1,3 +1,4 @@
+import hmac
 import json
 import uuid
 
@@ -41,23 +42,31 @@ def _save_hotel_images(data: dict):
 @admin_bp.post("/login")
 def admin_login():
     data = request.get_json(silent=True) or {}
-    password = data.get("password", "")
+    password = str(data.get("password", ""))
 
-    if password != Config.ADMIN_PASSWORD:
+    def _same(a, b):
+        return hmac.compare_digest(a.encode(), b.encode())
+
+    if _same(password, Config.ADMIN_PASSWORD):
+        role = "admin"
+    elif Config.ADMIN2_PASSWORD and _same(password, Config.ADMIN2_PASSWORD):
+        role = "admin2"
+    else:
         return jsonify({"error": "Invalid admin credentials."}), 401
 
-    return jsonify({"token": create_admin_token(), "message": "Authenticated"})
+    return jsonify({"token": create_admin_token(role), "role": role, "message": "Authenticated"})
 
 
 @admin_bp.get("/verify")
 def admin_verify():
-    from backend.auth import verify_admin_token
+    from backend.auth import get_admin_role
 
     auth_header = request.headers.get("Authorization", "")
     token = auth_header.removeprefix("Bearer ").strip() if auth_header else ""
-    if not verify_admin_token(token):
+    role = get_admin_role(token)
+    if role is None:
         return jsonify({"authenticated": False}), 401
-    return jsonify({"authenticated": True})
+    return jsonify({"authenticated": True, "role": role})
 
 
 @admin_bp.get("/hotel-images")
