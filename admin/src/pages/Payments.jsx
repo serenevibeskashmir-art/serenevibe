@@ -88,7 +88,7 @@ export default function Payments({ onUnauthorized }) {
       if (res.status === 401) { onUnauthorized && onUnauthorized(); return; }
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not update the sheet.');
-      setRows((prev) => prev.map((x) => (key(x) === k ? { ...x, confirmed: next } : x)));
+      setRows((prev) => prev.map((x) => (key(x) === k ? { ...x, confirmed: next, ...(data.row || {}) } : x)));
     } catch (e) { setError(e.message); }
     setConfirming('');
   };
@@ -96,7 +96,7 @@ export default function Payments({ onUnauthorized }) {
   /* Mark complete: the trip is over / the booking is closed. Writes the date into "Completed On" in the sheet. */
   const toggleComplete = async (r) => {
     const k = key(r), next = !r.completed;
-    if (next && r.balance > 0 && !window.confirm(`${r.name} still has ${inr(r.balance)} unpaid. Mark this booking complete anyway?`)) return;
+    if (next && r.balance > 0 && !window.confirm(`Mark ${r.name} complete? The remaining ${inr(r.balance)} will be recorded as received (Paid in full, balance ₹0).`)) return;
     setCompleting(k); setError('');
     try {
       const res = await apiFetch('/api/admin/payments/complete', {
@@ -105,7 +105,7 @@ export default function Payments({ onUnauthorized }) {
       if (res.status === 401) { onUnauthorized && onUnauthorized(); return; }
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not update the sheet.');
-      setRows((prev) => prev.map((x) => (key(x) === k ? { ...x, completed: next, completed_on: data.completed_on || '' } : x)));
+      setRows((prev) => prev.map((x) => (key(x) === k ? { ...x, completed: next, completed_on: data.completed_on || '', ...(next ? { follow_up_date: '' } : {}), ...(data.row || {}) } : x)));
     } catch (e) { setError(e.message); }
     setCompleting('');
   };
@@ -207,19 +207,19 @@ export default function Payments({ onUnauthorized }) {
                   </button>
                   <button type="button" disabled={confirming === k} onClick={() => toggleConfirm(r)}
                     style={{ ...S.confirm, ...(r.confirmed ? S.confirmOn : {}) }}
-                    title={r.confirmed ? 'Row is green in the sheet. Tap to undo.' : 'Turn this row green in the sheet'}>
+                    title={r.confirmed ? 'Row is green in the sheet. Tap to undo.' : 'Turn this row green and record the 25% booking amount'}>
                     {confirming === k ? 'Saving…' : r.confirmed ? '✓ Confirmed' : 'Confirm'}
                   </button>
                   <button type="button" disabled={completing === k} onClick={() => toggleComplete(r)}
                     style={{ ...S.complete, ...(r.completed ? S.completeOn : {}) }}
-                    title={r.completed ? 'Marked complete in the sheet. Tap to undo.' : 'Booking finished: writes the date in the sheet'}>
+                    title={r.completed ? 'Marked complete in the sheet. Tap to undo.' : 'Booking finished: paid in full, balance 0, date saved in the sheet'}>
                     {completing === k ? 'Saving…' : r.completed ? '✓ Completed · tap to undo' : 'Mark complete'}
                   </button>
                 </div>
               )}
               {saved === k && !editing && <div style={S.ok}>Saved to the sheet.</div>}
 
-              {!editing && (
+              {!editing && !r.completed && (
                 <div style={{ ...S.lead, ...(isDue(r) ? S.leadDue : {}) }}>
                   <div style={S.leadRow}>
                     <div style={S.leadCol}>
