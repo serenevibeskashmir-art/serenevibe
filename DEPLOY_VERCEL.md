@@ -32,6 +32,8 @@ In your Vercel project → Settings → Environment Variables, add:
 | `DATABASE_URL_2` | (Optional) 2nd Neon database, used automatically if `DATABASE_URL` is unreachable |
 | `SECRET_KEY`     | A long random string                       |
 | `ADMIN_PASSWORD` | Your admin panel password                  |
+| `ADMIN2_PASSWORD` | (Optional) Second admin's password. Same panel, but no Accounts tab and Accounts APIs are blocked |
+| `ADMIN_NAME` / `ADMIN2_NAME` | (Optional) Names shown in the sheet's "Created By" column. Defaults: Main Admin / Admin 2 |
 
 > **Recommended DB**: [Neon](https://neon.tech) — free PostgreSQL, works great with Vercel.
 > Copy the connection string from Neon; it starts with `postgresql://`.
