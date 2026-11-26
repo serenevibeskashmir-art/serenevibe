@@ -3,7 +3,7 @@ import os
 
 from flask import Blueprint, jsonify, request, send_file
 
-from backend.auth import admin_required
+from backend.auth import admin_required, current_admin_name
 from backend.services.pdf_service import (generate_pdf, _quote_ref, normalize_extras, _extras_list, _amount_int,
                                           UNION_CAB_PLACES, SNOW_CHAIN_PLACES, COUPLE_EXTRAS, _GONDOLA_LABELS, clean_text_list)
 from backend.services.pdf_archive import archive_pdf, get_archived_pdf, list_archive
@@ -347,6 +347,7 @@ def generate_custom_itinerary():
         "budget_tier": budget_tier, "vehicle": vehicle, "meal_plan": meal_plan,
         "pickup": start_point, "drop": end_point, "hotels": _hotel_names,
         "inclusions": _inclusion_labels(response_payload),
+        "created_by": current_admin_name(),
     })
 
     # On serverless hosting a second request may land on a different instance that
