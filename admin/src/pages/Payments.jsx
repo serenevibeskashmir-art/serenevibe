@@ -307,7 +307,7 @@ const S = {
   confirmOn: { background: '#2e9e66', color: '#fff' },
   complete: { flex: '1 1 100%', font: 'inherit', fontSize: 14, fontWeight: 700, borderRadius: 9, padding: '4px 14px', minHeight: 38, cursor: 'pointer', background: '#fff', border: '1px solid #334e68', color: '#334e68' },
   completeOn: { background: '#2f5d9e', borderColor: '#2f5d9e', color: '#fff' },
-  cardDone: { background: '#e3edf9', borderColor: '#7c9cc4', borderLeft: '6px solid #2f5d9e' },
+  cardDone: { background: '#e3edf9', borderColor: '#7c9cc4', borderLeft: '6px solid #2f5d9e', fontWeight: 700 },
   lead: { marginTop: 10, padding: '8px 10px', border: `1px solid ${LINE}`, borderRadius: 8, background: '#fafbfc' },
   leadDue: { borderColor: '#c62828', background: '#fdf0ef' },
   leadRow: { display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: 8 },
