@@ -15,7 +15,7 @@ import re
 
 from flask import Blueprint, jsonify, request
 
-from backend.auth import admin_required
+from backend.auth import main_admin_required
 from backend.services.pdf_import import parse_pages, parse_quote_pdf
 from backend.services.sheet_log import call_script, send_row
 
@@ -25,7 +25,7 @@ MAX_PDF_BYTES = 4 * 1024 * 1024          # the host rejects request bodies over 
 
 
 @payments_bp.get("/admin/payments")
-@admin_required
+@main_admin_required
 def list_payments():
     data, error = call_script("list")
     if error:
@@ -34,7 +34,7 @@ def list_payments():
 
 
 @payments_bp.post("/admin/payments")
-@admin_required
+@main_admin_required
 def save_payment():
     body = request.get_json(silent=True) or {}
     name = str(body.get("name") or "").strip()
@@ -54,7 +54,7 @@ def save_payment():
 
 
 @payments_bp.post("/admin/payments/confirm")
-@admin_required
+@main_admin_required
 def confirm_quote():
     body = request.get_json(silent=True) or {}
     name = str(body.get("name") or "").strip()
@@ -68,7 +68,7 @@ def confirm_quote():
 
 
 @payments_bp.post("/admin/payments/complete")
-@admin_required
+@main_admin_required
 def complete_quote():
     body = request.get_json(silent=True) or {}
     name = str(body.get("name") or "").strip()
@@ -83,7 +83,7 @@ def complete_quote():
 
 
 @payments_bp.post("/admin/payments/lead")
-@admin_required
+@main_admin_required
 def quote_lead():
     body = request.get_json(silent=True) or {}
     name = str(body.get("name") or "").strip()
@@ -103,7 +103,7 @@ def quote_lead():
 
 
 @payments_bp.post("/admin/payments/import/parse")
-@admin_required
+@main_admin_required
 def import_parse():
     """Read ONE old quote PDF. Nothing is written to the sheet here."""
     body = request.get_json(silent=True)
@@ -128,7 +128,7 @@ def import_parse():
 
 
 @payments_bp.post("/admin/payments/import")
-@admin_required
+@main_admin_required
 def import_row():
     """Write ONE reviewed quote into the Quotes tab. The same name + quote number updates its row instead of duplicating it."""
     b = request.get_json(silent=True) or {}
