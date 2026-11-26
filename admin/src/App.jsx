@@ -9,7 +9,7 @@ import WhatsAppLeads from './pages/WhatsAppLeads.jsx';
 import Accounts from './pages/Accounts.jsx';
 import ScrollDownButton from './components/ScrollDownButton.jsx';
 import { Icon } from './components/ui.jsx';
-import { clearAdminToken, verifyAdminSession } from './api';
+import { clearAdminToken, getAdminRole, verifyAdminSession } from './api';
 
 // Bottom navigation on phones, tab row on desktop (see admin-mobile.css).
 const TABS = [
@@ -70,7 +70,9 @@ export default function App() {
     );
   }
 
-  const tab = TABS.find((t) => t.id === activeTab) || TABS[0];
+  const isMain = getAdminRole() === 'admin';
+  const tabs = TABS.filter((t) => t.id !== 'accounts' || isMain);   // second admin has no Accounts
+  const tab = tabs.find((t) => t.id === activeTab) || tabs[0];
   const inItinerary = activeTab === 'itinerary';
 
   return (
@@ -127,7 +129,7 @@ export default function App() {
 
         {activeTab === 'whatsapp' && <WhatsAppLeads onUnauthorized={handleLogout} />}
 
-        {activeTab === 'accounts' && <Accounts onUnauthorized={handleLogout} />}
+        {activeTab === 'accounts' && isMain && <Accounts onUnauthorized={handleLogout} />}
 
         {activeTab === 'packages' && (
           <SitePackages authenticated={authenticated} onUnauthorized={handleLogout} />
@@ -145,7 +147,7 @@ export default function App() {
       {!inItinerary && <ScrollDownButton />}
 
       <nav className="sv-nav" aria-label="Admin sections">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
