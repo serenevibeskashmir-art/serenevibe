@@ -191,7 +191,7 @@ export default function Payments({ onUnauthorized }) {
                 </div>
                 <div style={S.badges}>
                   <span style={{ ...S.badge, background: bg, color: fg }}>{r.status}</span>
-                  {r.completed && <span style={{ ...S.badge, background: '#e0e7ef', color: '#334e68' }}>Completed{r.completed_on ? ` · ${r.completed_on}` : ''}</span>}
+                  {r.completed && <span style={{ ...S.badge, background: '#2f5d9e', color: '#fff' }}>Completed{r.completed_on ? ` · ${r.completed_on}` : ''}</span>}
                 </div>
               </div>
               <div style={S.nums}>
@@ -306,8 +306,8 @@ const S = {
   confirm: { flex: '0 0 auto', font: 'inherit', fontSize: 14, fontWeight: 700, borderRadius: 9, padding: '4px 14px', minHeight: 38, cursor: 'pointer', background: '#fff', border: '1px solid #2e9e66', color: '#1b7a4b' },
   confirmOn: { background: '#2e9e66', color: '#fff' },
   complete: { flex: '1 1 100%', font: 'inherit', fontSize: 14, fontWeight: 700, borderRadius: 9, padding: '4px 14px', minHeight: 38, cursor: 'pointer', background: '#fff', border: '1px solid #334e68', color: '#334e68' },
-  completeOn: { background: '#334e68', color: '#fff' },
-  cardDone: { opacity: 0.82, borderColor: '#9fb3c8' },
+  completeOn: { background: '#2f5d9e', borderColor: '#2f5d9e', color: '#fff' },
+  cardDone: { background: '#e3edf9', borderColor: '#7c9cc4', borderLeft: '6px solid #2f5d9e' },
   lead: { marginTop: 10, padding: '8px 10px', border: `1px solid ${LINE}`, borderRadius: 8, background: '#fafbfc' },
   leadDue: { borderColor: '#c62828', background: '#fdf0ef' },
   leadRow: { display: 'grid', gridTemplateColumns: '1fr 1.3fr', gap: 8 },
