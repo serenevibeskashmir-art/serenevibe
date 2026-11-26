@@ -3,12 +3,16 @@
     GET  /api/admin/payments               -> {"rows": [...]}  (newest quote first)
     POST /api/admin/payments               -> body {name, quote_no, amount}; writes Booking Amount + Payment Status into the sheet
     POST /api/admin/payments/confirm       -> body {name, quote_no, confirmed}; paints that quote's row green (or clears it) in the sheet
+    POST /api/admin/payments/complete      -> body {name, quote_no, completed}; writes today's date in the sheet's "Completed On" column (or clears it)
+    POST /api/admin/payments/lead          -> body {name, quote_no, lead_status, follow_up_date}; hot / warm / cold / dead + follow-up date, written to the sheet
     POST /api/admin/payments/import/parse  -> JSON {pages: [text of each PDF page], created}  (the browser reads the PDF, so size does not matter)
                                               or multipart "file" (a small PDF); returns the fields read from it
     POST /api/admin/payments/import        -> body {name, quote_no, cost, travel_date, ...}; adds / updates that quote's row in the sheet
 
 The sheet stays the single source of truth: nothing is stored in the database.
 """
+import re
+
 from flask import Blueprint, jsonify, request
 
 from backend.auth import admin_required
@@ -61,6 +65,40 @@ def confirm_quote():
     if error:
         return jsonify({"error": error}), 502
     return jsonify({"ok": True, "confirmed": bool(data.get("confirmed"))})
+
+
+@payments_bp.post("/admin/payments/complete")
+@admin_required
+def complete_quote():
+    body = request.get_json(silent=True) or {}
+    name = str(body.get("name") or "").strip()
+    quote_no = str(body.get("quote_no") or "").strip()
+    if not name or not quote_no:
+        return jsonify({"error": "Quote not specified."}), 400
+    data, error = call_script("complete", {"name": name, "quote_no": quote_no, "completed": bool(body.get("completed"))})
+    if error:
+        return jsonify({"error": error}), 502
+    return jsonify({"ok": True, "completed": bool(data.get("completed")), "completed_on": data.get("completed_on") or ""})
+
+
+@payments_bp.post("/admin/payments/lead")
+@admin_required
+def quote_lead():
+    body = request.get_json(silent=True) or {}
+    name = str(body.get("name") or "").strip()
+    quote_no = str(body.get("quote_no") or "").strip()
+    status = str(body.get("lead_status") or "").strip().lower()
+    day = str(body.get("follow_up_date") or "").strip()
+    if not name or not quote_no:
+        return jsonify({"error": "Quote not specified."}), 400
+    if status not in ("", "hot", "warm", "cold", "dead"):
+        return jsonify({"error": "Lead status must be hot, warm, cold or dead."}), 400
+    if day and not re.match(r"^\d{4}-\d{2}-\d{2}$", day):
+        return jsonify({"error": "Follow-up date must look like 2026-11-30."}), 400
+    data, error = call_script("quote_lead", {"name": name, "quote_no": quote_no, "lead_status": status, "follow_up_date": day})
+    if error:
+        return jsonify({"error": error}), 502
+    return jsonify({"ok": True, "lead_status": data.get("lead_status") or "", "follow_up_date": data.get("follow_up_date") or ""})
 
 
 @payments_bp.post("/admin/payments/import/parse")
