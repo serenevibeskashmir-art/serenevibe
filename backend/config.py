@@ -31,6 +31,11 @@ class Config:
         SQLALCHEMY_ENGINE_OPTIONS["creator"] = make_creator(SQLALCHEMY_DATABASE_URI, DATABASE_URL_2)
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
     ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+    # Second admin: same panel but without Accounts. Disabled unless this variable is set.
+    ADMIN2_PASSWORD = os.getenv("ADMIN2_PASSWORD", "").strip()
+    # Names written in the "Created By" column of the Google Sheet (optional).
+    ADMIN_NAME = os.getenv("ADMIN_NAME", "Main Admin").strip() or "Main Admin"
+    ADMIN2_NAME = os.getenv("ADMIN2_NAME", "Admin 2").strip() or "Admin 2"
 
     # --- Cloudinary image storage (optional; without these, images stay in the database) ---
     # Either set CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>  (copy it from the
