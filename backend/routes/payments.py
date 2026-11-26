@@ -2,8 +2,8 @@
 
     GET  /api/admin/payments               -> {"rows": [...]}  (newest quote first)
     POST /api/admin/payments               -> body {name, quote_no, amount}; writes Booking Amount + Payment Status into the sheet
-    POST /api/admin/payments/confirm       -> body {name, quote_no, confirmed}; paints that quote's row green (or clears it) in the sheet
-    POST /api/admin/payments/complete      -> body {name, quote_no, completed}; writes today's date in the sheet's "Completed On" column (or clears it)
+    POST /api/admin/payments/confirm       -> body {name, quote_no, confirmed}; paints that quote's row green (or clears it) in the sheet; records the 25% booking amount if nothing is paid yet
+    POST /api/admin/payments/complete      -> body {name, quote_no, completed}; writes today's date in the sheet's "Completed On" column and records the booking as paid in full (or clears the date)
     POST /api/admin/payments/lead          -> body {name, quote_no, lead_status, follow_up_date}; hot / warm / cold / dead + follow-up date, written to the sheet
     POST /api/admin/payments/import/parse  -> JSON {pages: [text of each PDF page], created}  (the browser reads the PDF, so size does not matter)
                                               or multipart "file" (a small PDF); returns the fields read from it
@@ -64,7 +64,7 @@ def confirm_quote():
     data, error = call_script("confirm", {"name": name, "quote_no": quote_no, "confirmed": bool(body.get("confirmed"))})
     if error:
         return jsonify({"error": error}), 502
-    return jsonify({"ok": True, "confirmed": bool(data.get("confirmed"))})
+    return jsonify({"ok": True, "confirmed": bool(data.get("confirmed")), "row": data.get("row")})
 
 
 @payments_bp.post("/admin/payments/complete")
@@ -78,7 +78,8 @@ def complete_quote():
     data, error = call_script("complete", {"name": name, "quote_no": quote_no, "completed": bool(body.get("completed"))})
     if error:
         return jsonify({"error": error}), 502
-    return jsonify({"ok": True, "completed": bool(data.get("completed")), "completed_on": data.get("completed_on") or ""})
+    return jsonify({"ok": True, "completed": bool(data.get("completed")), "completed_on": data.get("completed_on") or "",
+                    "row": data.get("row")})
 
 
 @payments_bp.post("/admin/payments/lead")
